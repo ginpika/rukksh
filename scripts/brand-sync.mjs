@@ -41,7 +41,7 @@ const changed = []
   }
 }
 
-// 2) desktop/Cargo.toml：[[bin]].name（避免未打包 dev 运行时在 macOS 上显示 package 名 minis-desktop）
+// 2) desktop/Cargo.toml：[[bin]].name（避免未打包 dev 运行时在 macOS 上显示 package 名 rukksh-desktop）
 {
   const file = join(root, 'desktop', 'Cargo.toml')
   const before = readFileSync(file, 'utf8')

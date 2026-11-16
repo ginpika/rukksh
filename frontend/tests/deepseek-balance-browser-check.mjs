@@ -8,7 +8,7 @@ const frontend = fileURLToPath(new URL('../', import.meta.url))
 const dist = path.join(frontend, 'dist')
 const output = path.resolve(frontend, '../backend/target/deepseek-balance-browser-check')
 await fs.mkdir(output, { recursive: true })
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const html = await fs.readFile(path.join(dist, 'index.html'), 'utf8')
 const requests = [], errors = [], checks = []
@@ -31,8 +31,8 @@ function balance(url) {
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
 await context.addInitScript(() => {
-  window.__MINIS_LOCAL_TOKEN__ = 'fixture-desktop-token'
-  if (!localStorage.getItem('minis.theme.v4')) localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } }))
+  window.__RUKKSH_LOCAL_TOKEN__ = 'fixture-desktop-token'
+  if (!localStorage.getItem('rukksh.theme.v4')) localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } }))
 })
 const page = await context.newPage()
 page.setDefaultTimeout(8000)
@@ -130,7 +130,7 @@ try {
   checks.push('official endpoint preset; masked key entry; save mounts a fresh account balance query')
 
   for (const theme of ['old', 'endfield', 'bluearchive', 'astrolabe']) {
-    await page.evaluate(themeId => { const state = JSON.parse(localStorage.getItem('minis.theme.v4')); state.themeId = themeId; localStorage.setItem('minis.theme.v4', JSON.stringify(state)) }, theme)
+    await page.evaluate(themeId => { const state = JSON.parse(localStorage.getItem('rukksh.theme.v4')); state.themeId = themeId; localStorage.setItem('rukksh.theme.v4', JSON.stringify(state)) }, theme)
     await page.reload(); await row().getByText('109.9912', { exact: true }).waitFor()
     await noOverflow(theme + ' desktop')
     const undersized = await page.locator('.deepseek-balance').evaluateAll(roots => roots.flatMap(root => [...root.querySelectorAll('*')].filter(el => [...el.childNodes].some(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 12).map(el => el.tagName)))

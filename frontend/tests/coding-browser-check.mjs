@@ -9,7 +9,7 @@ const frontend = fileURLToPath(new URL('../', import.meta.url))
 const dist = path.join(frontend, 'dist')
 const output = path.resolve(frontend, '../backend/target/coding-browser-check')
 await fs.mkdir(output, { recursive: true })
-const runtime = process.env.MINIS_PLAYWRIGHT_DIR
+const runtime = process.env.RUKKSH_PLAYWRIGHT_DIR
 const require = createRequire(runtime ? path.join(runtime, 'package.json') : path.join(frontend, 'package.json'))
 const { chromium } = require('playwright')
 const html = await fs.readFile(path.join(dist, 'index.html'), 'utf8')
@@ -35,7 +35,7 @@ const page = await context.newPage()
 page.setDefaultTimeout(7000)
 const errors = []
 page.on('pageerror', error => errors.push(error.message))
-await context.addInitScript(() => { if (!localStorage.getItem('minis.theme.v4')) localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'dark', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })) })
+await context.addInitScript(() => { if (!localStorage.getItem('rukksh.theme.v4')) localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'dark', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })) })
 await context.route('**/*', async route => {
   const url = new URL(route.request().url())
   if (url.origin !== 'http://coding.test') { await route.abort(); return }
@@ -111,7 +111,7 @@ await context.route('**/*', async route => {
   await route.fulfill({ contentType: 'application/json', body: JSON.stringify(value) })
 })
 async function check(name, work) {
-  if (process.env.MINIS_BROWSER_CHECK_ONLY && !name.includes(process.env.MINIS_BROWSER_CHECK_ONLY)) return
+  if (process.env.RUKKSH_BROWSER_CHECK_ONLY && !name.includes(process.env.RUKKSH_BROWSER_CHECK_ONLY)) return
   await work(); checks.push(name); console.log(`PASS ${name}`)
 }
 async function no404() { assert.equal(await page.getByText('404 —— 没有这个页面。', { exact: true }).count(), 0) }
@@ -131,7 +131,7 @@ try {
     await page.goto('http://coding.test/#/coding?start=1')
     const remove = page.getByRole('button', { name: `从最近项目移除 ${project.name}`, exact: true })
     await remove.waitFor()
-    await page.evaluate(() => { document.cookie = 'minis.coding.project=p1; Path=/; SameSite=Lax' })
+    await page.evaluate(() => { document.cookie = 'rukksh.coding.project=p1; Path=/; SameSite=Lax' })
     removeRecentFails = true
     await remove.click()
     await page.getByRole('alert').filter({ hasText: '移除失败：暂时无法移除' }).waitFor()
@@ -141,7 +141,7 @@ try {
     await remove.click()
     await page.locator('.coding-recent-empty').waitFor()
     assert.equal(await page.locator('.coding-project-row').count(), 0)
-    assert.equal((await page.evaluate(() => document.cookie)).includes('minis.coding.project='), false)
+    assert.equal((await page.evaluate(() => document.cookie)).includes('rukksh.coding.project='), false)
     await page.reload(); await page.locator('.coding-recent-empty').waitFor()
     await page.goto('http://coding.test/#/coding?project=p1'); await page.locator('.coding-studio').waitFor()
     await page.goto('http://coding.test/#/coding?workspace=w1&directory=projects/assistant')
@@ -270,7 +270,7 @@ try {
   })
   for (const theme of ['old', 'endfield', 'bluearchive', 'astrolabe']) {
     await check(`${theme} shell contains the coding page at desktop and narrow widths`, async () => {
-      await page.evaluate(theme => { localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: theme, schemeMode: 'dark', override: { seed: {} }, mono: { sidebar: true, hideChrome: false } })); location.hash = '/coding?project=p1' }, theme)
+      await page.evaluate(theme => { localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: theme, schemeMode: 'dark', override: { seed: {} }, mono: { sidebar: true, hideChrome: false } })); location.hash = '/coding?project=p1' }, theme)
       await page.setViewportSize({ width: 1280, height: 900 }); await page.reload()
       await page.getByRole('heading', { name: '一起完成这个项目' }).waitFor(); await no404()
       await page.screenshot({ path: path.join(output, `project-${theme}.png`) })
@@ -462,8 +462,8 @@ try {
     await page.getByRole('heading', { name: '从一个项目开始', exact: true }).waitFor()
     await page.getByRole('button', { name: /personal-assistant-with-a-long-project-name/ }).click()
     await page.locator('.coding-studio').waitFor()
-    await page.waitForFunction(() => document.cookie.includes('minis.coding.project=p1'))
-    const cookie = (await context.cookies()).find(item => item.name === 'minis.coding.project')
+    await page.waitForFunction(() => document.cookie.includes('rukksh.coding.project=p1'))
+    const cookie = (await context.cookies()).find(item => item.name === 'rukksh.coding.project')
     assert.equal(cookie.value, 'p1'); assert.equal(cookie.expires, -1); assert.equal(cookie.path, '/')
     await page.goto('http://coding.test/#/knowledge')
     await page.goto('http://coding.test/#/coding')
@@ -478,7 +478,7 @@ try {
     await page.locator('.coding-back').click()
     await page.getByRole('heading', { name: '从一个项目开始', exact: true }).waitFor()
     await page.reload(); await page.locator('.coding-start').waitFor()
-    assert.ok((await page.evaluate(() => document.cookie)).includes('minis.coding.project=p1'))
+    assert.ok((await page.evaluate(() => document.cookie)).includes('rukksh.coding.project=p1'))
     await page.goto('http://coding.test/#/coding?workspace=w1&directory=src')
     await page.locator('.coding-picker').waitFor()
     assert.equal(await page.locator('.coding-studio').count(), 0)
@@ -488,31 +488,31 @@ try {
     listedProjects = [project, { ...project, id: 'p2', name: '第二个项目' }]
     await page.goto('http://coding.test/#/coding?project=p2'); await page.reload()
     await page.locator('.coding-studio-toolbar strong').getByText('第二个项目', { exact: true }).waitFor()
-    await page.waitForFunction(() => document.cookie.includes('minis.coding.project=p2'))
+    await page.waitForFunction(() => document.cookie.includes('rukksh.coding.project=p2'))
     await page.goto('http://coding.test/#/coding?run=r2')
     await page.locator('.coding-studio-toolbar strong').getByText(project.name, { exact: true }).waitFor()
-    await page.waitForFunction(() => document.cookie.includes('minis.coding.project=p1'))
+    await page.waitForFunction(() => document.cookie.includes('rukksh.coding.project=p1'))
     await page.goto('http://coding.test/#/coding?project=missing')
     await page.locator('.coding-start').waitFor()
     await page.getByText('这个项目未绑定现有工作空间', { exact: false }).waitFor()
     listedProjects = [project]
   })
   await check('removed or disabled projects clear the stale cookie and return to the picker', async () => {
-    await page.evaluate(() => { document.cookie = 'minis.coding.project=missing; Path=/; SameSite=Lax' })
+    await page.evaluate(() => { document.cookie = 'rukksh.coding.project=missing; Path=/; SameSite=Lax' })
     await page.goto('http://coding.test/#/coding'); await page.reload()
     await page.locator('.coding-start').waitFor()
-    await page.waitForFunction(() => !document.cookie.includes('minis.coding.project='))
+    await page.waitForFunction(() => !document.cookie.includes('rukksh.coding.project='))
     listedProjects = [{ ...project, enabled: false }]
-    await page.evaluate(() => { document.cookie = 'minis.coding.project=p1; Path=/; SameSite=Lax' })
+    await page.evaluate(() => { document.cookie = 'rukksh.coding.project=p1; Path=/; SameSite=Lax' })
     await page.reload(); await page.locator('.coding-start').waitFor()
-    await page.waitForFunction(() => !document.cookie.includes('minis.coding.project='))
+    await page.waitForFunction(() => !document.cookie.includes('rukksh.coding.project='))
     listedProjects = [project]
   })
   await check('temporary project loading failures preserve the session cookie for retry', async () => {
-    await page.evaluate(() => { document.cookie = 'minis.coding.project=p1; Path=/; SameSite=Lax' })
+    await page.evaluate(() => { document.cookie = 'rukksh.coding.project=p1; Path=/; SameSite=Lax' })
     projectsFail = true
     await page.reload(); await page.getByText('项目列表暂时不可用', { exact: false }).waitFor()
-    assert.ok((await page.evaluate(() => document.cookie)).includes('minis.coding.project=p1'))
+    assert.ok((await page.evaluate(() => document.cookie)).includes('rukksh.coding.project=p1'))
     projectsFail = false
     await page.getByRole('button', { name: '重新加载', exact: true }).click()
     await page.locator('.coding-studio').waitFor()

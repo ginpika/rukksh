@@ -14,7 +14,7 @@
       ;(function () {
         try {
           var root = document.documentElement
-          var raw = localStorage.getItem('minis.theme.v4')
+          var raw = localStorage.getItem('rukksh.theme.v4')
           if (!raw) return
           var s = JSON.parse(raw)
           var vars = s && s.vars
@@ -47,15 +47,15 @@
        *
        * 数值与配色和 shell/desktopFrame.css、desktop/ui/index.html 严格同源：改一处要三处同步。
        * ========================================================================== */
-      #minis-df-skeleton {
+      #rukksh-df-skeleton {
         display: none;
       }
       /* 把底让给桌面：否则首帧仍是一块不透明的 --c-bg（跳变的一半来自这里） */
-      html.minis-df-skeleton,
-      html.minis-df-skeleton body {
+      html.rukksh-df-skeleton,
+      html.rukksh-df-skeleton body {
         background: transparent;
       }
-      html.minis-df-skeleton #minis-df-skeleton {
+      html.rukksh-df-skeleton #rukksh-df-skeleton {
         position: fixed;
         inset: 0;
         z-index: 60;
@@ -166,21 +166,21 @@
     </style>
     <script>
       ;(function () {
-        // 只在本机桌面壳里铺骨架（浏览器里 #minis-df-skeleton 保持 display:none）
+        // 只在本机桌面壳里铺骨架（浏览器里 #rukksh-df-skeleton 保持 display:none）
         if (!('__TAURI_INTERNALS__' in window)) return
-        document.documentElement.classList.add('minis-df-skeleton')
+        document.documentElement.classList.add('rukksh-df-skeleton')
         // 兜底：bundle 跑不起来时也别让骨架一直挂着
         setTimeout(function () {
-          var el = document.getElementById('minis-df-skeleton')
+          var el = document.getElementById('rukksh-df-skeleton')
           if (el) el.remove()
-          document.documentElement.classList.remove('minis-df-skeleton')
+          document.documentElement.classList.remove('rukksh-df-skeleton')
         }, 6000)
       })()
     </script>
   </head>
   <body>
     <!-- 桌面壳首帧骨架：形状与窗口外壳一致，React 挂载后由 DesktopFrame 撤掉（见上方的样式） -->
-    <div id="minis-df-skeleton" aria-hidden="true">
+    <div id="rukksh-df-skeleton" aria-hidden="true">
       <div class="mds-acrylic"></div>
       <aside class="mds-rail">
         <span class="mds-logo"><img src="/icon-64x64.png" alt="" /></span>

@@ -1,4 +1,4 @@
-# minis 前端镜像：Vite 构建 → nginx 托管静态产物 + 反代 /api
+# rukksh 前端镜像：Vite 构建 → nginx 托管静态产物 + 反代 /api
 # 构建上下文：仓库根目录（docker compose 已配置）——branding.json 在根目录，供 vite.config 读取
 FROM node:22-alpine AS build
 WORKDIR /build/frontend

@@ -39,7 +39,7 @@ import { activePathOf } from './shell/nav'
 import { isKnownRoute, routeFromHash } from './shell/routes'
 import { btnOutline } from './components/ui'
 import ChatNotifier from './components/ChatNotifier'
-import SlimePage from './components/SlimePage'
+import RukkshPage from './components/RukkshPage'
 import { PortalAppearanceContext } from './components/portalAppearance'
 
 function useHashRoute(): string {
@@ -343,103 +343,103 @@ function App() {
       break
     case '/economy':
       standalone = (
-        <SlimePage title="经济" backHref="#/dashboard" backLabel="返回 Dashboard">
+        <RukkshPage title="经济" backHref="#/dashboard" backLabel="返回 Dashboard">
           <Economy />
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/economy/research':
     case '/economy/database': {
       const research = route === '/economy/research'
       standalone = (
-        <SlimePage key={route} title={research ? '隔夜策略工作台' : '观测数据库'} backHref="#/economy" backLabel="返回经济">
-          <PortalAppearanceContext value="slime-surface">
+        <RukkshPage key={route} title={research ? '隔夜策略工作台' : '观测数据库'} backHref="#/economy" backLabel="返回经济">
+          <PortalAppearanceContext value="rukksh-surface">
             {research ? <EconomyResearch /> : <EconomyDatabase />}
           </PortalAppearanceContext>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     }
     case '/todos':
       standalone = (
-        <SlimePage key={route} title="项目与待办" backHref="#/dashboard" backLabel="返回 Dashboard" className="work-surface">
+        <RukkshPage key={route} title="项目与待办" backHref="#/dashboard" backLabel="返回 Dashboard" className="work-surface">
           <WorkHome />
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/todos/projects':
       standalone = (
-        <SlimePage key={route} title="项目" backHref="#/todos" backLabel="返回项目与待办" className="work-surface">
+        <RukkshPage key={route} title="项目" backHref="#/todos" backLabel="返回项目与待办" className="work-surface">
           <div data-page="projects"><Projects /></div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/todos/tasks':
       standalone = (
-        <SlimePage key={route} title="待办" backHref="#/todos" backLabel="返回项目与待办" className="work-surface">
+        <RukkshPage key={route} title="待办" backHref="#/todos" backLabel="返回项目与待办" className="work-surface">
           <div data-page="todos"><PageSlot route="todos" props={{}} fallback={<Todos />} /></div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/workspace':
       standalone = (
-        <SlimePage title="工作空间" backHref="#/dashboard" backLabel="返回 Dashboard">
+        <RukkshPage title="工作空间" backHref="#/dashboard" backLabel="返回 Dashboard">
           <div data-page="workspace">
             <PageSlot route="workspace" props={{}} fallback={<Workspace />} />
           </div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     /* 记忆与 Dashboard / 知识库同一套独立窗口：极简页头 + 返回 Dashboard */
     case '/memory':
       standalone = (
-        <SlimePage key={route} title="记忆" backHref="#/dashboard" backLabel="返回 Dashboard">
+        <RukkshPage key={route} title="记忆" backHref="#/dashboard" backLabel="返回 Dashboard">
           <div data-page="memory"><PageSlot route="memory" props={{}} fallback={<MemoryPage />} /></div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/knowledge':
       /* 与首页 / Dashboard 一致：不套外壳顶栏与页脚，只保留极简页头 */
       standalone = (
-        <SlimePage title="知识库" backHref="#/dashboard" backLabel="返回 Dashboard">
+        <RukkshPage title="知识库" backHref="#/dashboard" backLabel="返回 Dashboard">
           <div data-page="knowledge"><Knowledge /></div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     /* 知识库子页与起始页 / Dashboard 同一套独立窗口：极简页头 + 返回知识库 */
     case '/articles':
       standalone = (
-        <SlimePage key={route} title="文档" backHref="#/knowledge" backLabel="返回知识库">
+        <RukkshPage key={route} title="文档" backHref="#/knowledge" backLabel="返回知识库">
           <div data-page="articles"><PageSlot route="articles" props={{}} fallback={<Articles />} /></div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/import':
       standalone = (
-        <SlimePage key={route} title="文档导入" backHref="#/knowledge" backLabel="返回知识库">
+        <RukkshPage key={route} title="文档导入" backHref="#/knowledge" backLabel="返回知识库">
           <div data-page="import"><PageSlot route="import" props={{}} fallback={<Import />} /></div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/analyze':
       standalone = (
-        <SlimePage key={route} title="文档分析" backHref="#/knowledge" backLabel="返回知识库">
+        <RukkshPage key={route} title="文档分析" backHref="#/knowledge" backLabel="返回知识库">
           <div data-page="analyze"><PageSlot route="analyze" props={{}} fallback={<Analyze />} /></div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/graph':
       standalone = (
-        <SlimePage key={route} title="知识图谱" backHref="#/knowledge" backLabel="返回知识库">
+        <RukkshPage key={route} title="知识图谱" backHref="#/knowledge" backLabel="返回知识库">
           <div data-page="graph" className="h-full"><PageSlot route="graph" props={{}} fallback={<Graph />} /></div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/snapshots':
       standalone = (
-        <SlimePage key={route} title="网页快照" backHref="#/knowledge" backLabel="返回知识库">
+        <RukkshPage key={route} title="网页快照" backHref="#/knowledge" backLabel="返回知识库">
           <div data-page="snapshots"><Snapshots /></div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/agent-conversation':
@@ -447,48 +447,48 @@ function App() {
       break
     case '/multi-agent':
       standalone = (
-        <SlimePage key={route} title="智能体" backHref="#/dashboard" backLabel="返回 Dashboard">
+        <RukkshPage key={route} title="智能体" backHref="#/dashboard" backLabel="返回 Dashboard">
           <div data-page="multi-agent">
             <PageSlot route="multi-agent" props={{}} fallback={<MultiAgent />} />
           </div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/system':
       standalone = (
-        <SlimePage key={route} title="系统" backHref="#/dashboard" backLabel="返回 Dashboard">
+        <RukkshPage key={route} title="系统" backHref="#/dashboard" backLabel="返回 Dashboard">
           <div data-page="system">
             {/* 沿用原系统视图的页面覆盖键。 */}
             <PageSlot route="subconscious" props={{}} fallback={<SystemPanel />} />
           </div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/stats':
       standalone = (
-        <SlimePage key={route} title="用量与统计" backHref="#/dashboard" backLabel="返回 Dashboard">
+        <RukkshPage key={route} title="用量与统计" backHref="#/dashboard" backLabel="返回 Dashboard">
           <div data-page="stats">
             <PageSlot route="stats" props={{}} fallback={<Stats />} />
           </div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/settings':
       standalone = (
-        <SlimePage key={route} title="系统设置" backHref="#/dashboard" backLabel="返回 Dashboard">
+        <RukkshPage key={route} title="系统设置" backHref="#/dashboard" backLabel="返回 Dashboard">
           <div data-page="settings">
             <PageSlot route="settings" props={{}} fallback={<Settings />} />
           </div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
     case '/debug':
       standalone = (
-        <SlimePage key={route} title="调试" backHref="#/dashboard" backLabel="返回 Dashboard">
+        <RukkshPage key={route} title="调试" backHref="#/dashboard" backLabel="返回 Dashboard">
           <div data-page="debug">
             <ContextDebug />
           </div>
-        </SlimePage>
+        </RukkshPage>
       )
       break
   }
@@ -497,20 +497,20 @@ function App() {
   if (articleMatch && !standalone) {
     const articleUrl = decodeURIComponent(articleMatch[1])
     standalone = (
-      <SlimePage key={articleUrl} title="文档" backHref="#/articles" backLabel="返回文档列表">
+      <RukkshPage key={articleUrl} title="文档" backHref="#/articles" backLabel="返回文档列表">
         <div data-page="article">
           <PageSlot route="article" props={{ url: articleUrl }} fallback={<ArticleDetailPage url={articleUrl} />} />
         </div>
-      </SlimePage>
+      </RukkshPage>
     )
   }
 
   if (snapshotMatch && !standalone) {
     const snapshotId = snapshotMatch[1]
     standalone = (
-      <SlimePage key={snapshotId} title="网页快照" backHref="#/snapshots" backLabel="返回快照库">
+      <RukkshPage key={snapshotId} title="网页快照" backHref="#/snapshots" backLabel="返回快照库">
         <div data-page="snapshots"><Snapshots id={snapshotId} /></div>
-      </SlimePage>
+      </RukkshPage>
     )
   }
 
@@ -518,13 +518,13 @@ function App() {
   if (agentMatch && !standalone) {
     const peerId = decodeURIComponent(agentMatch[1])
     standalone = (
-      <SlimePage
+      <RukkshPage
         title={peerId === 'new' ? '新建成员' : '智能体'}
         backHref="#/multi-agent"
         backLabel="返回成员列表"
       >
         <PageSlot route="agent" props={{ id: peerId }} fallback={<AgentDetail key={peerId} peerId={peerId} />} />
-      </SlimePage>
+      </RukkshPage>
     )
   }
 

@@ -224,7 +224,7 @@ export default function ContextDebug() {
   })), [sessions.data])
 
   return (
-    <PortalAppearanceContext value="slime-surface ctx-debug-popover">
+    <PortalAppearanceContext value="rukksh-surface ctx-debug-popover">
       <div className="ctx-debug">
         {options.length > 0 && (
           <div className="ctx-debug-session">

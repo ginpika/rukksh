@@ -56,7 +56,7 @@ import {
   useRunningSessionIds,
 } from '../components/roundtableLive'
 import Toast from '../components/Toast'
-import SlimePage from '../components/SlimePage'
+import RukkshPage from '../components/RukkshPage'
 import { PortalAppearanceContext } from '../components/portalAppearance'
 import { PageKitProvider, usePageKit } from '../kit'
 import { flatKit } from '../kit/flat'
@@ -81,16 +81,16 @@ import './collaboration/layout.css'
 import { resetWindowStates, useDraftState, useRememberedState } from '../components/windowState'
 
 /** 「不显示思维链」偏好的本地存储 key：离开圆桌再回来不用重设 */
-const HIDE_COT_KEY = 'minis.roundtable.hide-cot'
+const HIDE_COT_KEY = 'rukksh.roundtable.hide-cot'
 
 /** 「显示入场 / 退场」偏好的本地存储 key（默认收起） */
-const SHOW_PRESENCE_KEY = 'minis.roundtable.show-presence'
+const SHOW_PRESENCE_KEY = 'rukksh.roundtable.show-presence'
 
 /** 「点击气泡查看原始上下文」偏好的本地存储 key（默认关） */
-const BUBBLE_CONTEXT_KEY = 'minis.roundtable.bubble-context'
+const BUBBLE_CONTEXT_KEY = 'rukksh.roundtable.bubble-context'
 
 /** 「发言策略」偏好的本地存储 key（默认轮询）：决定这一轮该谁先开口 */
-const SPEAKER_STRATEGY_KEY = 'minis.roundtable.speaker-strategy'
+const SPEAKER_STRATEGY_KEY = 'rukksh.roundtable.speaker-strategy'
 
 /**
  * 默认收起的状态行：话题的生命周期动作，而不是讨论内容——每开一个话题全桌各来一条。
@@ -266,7 +266,7 @@ export default function Roundtable({ initialView = 'discussion' }: { initialView
 
   return (
     <PageKitProvider value={flatKit}>
-      <PortalAppearanceContext value="slime-surface work-surface collab-portal">
+      <PortalAppearanceContext value="rukksh-surface work-surface collab-portal">
         <PageBoundary>
           <RoundtableBoard
             initialView={initialView}
@@ -938,7 +938,7 @@ function RoundtableBoard({
   const boundWorkspace = workspace.workspaceBindings?.find(b => b.projectId === mainSession?.projectId)
   const workspaceLabel = boundWorkspace?.enabled ? '工作目录' : '设置工作目录'
   return (
-    <SlimePage title={title} backHref={backHref} backLabel={backLabel} className="work-surface collab-surface">
+    <RukkshPage title={title} backHref={backHref} backLabel={backLabel} className="work-surface collab-surface">
     <div className="collab-workspace collab-v2" data-page="collaboration">
       {invalidLocation ? (
         <div className="collab-page-empty"><h2>这个会话或议题不属于当前位置</h2></div>
@@ -1261,7 +1261,7 @@ function RoundtableBoard({
           </Card>
         </div>
       )}
-    </SlimePage>
+    </RukkshPage>
   )
 }
 

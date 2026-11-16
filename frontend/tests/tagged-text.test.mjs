@@ -10,10 +10,10 @@ const { parseTaggedText } = await import('data:text/javascript;base64,' + Buffer
 const restore = parts => parts.map(p => p.type === 'text' ? p.text : p.opening + restore(p.children) + p.closing).join('')
 
 test('nested, repeated and adjacent prompt tags preserve exact text and boundaries', () => {
-  const text = '前言\n<minis-memory>\n<item>甲</item><item>乙<item>内层</item></item>\n</minis-memory>尾声'
+  const text = '前言\n<rukksh-memory>\n<item>甲</item><item>乙<item>内层</item></item>\n</rukksh-memory>尾声'
   const parts = parseTaggedText(text)
   assert.equal(restore(parts), text)
-  assert.equal(parts[1].name, 'minis-memory')
+  assert.equal(parts[1].name, 'rukksh-memory')
   assert.equal(parts[1].children[2].children[1].name, 'item')
   assert.equal(parts[2].text, '尾声')
 })

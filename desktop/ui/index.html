@@ -7,7 +7,15 @@
     <script>
       ;(function () {
         try {
-          var mode = localStorage.getItem('minis.shell.scheme')
+          var mode = localStorage.getItem('rukksh.shell.scheme')
+          var legacy = localStorage.getItem('minis.shell.scheme')
+          if (legacy !== null) {
+            if (mode === null) {
+              mode = legacy
+              localStorage.setItem('rukksh.shell.scheme', mode)
+            }
+            localStorage.removeItem('minis.shell.scheme')
+          }
           if (mode !== 'light' && mode !== 'dark' && mode !== 'system') mode = 'system'
           var dark =
             mode === 'dark' ||
@@ -26,7 +34,7 @@
     </script>
     <style>
       /* ============================================================================
-       * 桌面端壳页面 —— 对齐主界面 .slime-surface 极简无框风格
+       * 桌面端壳页面 —— 对齐主界面 .rukksh-surface 极简无框风格
        * 分层设计：主舞台仅保留服务启动入口，账号与身份收纳在左下角头像浮层。
        * ========================================================================= */
       :root {
@@ -1273,7 +1281,7 @@
                       id="remote-url"
                       class="input"
                       type="url"
-                      placeholder="https://slime.example.com"
+                      placeholder="https://rukksh.example.com"
                       spellcheck="false"
                       aria-label="远程后端地址"
                     />
@@ -1412,7 +1420,7 @@
       document.body.classList.toggle('is-mac', isMac)
       const winCmd = (cmd, args) => invoke(`plugin:window|${cmd}`, args).catch(() => {})
 
-      const SCHEME_KEY = 'minis.shell.scheme'
+      const SCHEME_KEY = 'rukksh.shell.scheme'
       const SCHEME_LABELS = { system: '跟随系统', light: '浅色', dark: '深色' }
       const NEXT_SCHEME = { system: 'light', light: 'dark', dark: 'system' }
       const appearanceBtn = document.getElementById('appearance-btn')
@@ -1700,7 +1708,7 @@
       invoke('desktop_state')
         .then(render)
         .catch((e) => toast(String(e), 'error'))
-      listen('minis://status', (event) => render(event.payload))
+      listen('rukksh://status', (event) => render(event.payload))
 
       localBtn.addEventListener('click', async () => {
         if (sessionFor('local')) {
@@ -1994,7 +2002,7 @@
         })
         .catch(() => renderUsers())
 
-      listen('minis://user', (event) => {
+      listen('rukksh://user', (event) => {
         users = event.payload
         renderUsers()
         refreshHostidBase()

@@ -1,9 +1,11 @@
-# minis 生产编排：前后端分离两个容器
+# rukksh 生产编排：前后端分离两个容器
 #   frontend = nginx（托管 Vite 产物 + 反代 /api → backend）
 #   backend  = Spring Boot jar（SQLite；模型等业务配置在页面维护并存入数据库）
 # 用法（Docker Compose 2.24.0+）：
 #   docker compose up -d --build
 #   访问 http://localhost:18081
+name: rukksh
+
 services:
   backend:
     build:
@@ -22,12 +24,12 @@ services:
         required: false
     environment:
       # 容器内固定为挂载卷路径，覆盖 .env 里相对 maven 工作目录的默认值
-      MINIS_DB_PATH: /data/minis.db
-      MINIS_ARTICLE_DIR: /data/article
-      MINIS_PORT: "18081"
+      RUKKSH_DB_PATH: "${RUKKSH_DB_PATH:-/data/rukksh.db}"
+      RUKKSH_ARTICLE_DIR: /data/article
+      RUKKSH_PORT: "18081"
     volumes:
       # 持久化：SQLite 库 + markdown 文章目录
-      - minis-data:/data
+      - rukksh-data:/data
       # 本机工作空间：按需挂载宿主机项目目录，在页面填写容器内路径。
       # - /srv/projects:/workspaces
       # 若想直接复用仓库 ./data 目录，可改用 bind mount（Windows 上 WAL 可能受文件系统影响，慎用）：
@@ -46,8 +48,10 @@ services:
     depends_on:
       - backend
     ports:
-      # 宿主机端口可用根目录 .env 的 MINIS_HOST_PORT 覆盖
-      - "${MINIS_HOST_PORT:-18081}:80"
+      # 宿主机端口可用根目录 .env 的 RUKKSH_HOST_PORT 覆盖
+      - "${RUKKSH_HOST_PORT:-18081}:80"
 
 volumes:
-  minis-data:
+  rukksh-data:
+    name: "${RUKKSH_DATA_VOLUME:-${COMPOSE_PROJECT_NAME}-data}"
+    external: "${RUKKSH_DATA_VOLUME_EXTERNAL:-false}"

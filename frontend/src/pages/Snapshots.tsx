@@ -12,7 +12,7 @@ import SnapshotRename from '../components/SnapshotRename'
 import './knowledge.css'
 
 const stamp = (time: number) => new Date(time).toLocaleString()
-const TAB_STORAGE_KEY = 'minis.snapshots.tab'
+const TAB_STORAGE_KEY = 'rukksh.snapshots.tab'
 
 export default function Snapshots({ id }: { id?: string }) {
   const [tab, setTab] = useState<'capture' | 'library'>(() => {

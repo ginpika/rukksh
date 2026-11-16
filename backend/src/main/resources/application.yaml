@@ -2,12 +2,12 @@
 # 部署参数可用环境变量或 backend/.env 按需覆盖（模板见 .env.example；真实环境变量优先）。
 # LLM / Embedding / Rerank 环境变量保留为旧部署的内置项或兜底配置。
 server:
-  port: ${MINIS_PORT:18081}
+  port: ${RUKKSH_PORT:18081}
 
 spring:
-  # 应用名（spring.application.name）由 MinisApplication 从根目录 branding.json 注入，不在此写死
+  # 应用名（spring.application.name）由 RukkshApplication 从根目录 branding.json 注入，不在此写死
   datasource:
-    url: jdbc:sqlite:${MINIS_DB_PATH:../data/minis.db}   # 相对 maven/docker 工作目录；生产用绝对路径或挂载卷
+    url: jdbc:sqlite:${RUKKSH_DB_PATH:${rukksh.default-db-path:../data/rukksh.db}}   # 生产用绝对路径或挂载卷
     driver-class-name: org.sqlite.JDBC
   sql:
     init:
@@ -16,46 +16,46 @@ spring:
 
 logging:
   file:
-    name: ${MINIS_LOG_FILE:../data/logs/minis.log}   # 落文件便于回溯（相对 maven/docker 工作目录）
+    name: ${RUKKSH_LOG_FILE:../data/logs/rukksh.log}   # 落文件便于回溯（相对 maven/docker 工作目录）
   level:
-    cc.ginpika.minis: INFO
+    cc.ginpika.rukksh: INFO
 
-minis:
+rukksh:
   computer:
     # 仅桌面壳本机模式注入；Web / 远程部署不会启用窗口捕获。
-    window-helper: ${MINIS_COMPUTER_WINDOW_HELPER:}
+    window-helper: ${RUKKSH_COMPUTER_WINDOW_HELPER:}
     # 独立 Chrome 永远以 headless 方式启动，不使用个人配置目录。
-    chrome-executable: ${MINIS_COMPUTER_CHROME_EXECUTABLE:}
+    chrome-executable: ${RUKKSH_COMPUTER_CHROME_EXECUTABLE:}
   coding:
-    enabled: ${MINIS_CODING_ENABLED:true}
-    data-dir: ${MINIS_CODING_DIR:}
-    docker-host-data-dir: ${MINIS_CODING_HOST_DIR:}
-    docker-image: ${MINIS_CODING_IMAGE:maven:3.9-eclipse-temurin-21}
-    allow-local-execution: ${MINIS_CODING_LOCAL_EXECUTION:false}
-    max-run-minutes: ${MINIS_CODING_MAX_MINUTES:30}
-    max-estimated-tokens: ${MINIS_CODING_MAX_TOKENS:0} # 0：不限制累计 token；正数：每次运行的累计额度
-    max-response-tokens: ${MINIS_CODING_RESPONSE_TOKENS:0}
-    response-reserve-tokens: ${MINIS_CODING_RESPONSE_RESERVE:32768}
-    max-output-continuations: ${MINIS_CODING_OUTPUT_CONTINUATIONS:3}
-    max-model-retries: ${MINIS_CODING_MODEL_RETRIES:3}
-    max-concurrent-subagents: ${MINIS_CODING_SUBAGENTS:2}
-    max-concurrent-runs: ${MINIS_CODING_RUNS:2}
+    enabled: ${RUKKSH_CODING_ENABLED:true}
+    data-dir: ${RUKKSH_CODING_DIR:}
+    docker-host-data-dir: ${RUKKSH_CODING_HOST_DIR:}
+    docker-image: ${RUKKSH_CODING_IMAGE:maven:3.9-eclipse-temurin-21}
+    allow-local-execution: ${RUKKSH_CODING_LOCAL_EXECUTION:false}
+    max-run-minutes: ${RUKKSH_CODING_MAX_MINUTES:30}
+    max-estimated-tokens: ${RUKKSH_CODING_MAX_TOKENS:0} # 0：不限制累计 token；正数：每次运行的累计额度
+    max-response-tokens: ${RUKKSH_CODING_RESPONSE_TOKENS:0}
+    response-reserve-tokens: ${RUKKSH_CODING_RESPONSE_RESERVE:32768}
+    max-output-continuations: ${RUKKSH_CODING_OUTPUT_CONTINUATIONS:3}
+    max-model-retries: ${RUKKSH_CODING_MODEL_RETRIES:3}
+    max-concurrent-subagents: ${RUKKSH_CODING_SUBAGENTS:2}
+    max-concurrent-runs: ${RUKKSH_CODING_RUNS:2}
   web:
-    executable-path: ${MINIS_WEB_EXECUTABLE_PATH:}   # 空值：Windows 自动使用 Chrome / Edge，其他平台使用已安装 Chromium
-    headless: ${MINIS_WEB_HEADLESS:true}
-    locale: ${MINIS_WEB_LOCALE:zh-CN}
-    timezone: ${MINIS_WEB_TIMEZONE:Asia/Shanghai}
-    allow-fake-ip: ${MINIS_WEB_ALLOW_FAKE_IP:false}   # 仅在代理使用 198.18.0.0/15 Fake-IP DNS 时开启（域名限定）
-    proxy-server: ${MINIS_WEB_PROXY_SERVER:}         # 可选，如 http://127.0.0.1:7890；不存凭证
-  public-base: ${MINIS_PUBLIC_BASE:http://localhost:18081}
-  article-dir: ${MINIS_ARTICLE_DIR:../data/article}   # markdown 文章目录（相对 maven 工作目录）
-  # 桌面壳（Tauri）：壳以 MINIS_DESKTOP=1 拉起后端并注入一次性令牌，此时 /api/** 需带
-  # X-Minis-Token；静态资源与页面不校验。Web 部署保持关闭（默认），行为不变。
+    executable-path: ${RUKKSH_WEB_EXECUTABLE_PATH:}   # 空值：Windows 自动使用 Chrome / Edge，其他平台使用已安装 Chromium
+    headless: ${RUKKSH_WEB_HEADLESS:true}
+    locale: ${RUKKSH_WEB_LOCALE:zh-CN}
+    timezone: ${RUKKSH_WEB_TIMEZONE:Asia/Shanghai}
+    allow-fake-ip: ${RUKKSH_WEB_ALLOW_FAKE_IP:false}   # 仅在代理使用 198.18.0.0/15 Fake-IP DNS 时开启（域名限定）
+    proxy-server: ${RUKKSH_WEB_PROXY_SERVER:}         # 可选，如 http://127.0.0.1:7890；不存凭证
+  public-base: ${RUKKSH_PUBLIC_BASE:http://localhost:18081}
+  article-dir: ${RUKKSH_ARTICLE_DIR:../data/article}   # markdown 文章目录（相对 maven 工作目录）
+  # 桌面壳（Tauri）：壳以 RUKKSH_DESKTOP=1 拉起后端并注入一次性令牌，此时 /api/** 需带
+  # X-Rukksh-Token；静态资源与页面不校验。Web 部署保持关闭（默认），行为不变。
   desktop:
-    enabled: ${MINIS_DESKTOP:false}
-    local-token: ${MINIS_LOCAL_TOKEN:}                # 壳每次启动生成的随机值；空 = 不校验
-    local-user-name: ${MINIS_LOCAL_USER_NAME:}        # 壳注入的本地用户名；本机模式顶替 local-dev
-    local-user-avatar: ${MINIS_LOCAL_USER_AVATAR:}    # 壳注入的本地用户头像（data URL）；空 = 无
+    enabled: ${RUKKSH_DESKTOP:false}
+    local-token: ${RUKKSH_LOCAL_TOKEN:}                # 壳每次启动生成的随机值；空 = 不校验
+    local-user-name: ${RUKKSH_LOCAL_USER_NAME:}        # 壳注入的本地用户名；本机模式顶替 local-dev
+    local-user-avatar: ${RUKKSH_LOCAL_USER_AVATAR:}    # 壳注入的本地用户头像（data URL）；空 = 无
   sso:
     server-url: ${SSO_SERVER_URL:}                    # hostid 生产地址，由使用者填入（§9-3）
     cookie-name: ${SSO_COOKIE_NAME:sso_token}

@@ -1,16 +1,16 @@
-# Minis Agent 动态上下文改造与交接
+# Rukksh Agent 动态上下文改造与交接
 
 2026-11-09 · P1 至 P4 单聊试点已接入 · P3、P4 待验证
 
 ## 给接手会话
 
-这次改造针对 Minis 的 **Java Personal Agent 通用运行时**。长篇角色扮演是验证用例，和长文审阅、资料调研、代码排障一样，用来检验同一个上下文机制。游戏规则、角色数值和地图渲染等属于应用或工具层。
+这次改造针对 Rukksh 的 **Java Personal Agent 通用运行时**。长篇角色扮演是验证用例，和长文审阅、资料调研、代码排障一样，用来检验同一个上下文机制。游戏规则、角色数值和地图渲染等属于应用或工具层。
 
 设计阶段完成了仓库只读审计和方案讨论。下文使用 `ContextFragment`、`ContextPlan`、`ContextManifest`、`ContextScope` 等名称描述设计。审计时 `main` 指向 `97511a9`，单聊、圆桌、运行时、子代理和前端均有既有工作树改动。接手时重新检查 `AGENTS.md`、`git status` 和相关差异，以实际代码为准。
 
 下面是 P1 开工时的原始交接指令。P1、P2 的实际用法见各阶段说明。
 
-> 请阅读 `docs/design/persistent-agent-ephemeral-context.md`，继续 Minis 的 Java Personal Agent 通用动态上下文改造。本次只做 P1 的个人单聊试点。先检查当前工作树和真实调用链，保护既有改动，再复用现有 ContextProvider、ContextBuilder 和 ModelLoop，实现完整请求预算、带权限的来源回读及实际出站 Manifest。按文档报告验证结果与剩余风险，完成 P1 后停在可审查的结果。P2 及后续阶段另行确认。
+> 请阅读 `docs/design/persistent-agent-ephemeral-context.md`，继续 Rukksh 的 Java Personal Agent 通用动态上下文改造。本次只做 P1 的个人单聊试点。先检查当前工作树和真实调用链，保护既有改动，再复用现有 ContextProvider、ContextBuilder 和 ModelLoop，实现完整请求预算、带权限的来源回读及实际出站 Manifest。按文档报告验证结果与剩余风险，完成 P1 后停在可审查的结果。P2 及后续阶段另行确认。
 
 ## 问题与目标
 
@@ -73,12 +73,12 @@ Scene 用例包括长篇角色互动之后回到普通对话，长文审阅之�
 
 | 部位 | 审计发现与复用点 |
 | --- | --- |
-| 会话与轮次 | `hub_session` 是稳定会话 ID，`chat_turn` 配对触发、回复和任务。`chat_message` 同时承载转录与部分执行记录。旧会话和分支可能依赖 `History` 的回退配对。 [Schema](../../backend/src/main/resources/schema.sql) · [History](../../backend/src/main/java/cc/ginpika/minis/agent/chat/turn/History.java) |
-| 装配与预算 | `ContextProvider` 直接产出 `systemSuffix` 或 `messages`。预算先扣 system 基底和工具 schema，动态 suffix 随后才拼入。零历史预算也会走全量回放。先在 `ContextBuilder` 附近接入少量结构化片段和整份请求的预算。 [ContextProvider](../../backend/src/main/java/cc/ginpika/minis/agent/context/ContextProvider.java) · [ChatContextService](../../backend/src/main/java/cc/ginpika/minis/agent/chat/ChatContextService.java) |
-| 执行与观测 | `ChatTurnRunner` 和 `AgentRunner` 共享 `AgentRuntime` 与 `ModelLoop`。工具往返会使请求继续增长。保留现有循环，在实际发送边界复核最终预算和采集 Manifest。当前 raw-context 预览是重新组装的，不能代替实际请求记录。圆桌虽复用执行链，却有自己的装配路径。 [ModelLoop](../../backend/src/main/java/cc/ginpika/minis/ai/runtime/ModelLoop.java) · [ChatContextService](../../backend/src/main/java/cc/ginpika/minis/agent/chat/ChatContextService.java) |
-| 记忆 | 复用 `MemoryPolicy`、时态和来源过滤、`recall_memory`、工作集及现有记忆治理。初始 `MemorySnapshot` 会随模型步骤重验和渲染，按 Turn 覆盖的键不足以记录父子调用。关闭回放的正文也要按用途检查是否进入记忆采集和提炼。现有 `memory_off` 语义接手时从代码核实。 [MemoryProvider](../../backend/src/main/java/cc/ginpika/minis/agent/context/MemoryProvider.java) · [MemoryLiveContext](../../backend/src/main/java/cc/ginpika/minis/ai/memory/MemoryLiveContext.java) |
-| 子代理 | 已有独立请求、任务与产物、同步和后台执行。后台报告虽显示为摘要卡片，全文仍写进聊天历史，批次总结还会读取会话。`read_subagent_run` 的读取路径应核对会话和 Agent 归属。复用现有 runner 和产物，以结构化结果及引用替换默认全文回流。 [SubagentService](../../backend/src/main/java/cc/ginpika/minis/agent/subagent/SubagentService.java) · [SubagentDeliveryService](../../backend/src/main/java/cc/ginpika/minis/agent/chat/SubagentDeliveryService.java) |
-| 状态与恢复 | 现有事件表可去重，事件总线有提交后广播路径。工具执行键主要用于追踪，启动恢复主要把在途执行标为中断并恢复工作集摘要。需要业务事务和精确续跑时，基于现有机制补齐保证。 [RuntimeEventStore](../../backend/src/main/java/cc/ginpika/minis/agent/runtime/event/RuntimeEventStore.java) · [ToolExecutionRecorder](../../backend/src/main/java/cc/ginpika/minis/agent/runtime/ToolExecutionRecorder.java) · [TaskRecovery](../../backend/src/main/java/cc/ginpika/minis/agent/runtime/TaskRecovery.java) |
+| 会话与轮次 | `hub_session` 是稳定会话 ID，`chat_turn` 配对触发、回复和任务。`chat_message` 同时承载转录与部分执行记录。旧会话和分支可能依赖 `History` 的回退配对。 [Schema](../../backend/src/main/resources/schema.sql) · [History](../../backend/src/main/java/cc/ginpika/rukksh/agent/chat/turn/History.java) |
+| 装配与预算 | `ContextProvider` 直接产出 `systemSuffix` 或 `messages`。预算先扣 system 基底和工具 schema，动态 suffix 随后才拼入。零历史预算也会走全量回放。先在 `ContextBuilder` 附近接入少量结构化片段和整份请求的预算。 [ContextProvider](../../backend/src/main/java/cc/ginpika/rukksh/agent/context/ContextProvider.java) · [ChatContextService](../../backend/src/main/java/cc/ginpika/rukksh/agent/chat/ChatContextService.java) |
+| 执行与观测 | `ChatTurnRunner` 和 `AgentRunner` 共享 `AgentRuntime` 与 `ModelLoop`。工具往返会使请求继续增长。保留现有循环，在实际发送边界复核最终预算和采集 Manifest。当前 raw-context 预览是重新组装的，不能代替实际请求记录。圆桌虽复用执行链，却有自己的装配路径。 [ModelLoop](../../backend/src/main/java/cc/ginpika/rukksh/ai/runtime/ModelLoop.java) · [ChatContextService](../../backend/src/main/java/cc/ginpika/rukksh/agent/chat/ChatContextService.java) |
+| 记忆 | 复用 `MemoryPolicy`、时态和来源过滤、`recall_memory`、工作集及现有记忆治理。初始 `MemorySnapshot` 会随模型步骤重验和渲染，按 Turn 覆盖的键不足以记录父子调用。关闭回放的正文也要按用途检查是否进入记忆采集和提炼。现有 `memory_off` 语义接手时从代码核实。 [MemoryProvider](../../backend/src/main/java/cc/ginpika/rukksh/agent/context/MemoryProvider.java) · [MemoryLiveContext](../../backend/src/main/java/cc/ginpika/rukksh/ai/memory/MemoryLiveContext.java) |
+| 子代理 | 已有独立请求、任务与产物、同步和后台执行。后台报告虽显示为摘要卡片，全文仍写进聊天历史，批次总结还会读取会话。`read_subagent_run` 的读取路径应核对会话和 Agent 归属。复用现有 runner 和产物，以结构化结果及引用替换默认全文回流。 [SubagentService](../../backend/src/main/java/cc/ginpika/rukksh/agent/subagent/SubagentService.java) · [SubagentDeliveryService](../../backend/src/main/java/cc/ginpika/rukksh/agent/chat/SubagentDeliveryService.java) |
+| 状态与恢复 | 现有事件表可去重，事件总线有提交后广播路径。工具执行键主要用于追踪，启动恢复主要把在途执行标为中断并恢复工作集摘要。需要业务事务和精确续跑时，基于现有机制补齐保证。 [RuntimeEventStore](../../backend/src/main/java/cc/ginpika/rukksh/agent/runtime/event/RuntimeEventStore.java) · [ToolExecutionRecorder](../../backend/src/main/java/cc/ginpika/rukksh/agent/runtime/ToolExecutionRecorder.java) · [TaskRecovery](../../backend/src/main/java/cc/ginpika/rukksh/agent/runtime/TaskRecovery.java) |
 
 ## 分阶段实施与验收
 
@@ -101,7 +101,7 @@ P1 验收要求如下。
 
 - 后端启动时设置 `CONTEXT_EPHEMERAL_CHAT=true`，在个人单聊启用新选取策略。默认值为 `false`。预算使用该模型配置的窗口、`CONTEXT_RESERVE_OUTPUT_TOKENS` 和估算安全余量。窗口不足时，当前输入与必带内容优先。
 - `read_context_source` 在当前会话内分页列出或读取文本。消息使用 `message:<id>`，原生工具记录使用 `message:<id>:tool:<索引>`，任务产物使用 `artifact:<id>`。超长工具结果在裁剪时可保存为任务产物，当前轮就能用引用回读。自动装载和回读共用消息归属校验，早期无任务关联的消息沿用会话绑定。每次提交模型请求前复核会话、Agent、项目和当前 Turn。
-- 使用 `GET /api/sessions/{id}/context-manifests?turnId=<id>&limit=30` 查看出站元数据，两个查询参数均可省略。调用序号和模型重试序号从零开始，同一尝试中的 HTTP 正文发送次数从一开始。诊断记录保存在进程内，保留至多 500 条、24 小时。`raw-context` 的响应头 `X-Minis-Context-Kind: preview` 标记预览。
+- 使用 `GET /api/sessions/{id}/context-manifests?turnId=<id>&limit=30` 查看出站元数据，两个查询参数均可省略。调用序号和模型重试序号从零开始，同一尝试中的 HTTP 正文发送次数从一开始。诊断记录保存在进程内，保留至多 500 条、24 小时。`raw-context` 的响应头 `X-Rukksh-Context-Kind: preview` 标记预览。
 - 自动化用例以模拟模型对照长叙事的旧过程裁剪和近期约定保留，以及长日志裁剪后按引用精确读回根因。真实模型的行为、总 token、缓存命中和延迟仍需对照采样。
 
 ### P2 · 收敛 SubAgent 回流和记忆入口
@@ -176,4 +176,4 @@ P1 验收要求如下。
 - Scene 的首个正式流程、自动结束信号和是否需要独立持久实体，用对照结果决定。
 - 待办确认试点以外的恢复范围和业务操作，由实际流程决定。
 
-公开对照包括同一 Codex thread 上的压缩事件、Anthropic 持久会话与按需回读，以及 OpenAI 对委派与控制权转移的区分。这些资料用于类比设计。Minis 的效果以自己的对照评测为准。 [Codex App Server](https://learn.chatgpt.com/docs/app-server#trigger-thread-compaction) · [Anthropic Managed Agents](https://www.anthropic.com/research/managed-agents) · [OpenAI Orchestration](https://developers.openai.com/api/docs/guides/agents/orchestration) · [Anthropic Agent Memory](https://www.anthropic.com/research/components-of-agent-memory) · [OpenAI Agent Evals](https://developers.openai.com/api/docs/guides/agent-evals)
+公开对照包括同一 Codex thread 上的压缩事件、Anthropic 持久会话与按需回读，以及 OpenAI 对委派与控制权转移的区分。这些资料用于类比设计。Rukksh 的效果以自己的对照评测为准。 [Codex App Server](https://learn.chatgpt.com/docs/app-server#trigger-thread-compaction) · [Anthropic Managed Agents](https://www.anthropic.com/research/managed-agents) · [OpenAI Orchestration](https://developers.openai.com/api/docs/guides/agents/orchestration) · [Anthropic Agent Memory](https://www.anthropic.com/research/components-of-agent-memory) · [OpenAI Agent Evals](https://developers.openai.com/api/docs/guides/agent-evals)

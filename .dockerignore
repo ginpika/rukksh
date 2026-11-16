@@ -12,6 +12,7 @@ data/
 *.db
 *.db-wal
 *.db-shm
+*.vscdb
 .git/
 .idea/
 .vscode/

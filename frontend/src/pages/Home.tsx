@@ -89,7 +89,7 @@ type Props = { connErr: string | null }
 const projectActionBtn = 'flex w-full items-center gap-2.5 rounded-md border px-3 py-2 text-left text-xs font-medium shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50'
 
 /** 记住最近打开的会话：刷新后凭它判断「刚才那条会话是不是还在生成」，是就自动回去续看（断点续传） */
-const LAST_SESSION_KEY = 'minis.chat.lastSession'
+const LAST_SESSION_KEY = 'rukksh.chat.lastSession'
 
 /** 本次页面加载是否「一进来就落在首页」：断点续传只在这种情形触发——
  *  否则从别的页点「首页」进来时，也会被强行拽进那条正在生成的会话 */
@@ -782,7 +782,7 @@ export default function Home({ connErr }: Props) {
   /** BA 动画背景开关（层叠天空 + 会话白幕），记忆到 localStorage */
   const [skyOn, setSkyOn] = useState(() => {
     try {
-      return localStorage.getItem('minis.ba.sky') !== '0'
+      return localStorage.getItem('rukksh.ba.sky') !== '0'
     } catch {
       return true
     }
@@ -791,7 +791,7 @@ export default function Home({ connErr }: Props) {
     setSkyOn((v) => {
       const next = !v
       try {
-        localStorage.setItem('minis.ba.sky', next ? '1' : '0')
+        localStorage.setItem('rukksh.ba.sky', next ? '1' : '0')
       } catch {
         /* 隐私模式等场景忽略 */
       }
@@ -1302,7 +1302,7 @@ export default function Home({ connErr }: Props) {
   /* backend 健康检查失败（App 注入）：以错误 message box 提示，不再占据首页排版 */
   useEffect(() => {
     if (connErr) {
-      setToast(`backend 未连通（${connErr}）——请先启动 minis/backend`)
+      setToast(`backend 未连通（${connErr}）——请先启动 rukksh/backend`)
     }
   }, [connErr])
 
@@ -1744,8 +1744,8 @@ export default function Home({ connErr }: Props) {
   }, [])
 
   useEffect(() => {
-    window.addEventListener('minis:home-search', returnToSearch)
-    return () => window.removeEventListener('minis:home-search', returnToSearch)
+    window.addEventListener('rukksh:home-search', returnToSearch)
+    return () => window.removeEventListener('rukksh:home-search', returnToSearch)
   }, [returnToSearch])
 
   /** 切换检索/会话模式：搜索框左侧图标按钮与下方滑块共用同一入口 */

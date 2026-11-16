@@ -7,8 +7,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
 
 const tempRoot = resolve(tmpdir())
-const output = mkdtempSync(join(tempRoot, 'minis-url-tests-'))
-if (dirname(resolve(output)) !== tempRoot || !basename(output).startsWith('minis-url-tests-')) throw new Error('临时测试目录校验失败')
+const output = mkdtempSync(join(tempRoot, 'rukksh-url-tests-'))
+if (dirname(resolve(output)) !== tempRoot || !basename(output).startsWith('rukksh-url-tests-')) throw new Error('临时测试目录校验失败')
 const { writeFileSync } = await import('node:fs')
 let readableUrl, navigationUrl
 try {

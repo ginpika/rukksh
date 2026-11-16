@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const frontend = fileURLToPath(new URL('../', import.meta.url))
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const dist = path.join(frontend, 'dist'), output = path.resolve(frontend, '../backend/target/workspace-shell-browser-check')
 await fs.mkdir(output, { recursive: true })
@@ -16,7 +16,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
 const page = await context.newPage(); page.setDefaultTimeout(10000)
 page.on('pageerror', error => errors.push(error.message))
-await context.addInitScript(() => localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })))
+await context.addInitScript(() => localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })))
 await page.routeWebSocket('**/ws/workspaces/terminals/*', socket => {
   const token = new URL(socket.url()).pathname.split('/').at(-1), ticket = tickets.get(token)
   tickets.delete(token)

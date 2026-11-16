@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { AppIcon } from '../../components/AppIcon'
-import { SlimeAppearanceButton } from '../../components/SlimeAppearance'
+import { RukkshAppearanceButton } from '../../components/RukkshAppearance'
 
 export default function CodingToolbar({ children, actions, onChooseProject, projectTabId, backHref = '#/dashboard', backLabel = '返回 Dashboard' }: {
   children?: ReactNode
@@ -30,7 +30,7 @@ export default function CodingToolbar({ children, actions, onChooseProject, proj
       {children}
       <div className="coding-toolbar-actions">
         {actions}
-        <SlimeAppearanceButton />
+        <RukkshAppearanceButton />
       </div>
     </header>
   )

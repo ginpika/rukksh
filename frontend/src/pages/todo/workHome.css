@@ -1,10 +1,10 @@
-.work-surface.slime-surface {
+.work-surface.rukksh-surface {
   --work-success: var(--sl-accent-hover);
   --ui-clip-sm: none;
   letter-spacing: normal;
 }
 
-:root[data-scheme='dark'] .work-surface.slime-surface {
+:root[data-scheme='dark'] .work-surface.rukksh-surface {
   --work-success: var(--sl-accent);
 }
 

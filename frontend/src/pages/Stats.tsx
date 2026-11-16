@@ -191,7 +191,7 @@ export default function Stats() {
   }
 
   return (
-    <PortalAppearanceContext value="slime-surface usage-popover">
+    <PortalAppearanceContext value="rukksh-surface usage-popover">
       <div className="usage-page">
         <div className="usage-toolbar">
           <div className="usage-toolbar__row">

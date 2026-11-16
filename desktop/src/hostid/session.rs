@@ -743,7 +743,7 @@ mod tests {
         ));
         assert!(matches_wk_cookie(
             &cookie,
-            &Url::parse("https://minis.ginpika.cc/api/auth/me").unwrap()
+            &Url::parse("https://rukksh.ginpika.cc/api/auth/me").unwrap()
         ));
         assert!(matches_wk_cookie(
             &cookie,
@@ -784,7 +784,7 @@ mod tests {
         ));
         assert!(!matches_wk_cookie(
             &host_only,
-            &Url::parse("https://minis.ginpika.cc/api/sso/session").unwrap()
+            &Url::parse("https://rukksh.ginpika.cc/api/sso/session").unwrap()
         ));
 
         let ip_cookie = Cookie::build(("sso_token", "jwt"))

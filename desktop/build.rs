@@ -25,8 +25,8 @@ fn main() {
             .unwrap_or(fallback)
             .to_string()
     };
-    println!("cargo:rustc-env=BRAND_NAME={}", read("displayName", "minis"));
-    println!("cargo:rustc-env=BRAND_SLUG={}", read("slug", "minis"));
+    println!("cargo:rustc-env=BRAND_NAME={}", read("displayName", "Rukksh"));
+    println!("cargo:rustc-env=BRAND_SLUG={}", read("slug", "rukksh"));
     println!("cargo:rustc-env=BRAND_TAGLINE={}", read("tagline", ""));
 
     tauri_build::build()

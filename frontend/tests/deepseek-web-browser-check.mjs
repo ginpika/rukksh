@@ -8,7 +8,7 @@ const frontend = fileURLToPath(new URL('../', import.meta.url))
 const dist = path.join(frontend, 'dist')
 const output = path.resolve(frontend, '../backend/target/deepseek-web-browser-check')
 await fs.mkdir(output, { recursive: true })
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const html = await fs.readFile(path.join(dist, 'index.html'), 'utf8')
 const config = { baseUrl: 'https://api.deepseek.com', hasApiKey: false, fastEnabled: false, ragEnabled: false, fetchEnabled: true, count: 5, timeoutSeconds: 15 }
@@ -17,8 +17,8 @@ let secret = '', testFails = false, searchMode = 'web'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
 await context.addInitScript(() => {
-  window.__MINIS_LOCAL_TOKEN__ = 'fixture-desktop-token'
-  if (!localStorage.getItem('minis.theme.v4')) localStorage.setItem('minis.theme.v4', JSON.stringify({
+  window.__RUKKSH_LOCAL_TOKEN__ = 'fixture-desktop-token'
+  if (!localStorage.getItem('rukksh.theme.v4')) localStorage.setItem('rukksh.theme.v4', JSON.stringify({
     v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false },
   }))
 })
@@ -140,8 +140,8 @@ try {
 
   for (const theme of ['old', 'endfield', 'bluearchive', 'astrolabe']) {
     await page.evaluate(themeId => {
-      const state = JSON.parse(localStorage.getItem('minis.theme.v4')); state.themeId = themeId
-      localStorage.setItem('minis.theme.v4', JSON.stringify(state)); location.hash = '#/settings'
+      const state = JSON.parse(localStorage.getItem('rukksh.theme.v4')); state.themeId = themeId
+      localStorage.setItem('rukksh.theme.v4', JSON.stringify(state)); location.hash = '#/settings'
     }, theme)
     await page.reload()
     await panel.getByRole('button', { name: '保存联网检索配置' }).waitFor()

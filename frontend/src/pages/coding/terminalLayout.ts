@@ -1,6 +1,6 @@
 export type TerminalLayout = { inEditor: boolean; open: boolean; view: boolean }
 
-const key = (project: string) => `minis.coding.terminalLayout.${project}`
+const key = (project: string) => `rukksh.coding.terminalLayout.${project}`
 
 export function readTerminalLayout(project: string): TerminalLayout {
   const defaults = { inEditor: false, open: true, view: false }

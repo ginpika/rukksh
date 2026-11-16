@@ -26,7 +26,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // dev：前端同源走 /api，由 vite 代理到 minis backend
+      // dev：前端同源走 /api，由 vite 代理到 rukksh backend
       '/api': {
         target: process.env.VITE_DEV_API ?? 'http://localhost:18081',
         changeOrigin: true,
@@ -38,7 +38,7 @@ export default defineConfig({
       },
     },
     allowedHosts:[
-      'local.minis.ginpika.cc'
+      'local.rukksh.ginpika.cc'
     ]
   },
 })

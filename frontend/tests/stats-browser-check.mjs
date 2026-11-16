@@ -8,7 +8,7 @@ const frontend = fileURLToPath(new URL('../', import.meta.url))
 const dist = path.join(frontend, 'dist')
 const output = path.resolve(frontend, '../backend/target/stats-browser-check')
 await fs.mkdir(output, { recursive: true })
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const html = await fs.readFile(path.join(dist, 'index.html'), 'utf8')
 const endpoint = 'https://fixture.invalid/v1'
@@ -44,7 +44,7 @@ const page = await context.newPage()
 page.setDefaultTimeout(7000)
 page.on('pageerror', error => errors.push(error.message))
 await context.addInitScript(() => {
-  if (!localStorage.getItem('minis.theme.v4')) localStorage.setItem('minis.theme.v4', JSON.stringify({
+  if (!localStorage.getItem('rukksh.theme.v4')) localStorage.setItem('rukksh.theme.v4', JSON.stringify({
     v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false },
   }))
 })
@@ -148,8 +148,8 @@ try {
   await page.getByRole('button', { name: '30 天', exact: true }).click(); await loaded()
   for (const theme of ['old', 'endfield', 'bluearchive', 'astrolabe']) {
     await page.evaluate(themeId => {
-      const state = JSON.parse(localStorage.getItem('minis.theme.v4'))
-      state.themeId = themeId; localStorage.setItem('minis.theme.v4', JSON.stringify(state))
+      const state = JSON.parse(localStorage.getItem('rukksh.theme.v4'))
+      state.themeId = themeId; localStorage.setItem('rukksh.theme.v4', JSON.stringify(state))
     }, theme)
     await page.reload(); await loaded()
     await page.locator('.usage-page h1').scrollIntoViewIfNeeded()

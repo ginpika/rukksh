@@ -40,7 +40,7 @@ fn wait_for_login(
 ) -> Result<Option<User>, String> {
     close_existing_login_window(app);
 
-    let mut callback = provider.site.url("__minis_sso_done");
+    let mut callback = provider.site.url("__rukksh_sso_done");
     callback
         .query_pairs_mut()
         .append_pair("attempt", &uuid::Uuid::new_v4().to_string());
@@ -167,18 +167,18 @@ mod tests {
 
     #[test]
     fn matches_callback_by_origin_and_path_ignoring_query_variations() {
-        let callback = Url::parse("https://mail.ginpika.cc/__minis_sso_done?attempt=1234").unwrap();
+        let callback = Url::parse("https://mail.ginpika.cc/__rukksh_sso_done?attempt=1234").unwrap();
 
         assert!(matches_callback(
-            &Url::parse("https://mail.ginpika.cc/__minis_sso_done?attempt=1234").unwrap(),
+            &Url::parse("https://mail.ginpika.cc/__rukksh_sso_done?attempt=1234").unwrap(),
             &callback
         ));
         assert!(matches_callback(
-            &Url::parse("https://mail.ginpika.cc/__minis_sso_done").unwrap(),
+            &Url::parse("https://mail.ginpika.cc/__rukksh_sso_done").unwrap(),
             &callback
         ));
         assert!(matches_callback(
-            &Url::parse("https://mail.ginpika.cc/__minis_sso_done?foo=bar").unwrap(),
+            &Url::parse("https://mail.ginpika.cc/__rukksh_sso_done?foo=bar").unwrap(),
             &callback
         ));
         assert!(!matches_callback(
@@ -186,7 +186,7 @@ mod tests {
             &callback
         ));
         assert!(!matches_callback(
-            &Url::parse("https://other.ginpika.cc/__minis_sso_done?attempt=1234").unwrap(),
+            &Url::parse("https://other.ginpika.cc/__rukksh_sso_done?attempt=1234").unwrap(),
             &callback
         ));
     }

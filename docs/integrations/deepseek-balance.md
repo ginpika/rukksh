@@ -16,6 +16,6 @@
 
 这是官方账户级余额的定期查询快照；同一账户的不同模型与联网检索共享余额，不代表某个 Agent 的独立预算，也不保证扣费后的即时推送。
 
-验证：`DeepSeekBalanceServiceTest` 覆盖端点识别、协议、精度、多币种、缓存、并发、密钥隔离、错误与恢复；`DeepSeekBalanceControllerTest` 覆盖凭据来源、精确 ID 与缓存响应头。`frontend/tests/deepseek-balance-browser-check.mjs` 使用模拟 API 验证交互、轮询生命周期、四主题、移动端和 200% 字体。浏览器脚本依赖 Playwright，沿用 `MINIS_PLAYWRIGHT_DIR` 指定依赖位置；构建前端后执行。
+验证：`DeepSeekBalanceServiceTest` 覆盖端点识别、协议、精度、多币种、缓存、并发、密钥隔离、错误与恢复；`DeepSeekBalanceControllerTest` 覆盖凭据来源、精确 ID 与缓存响应头。`frontend/tests/deepseek-balance-browser-check.mjs` 使用模拟 API 验证交互、轮询生命周期、四主题、移动端和 200% 字体。浏览器脚本依赖 Playwright，沿用 `RUKKSH_PLAYWRIGHT_DIR` 指定依赖位置；构建前端后执行。
 
 官方接口文档：https://api-docs.deepseek.com/api/get-user-balance/

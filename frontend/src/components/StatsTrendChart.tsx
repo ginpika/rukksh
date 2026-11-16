@@ -24,7 +24,7 @@ type ECOption = ComposeOption<
   LineSeriesOption | GridComponentOption | TooltipComponentOption | LegendComponentOption
 >
 
-// Canvas 需要实际色值。中性色与 slimeAppearance.css 对齐。
+// Canvas 需要实际色值。中性色与 rukkshAppearance.css 对齐。
 const CHART_COLORS = {
   light: {
     panel: '#ffffff',

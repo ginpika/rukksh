@@ -180,7 +180,7 @@ mod tests {
                 "economy_capture::tests::fixture_window_process",
                 "--nocapture",
             ])
-            .env("MINIS_CAPTURE_FIXTURE", "1")
+            .env("RUKKSH_CAPTURE_FIXTURE", "1")
             .creation_flags(0x08000000)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -199,7 +199,7 @@ mod tests {
             fixture = list()
                 .unwrap()
                 .into_iter()
-                .find(|w| w.title == "MinisEconomyCaptureFixture" && w.pid == guard.0.id());
+                .find(|w| w.title == "RukkshEconomyCaptureFixture" && w.pid == guard.0.id());
             if fixture.is_some() {
                 break;
             }
@@ -236,13 +236,13 @@ mod tests {
 
     #[test]
     fn fixture_window_process() {
-        if std::env::var("MINIS_CAPTURE_FIXTURE").as_deref() != Ok("1") {
+        if std::env::var("RUKKSH_CAPTURE_FIXTURE").as_deref() != Ok("1") {
             return;
         }
         // Off-screen, no focus, no taskbar button; its message loop paints only this fixture.
         unsafe {
             let module = GetModuleHandleW(None).unwrap();
-            let class = w!("MinisEconomyCaptureTest");
+            let class = w!("RukkshEconomyCaptureTest");
             let wc = WNDCLASSW {
                 lpfnWndProc: Some(procedure),
                 hInstance: HINSTANCE(module.0),
@@ -254,7 +254,7 @@ mod tests {
             let hwnd = CreateWindowExW(
                 WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                 class,
-                w!("MinisEconomyCaptureFixture"),
+                w!("RukkshEconomyCaptureFixture"),
                 WS_POPUP | WS_VISIBLE,
                 -10000,
                 -10000,

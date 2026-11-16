@@ -249,7 +249,7 @@ export default function MemoryPage() {
       {selected &&
         createPortal(
           <div
-            className="mem-observatory slime-surface mem-detail-overlay"
+            className="mem-observatory rukksh-surface mem-detail-overlay"
             onClick={event => {
               if (event.target === event.currentTarget) setSelected(null)
             }}

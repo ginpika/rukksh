@@ -14,7 +14,7 @@ use session::{Provider, RemoteAuth, SessionClient, Site, User, DEFAULT_COOKIE};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Manager, Url};
 
-pub(super) const LOGOUT_PATH: &str = "/__minis_desktop_logout";
+pub(super) const LOGOUT_PATH: &str = "/__rukksh_desktop_logout";
 
 #[derive(Default)]
 pub(super) struct State {

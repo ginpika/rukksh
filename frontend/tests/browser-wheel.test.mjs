@@ -6,8 +6,8 @@ import { dirname, join, resolve, basename } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
 
-const tempRoot = resolve(tmpdir()), output = mkdtempSync(join(tempRoot, 'minis-wheel-tests-'))
-if (dirname(resolve(output)) !== tempRoot || !basename(output).startsWith('minis-wheel-tests-')) throw new Error('临时测试目录校验失败')
+const tempRoot = resolve(tmpdir()), output = mkdtempSync(join(tempRoot, 'rukksh-wheel-tests-'))
+if (dirname(resolve(output)) !== tempRoot || !basename(output).startsWith('rukksh-wheel-tests-')) throw new Error('临时测试目录校验失败')
 let bindBrowserWheel
 try {
   const source = readFileSync(fileURLToPath(new URL('../src/components/browserWheel.ts', import.meta.url)), 'utf8')

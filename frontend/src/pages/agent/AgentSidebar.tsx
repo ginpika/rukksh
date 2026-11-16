@@ -54,13 +54,13 @@ export default function AgentSidebar({ mainAgent, agents, selectedAgentId, previ
         </button>
       )}
       <div className="sl-agents__head-actions">
-        <button ref={searchButtonRef} type="button" className="sl-agents__round" aria-label="搜索 Agent" title="搜索 Agent" aria-expanded={searchOpen} aria-controls={searchOpen ? 'slime-agent-search' : undefined}
+        <button ref={searchButtonRef} type="button" className="sl-agents__round" aria-label="搜索 Agent" title="搜索 Agent" aria-expanded={searchOpen} aria-controls={searchOpen ? 'rukksh-agent-search' : undefined}
           onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}><Search size={18} /></button>
         <a className="sl-agents__round" href="#/multi-agent/new" aria-label="新增 Agent" title="新增 Agent"><Plus size={21} /></a>
       </div>
     </div>
 
-    {searchOpen && <div className="sl-agents__search" id="slime-agent-search" onKeyDown={event => {
+    {searchOpen && <div className="sl-agents__search" id="rukksh-agent-search" onKeyDown={event => {
       if (event.key !== 'Escape' || event.nativeEvent.isComposing || event.keyCode === 229) return
       event.preventDefault()
       event.stopPropagation()

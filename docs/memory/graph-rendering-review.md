@@ -39,7 +39,7 @@ npm --prefix frontend run bench:graph
 npm --prefix frontend run build
 ```
 
-浏览器脚本使用 Playwright 和本地 Chrome；若 Playwright 不在前端依赖中，设置 `MINIS_PLAYWRIGHT_DIR` 到包含 Playwright 的 `node_modules` 上级目录。脚本以 Vite 内存构建和路由拦截加载真实组件，不依赖后端和 loopback 服务。
+浏览器脚本使用 Playwright 和本地 Chrome；若 Playwright 不在前端依赖中，设置 `RUKKSH_PLAYWRIGHT_DIR` 到包含 Playwright 的 `node_modules` 上级目录。脚本以 Vite 内存构建和路由拦截加载真实组件，不依赖后端和 loopback 服务。
 
 - 纯函数回归：固定旧节点、确定性、无效 seed、重合节点、单节点居中、属性更新、标识冲突、自环、双向多重边，以及 256 节点近似结果对精确计算的总速度误差小于 3%。
 - 真实 Chrome 交互：两引擎拖拽、自环点击、属性编辑后位置不变、静态增量展开、关系过滤与滚轮缩放、选中不重建 force、物理开关坐标与像素位置保持、冻结后不动、卸载后不再调度动画；使用 StrictMode 包装。追加物理开/关时从画布四角平移、移出原图边界后拖回，以及捕获松手后实际 rendered 帧检查异常外跳。

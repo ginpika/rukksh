@@ -1,7 +1,7 @@
 /**
  * 文档页：博客式文章分页列表（索引：标题|摘要|url），点击进入 markdown 详情。
  *
- * 呈现为知识库子页：SlimePage 极简页头下的居中列表 —— 与 /dashboard、/knowledge
+ * 呈现为知识库子页：RukkshPage 极简页头下的居中列表 —— 与 /dashboard、/knowledge
  * 同一套表面语言（系统字体、细描边、小圆角、柔和灰底）。
  */
 

@@ -4,21 +4,21 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
-const frontend = fileURLToPath(new URL('../', import.meta.url)), dist = path.resolve(frontend, process.env.MINIS_TODO_DIST || 'dist')
+const frontend = fileURLToPath(new URL('../', import.meta.url)), dist = path.resolve(frontend, process.env.RUKKSH_TODO_DIST || 'dist')
 const output = path.resolve(frontend, '../backend/target/todo-browser-check')
 await fs.mkdir(output, { recursive: true })
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const now = Date.parse('2026-10-16T06:25:00Z'), dayStart = Date.parse('2026-10-15T16:00:00Z'), dayEnd = dayStart + 86400000
 const make = (id, title, more = {}) => ({ id, title, note: '', projectId: null, projectName: null, projectStatus: null, state: 'idea', plannedOn: null, dueAt: null, createdAt: now - 86400000, updatedAt: now, firstStartedAt: null, completedAt: null, closedAt: null, version: 0, spentMillis: 0, ...more })
-let items = [make('design', '设计个人待办模块', { projectId: 'p', projectName: 'Minis', projectStatus: 'active', state: 'doing', plannedOn: '2026-10-16', firstStartedAt: now - 1500000, spentMillis: 1500000 }), make('remember', '验证记忆隔离', { projectId: 'p', projectName: 'Minis', projectStatus: 'active', state: 'ready', plannedOn: '2026-10-16' }), make('walk', '傍晚去河边走走', { state: 'ready', plannedOn: '2026-10-16' }), make('old', '处理原计划', { plannedOn: '2026-10-14', state: 'ready' }), make('idea', '试试语音记录想法'), make('done', '修好网页快照的长文阅读', { state: 'done', completedAt: now - 3600000, closedAt: now - 3600000, spentMillis: 4500000, note: '长文章终于可以完整读下去，来源也能追溯了。' })]
-let focus = [{ id: 'f1', todoId: 'done', title: items.at(-1).title, projectId: null, projectName: null, startedAt: now - 5 * 3600000, endedAt: now - 5 * 3600000 + 4500000, source: 'timer', note: '检查长文与来源', version: 0 }, { id: 'f2', todoId: 'design', title: items[0].title, projectId: 'p', projectName: 'Minis', startedAt: now - 1500000, endedAt: null, source: 'timer', note: '', version: 0 }]
+let items = [make('design', '设计个人待办模块', { projectId: 'p', projectName: 'Rukksh', projectStatus: 'active', state: 'doing', plannedOn: '2026-10-16', firstStartedAt: now - 1500000, spentMillis: 1500000 }), make('remember', '验证记忆隔离', { projectId: 'p', projectName: 'Rukksh', projectStatus: 'active', state: 'ready', plannedOn: '2026-10-16' }), make('walk', '傍晚去河边走走', { state: 'ready', plannedOn: '2026-10-16' }), make('old', '处理原计划', { plannedOn: '2026-10-14', state: 'ready' }), make('idea', '试试语音记录想法'), make('done', '修好网页快照的长文阅读', { state: 'done', completedAt: now - 3600000, closedAt: now - 3600000, spentMillis: 4500000, note: '长文章终于可以完整读下去，来源也能追溯了。' })]
+let focus = [{ id: 'f1', todoId: 'done', title: items.at(-1).title, projectId: null, projectName: null, startedAt: now - 5 * 3600000, endedAt: now - 5 * 3600000 + 4500000, source: 'timer', note: '检查长文与来源', version: 0 }, { id: 'f2', todoId: 'design', title: items[0].title, projectId: 'p', projectName: 'Rukksh', startedAt: now - 1500000, endedAt: null, source: 'timer', note: '', version: 0 }]
 for (const [id, todoId, start, end] of [['f3', 'design', '10:50', '11:15'], ['f4', 'remember', '11:20', '11:30'], ['f5', 'design', '13:00', '13:40']]) {
   const item = items.find(t => t.id === todoId)
   focus.push({ id, todoId, title: item.title, projectId: item.projectId, projectName: item.projectName, startedAt: Date.parse(`2026-10-16T${start}:00+08:00`), endedAt: Date.parse(`2026-10-16T${end}:00+08:00`), source: 'timer', note: '', version: 0 })
 }
 const projects = [
-  { id: 'p', name: 'Minis', status: 'active', kind: 'software', note: '打造自己的个人工作台。', createdAt: now - 86400000, updatedAt: now },
+  { id: 'p', name: 'Rukksh', status: 'active', kind: 'software', note: '打造自己的个人工作台。', createdAt: now - 86400000, updatedAt: now },
   { id: 'research', name: '学习计划', status: 'paused', kind: 'research', note: '整理研究方向与学习目标。', createdAt: now, updatedAt: now },
   { id: 'story', name: '故事集', status: 'archived', kind: 'story', note: '已经告一段落的故事与创作。', createdAt: now, updatedAt: now },
 ]
@@ -30,11 +30,11 @@ const matches = (t, project) => !project || (project === 'unassigned' ? !t.proje
 const overview = project => ({ today: '2026-10-16', zone: 'Asia/Shanghai', now, dayStart, dayEnd, items: items.filter(t => matches(t, project)), todayFocus: focus.filter(f => matches(f, project)), active: focus.find(f => f.endedAt === null) ?? null, projects, dayNote: note })
 function review(project, month) {
   const closed = month === '2026-10' ? items.filter(t => ['done', 'dropped'].includes(t.state) && matches(t, project)) : []
-  return { month, now, rangeStart: dayStart, rangeEnd: dayEnd, completedCount: closed.filter(t => t.state === 'done').length, droppedCount: closed.filter(t => t.state === 'dropped').length, spentMillis: 6000000, activeDays: 1, allocations: [{ todoId: 'design', title: '设计个人待办模块', projectId: 'p', projectName: 'Minis', millis: 6000000 }], closed, footprints: closed.length ? [{ todoId: closed[0].id, title: '第一次，把想法做成', detail: '完成了第一件事情', occurredAt: now }] : [], notes: note.body && !project ? [note] : [] }
+  return { month, now, rangeStart: dayStart, rangeEnd: dayEnd, completedCount: closed.filter(t => t.state === 'done').length, droppedCount: closed.filter(t => t.state === 'dropped').length, spentMillis: 6000000, activeDays: 1, allocations: [{ todoId: 'design', title: '设计个人待办模块', projectId: 'p', projectName: 'Rukksh', millis: 6000000 }], closed, footprints: closed.length ? [{ todoId: closed[0].id, title: '第一次，把想法做成', detail: '完成了第一件事情', occurredAt: now }] : [], notes: note.body && !project ? [note] : [] }
 }
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, timezoneId: 'Asia/Shanghai' })
-await context.addInitScript(() => { if (!localStorage.getItem('minis.theme.v4')) localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })) })
+await context.addInitScript(() => { if (!localStorage.getItem('rukksh.theme.v4')) localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })) })
 await context.route('**/*', async route => {
   const request = route.request(), url = new URL(request.url()), method = request.method()
   if (url.origin !== 'http://todo.test') { await route.abort(); return }
@@ -123,7 +123,7 @@ try {
   assert.equal(requested.length, beforeDropdown, 'opening, searching and closing a dropdown must not refetch the page')
   assert.equal(await page.locator('#todo-quick-input').evaluate(el => el.getBoundingClientRect().top), captureY, 'dropdown focus must not scroll the surrounding page')
   await page.getByRole('combobox', { name: '项目筛选', exact: true }).click()
-  await page.getByRole('option', { name: 'Minis', exact: true }).click(); await loaded()
+  await page.getByRole('option', { name: 'Rukksh', exact: true }).click(); await loaded()
   assert.equal(requested.length, beforeDropdown, 'current-item project filtering is local')
   assert.equal(await captureNode.evaluate(el => el.isConnected), true, 'capture stays mounted while filtering')
   assert.equal(await noteNode.evaluate(el => el.isConnected), true, 'day note stays mounted while filtering')
@@ -149,7 +149,7 @@ try {
   await page.getByRole('combobox', { name: '筛选项目分类', exact: true }).click()
   await page.getByRole('option', { name: '软件开发', exact: true }).click()
   assert.equal(await page.locator('.todo-project-card').count(), 1)
-  await page.locator('.todo-project-card').filter({ hasText: 'Minis' }).click()
+  await page.locator('.todo-project-card').filter({ hasText: 'Rukksh' }).click()
   await page.getByRole('region', { name: '项目详情', exact: true }).waitFor()
   await page.getByText('打造自己的个人工作台。', { exact: true }).waitFor()
   assert.equal(await page.locator('.todo-item,.todo-review-summary').count(), 0)
@@ -175,7 +175,7 @@ try {
   await projectEditor.getByRole('button', { name: '保存项目', exact: true }).click()
   await page.waitForFunction(() => !document.querySelector('[role="dialog"]'))
   await page.getByRole('button', { name: /^查看待办/ }).click(); await loaded()
-  assert.match(await page.getByRole('combobox', { name: '项目筛选', exact: true }).innerText(), /Minis/)
+  assert.match(await page.getByRole('combobox', { name: '项目筛选', exact: true }).innerText(), /Rukksh/)
   assert.equal(await page.getByRole('button', { name: '傍晚去河边走走', exact: true }).count(), 0)
   await page.getByRole('tab', { name: '时间分配', exact: true }).click()
   await page.locator('.todo-timeline-table').waitFor()
@@ -187,7 +187,7 @@ try {
   assert.equal(requested.filter(r => r.path === '/api/todos/review').at(-1).query.projectId ?? '', '')
   assert.equal(await page.locator('.todo-project-filter').count(), 0)
   await page.getByRole('tab', { name: /^今天/ }).click(); await loaded()
-  assert.match(await page.getByRole('combobox', { name: '项目筛选', exact: true }).innerText(), /Minis/, 'task filter is preserved between task views')
+  assert.match(await page.getByRole('combobox', { name: '项目筛选', exact: true }).innerText(), /Rukksh/, 'task filter is preserved between task views')
   await page.getByRole('button', { name: '清除筛选', exact: true }).click()
   checks.push('project search, status and category; project details without repeated todos or review; edit retry and persistence; scoped task filters; global time and review')
   const original = page.locator('.todo-item').filter({ has: page.getByRole('button', { name: '设计个人待办模块', exact: true }) })
@@ -214,7 +214,7 @@ try {
   await page.locator('.todo-day-note').getByText('已保存', { exact: true }).waitFor()
   assert.equal(await page.locator('.todo-day-note textarea').inputValue(), note.body)
   await page.getByRole('combobox', { name: '项目筛选', exact: true }).click()
-  await page.getByRole('option', { name: 'Minis', exact: true }).click(); await loaded()
+  await page.getByRole('option', { name: 'Rukksh', exact: true }).click(); await loaded()
   assert.equal(await page.getByRole('button', { name: '傍晚去河边走走', exact: true }).count(), 0)
   await page.getByRole('button', { name: '清除筛选', exact: true }).click(); await loaded()
   await page.getByRole('button', { name: '补记', exact: true }).click()
@@ -272,8 +272,8 @@ try {
   await page.getByRole('tab', { name: '项目', exact: true }).click()
   await page.getByRole('button', { name: '全部项目', exact: true }).click()
   await page.locator('.todo-project-card').first().waitFor()
-  await page.locator('.todo-project-card').filter({ hasText: 'Minis' }).click()
-  await page.locator('.todo-project-detail').getByRole('heading', { name: 'Minis', exact: true }).waitFor()
+  await page.locator('.todo-project-card').filter({ hasText: 'Rukksh' }).click()
+  await page.locator('.todo-project-detail').getByRole('heading', { name: 'Rukksh', exact: true }).waitFor()
   assert.equal(await page.getByRole('button', { name: '傍晚去河边走走', exact: true }).count(), 0)
   await page.screenshot({ path: path.join(output, 'project-detail.png'), fullPage: true })
   await page.getByRole('button', { name: '全部项目', exact: true }).click()
@@ -316,7 +316,7 @@ try {
   await page.waitForFunction(() => document.querySelector('.todo-review-summary p')?.textContent?.includes('09'))
   checks.push('history, footprints and month navigation')
   for (const themeId of ['old', 'endfield', 'bluearchive', 'astrolabe']) {
-    await page.evaluate(themeId => { const theme = JSON.parse(localStorage.getItem('minis.theme.v4')); theme.themeId = themeId; localStorage.setItem('minis.theme.v4', JSON.stringify(theme)) }, themeId)
+    await page.evaluate(themeId => { const theme = JSON.parse(localStorage.getItem('rukksh.theme.v4')); theme.themeId = themeId; localStorage.setItem('rukksh.theme.v4', JSON.stringify(theme)) }, themeId)
     await page.reload(); await loaded()
     assert.equal(await page.locator('html').getAttribute('data-theme'), themeId)
     const tiny = await page.locator('.personal-todo-page').evaluate(root => [...root.querySelectorAll('*')].filter(el => [...el.childNodes].some(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 12).map(el => el.tagName + ':' + el.textContent.slice(0, 25)))
@@ -341,20 +341,20 @@ try {
       await page.getByRole('tab', { name: '项目', exact: true }).click()
       await page.locator('.todo-project-card').first().waitFor()
       assert.equal(await page.locator('.personal-todo-page').evaluate(el => el.scrollWidth <= el.clientWidth + 1), true, `${themeId}/${width}: projects reflow`)
-      await page.locator('.todo-project-card').filter({ hasText: 'Minis' }).click()
+      await page.locator('.todo-project-card').filter({ hasText: 'Rukksh' }).click()
       await page.locator('.todo-project-detail').waitFor()
       assert.equal(await page.locator('.personal-todo-page').evaluate(el => el.scrollWidth <= el.clientWidth + 1), true, `${themeId}/${width}: project details reflow`)
       if (width === 320) await page.screenshot({ path: path.join(output, `${themeId}-project-detail-mobile.png`), fullPage: true })
       await page.getByRole('button', { name: '编辑项目', exact: true }).click()
       await dialog.getByRole('combobox', { name: '项目分类', exact: true }).click()
       await page.getByRole('option', { name: '软件开发', exact: true }).press('Escape')
-      assert.equal(await dialog.getByLabel('项目名称', { exact: true }).inputValue(), 'Minis', 'closing a dropdown retains project fields')
+      assert.equal(await dialog.getByLabel('项目名称', { exact: true }).inputValue(), 'Rukksh', 'closing a dropdown retains project fields')
       await dialog.getByRole('button', { name: '取消', exact: true }).click()
       await page.getByRole('button', { name: '全部项目', exact: true }).click()
       await page.getByRole('tab', { name: /^今天/ }).click(); await loaded()
       if (width === 1440) await page.screenshot({ path: path.join(output, `${themeId}.png`), fullPage: true })
     }
-    await page.evaluate(() => { const theme = JSON.parse(localStorage.getItem('minis.theme.v4')); theme.schemeMode = 'dark'; localStorage.setItem('minis.theme.v4', JSON.stringify(theme)) })
+    await page.evaluate(() => { const theme = JSON.parse(localStorage.getItem('rukksh.theme.v4')); theme.schemeMode = 'dark'; localStorage.setItem('rukksh.theme.v4', JSON.stringify(theme)) })
     await page.reload(); await loaded()
     assert.equal(await page.locator('html').getAttribute('data-scheme'), 'dark')
     await page.screenshot({ path: path.join(output, `${themeId}-dark-mobile.png`), fullPage: true })
@@ -362,11 +362,11 @@ try {
     await page.locator('.todo-project-card').first().waitFor()
     await page.screenshot({ path: path.join(output, `${themeId}-projects-dark-mobile.png`), fullPage: true })
     await page.getByRole('tab', { name: /^今天/ }).click(); await loaded()
-    await page.evaluate(() => { const theme = JSON.parse(localStorage.getItem('minis.theme.v4')); theme.schemeMode = 'light'; localStorage.setItem('minis.theme.v4', JSON.stringify(theme)) })
+    await page.evaluate(() => { const theme = JSON.parse(localStorage.getItem('rukksh.theme.v4')); theme.schemeMode = 'light'; localStorage.setItem('rukksh.theme.v4', JSON.stringify(theme)) })
   }
   await page.setViewportSize({ width: 1024, height: 1000 })
   await page.getByRole('tab', { name: '项目', exact: true }).click()
-  await page.locator('.todo-project-card').filter({ hasText: 'Minis' }).click()
+  await page.locator('.todo-project-card').filter({ hasText: 'Rukksh' }).click()
   await page.locator('.todo-project-detail').waitFor()
   await page.locator('.personal-todo-page').evaluate(root => {
     const values = [...root.querySelectorAll('*')].map(el => [el, parseFloat(getComputedStyle(el).fontSize)])

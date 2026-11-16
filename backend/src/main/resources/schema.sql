@@ -1,5 +1,5 @@
--- minis M0 schema（幂等：全部 IF NOT EXISTS；增量用 _schema.version）
--- 权威：minis/M0-骨架设计.md §5
+-- rukksh M0 schema（幂等：全部 IF NOT EXISTS；增量用 _schema.version）
+-- 权威：rukksh/M0-骨架设计.md §5
 PRAGMA journal_mode=WAL;
 PRAGMA busy_timeout=5000;
 PRAGMA foreign_keys=ON;
@@ -1003,7 +1003,7 @@ CREATE TABLE IF NOT EXISTS term_target (
   deny_patterns   TEXT,                         -- JSON：命令黑名单正则数组；命中即拒（先于白名单判定）
   write_paths     TEXT,                         -- local：允许写入的绝对目录（JSON 数组）；NULL 表示只读
   -- docker：container 与 image 二选一。给了 container 就直接 exec 进去（容器由外部管理）；
-  -- 只给 image 时惰性起一个常驻会话容器（minis-term-<name>）并复用，于是文件与环境改动跨调用保留。
+  -- 只给 image 时惰性起一个常驻会话容器（rukksh-term-<name>）并复用，于是文件与环境改动跨调用保留。
   docker_host     TEXT,                         -- 如 unix:///var/run/docker.sock、tcp://localhost:2375；NULL=环境默认
   image           TEXT,
   container       TEXT,

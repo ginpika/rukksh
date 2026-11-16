@@ -1076,7 +1076,7 @@
                   id="remote-url"
                   class="input"
                   type="url"
-                  placeholder="https://minis.example.com"
+                  placeholder="https://rukksh.example.com"
                   spellcheck="false"
                 />
                 <button id="choose-remote" class="btn">连接</button>
@@ -1507,7 +1507,7 @@
       invoke('desktop_state')
         .then(render)
         .catch((e) => toast(String(e), 'error'))
-      listen('minis://status', (event) => render(event.payload))
+      listen('rukksh://status', (event) => render(event.payload))
 
       localBtn.addEventListener('click', async () => {
         // 有可回的实例：直接导航回去（重新渲染，会话与业务数据都在后端，落回离开时的路由）
@@ -1767,7 +1767,7 @@
         .catch(() => renderUsers())
 
       // 登录窗口取回 hostid 用户、或当前用户被切换后，壳会推一份新的身份视图
-      listen('minis://user', (event) => {
+      listen('rukksh://user', (event) => {
         users = event.payload
         renderUsers()
         // 登录成功会清掉壳里的「会话已失效」标记：重读状态让横幅同步撤下

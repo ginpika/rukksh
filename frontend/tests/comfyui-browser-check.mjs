@@ -8,7 +8,7 @@ const frontend = fileURLToPath(new URL('../', import.meta.url))
 const dist = path.join(frontend, 'dist')
 const output = path.resolve(frontend, '../backend/target/comfyui-browser-check')
 await fs.mkdir(output, { recursive: true })
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const html = await fs.readFile(path.join(dist, 'index.html'), 'utf8')
 const view = { endpoints: [], profiles: [], defaultProfileId: null }
@@ -23,8 +23,8 @@ const workflow = {
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
 await context.addInitScript(() => {
-  window.__MINIS_LOCAL_TOKEN__ = 'fixture-desktop-token'
-  if (!localStorage.getItem('minis.theme.v4')) localStorage.setItem('minis.theme.v4', JSON.stringify({
+  window.__RUKKSH_LOCAL_TOKEN__ = 'fixture-desktop-token'
+  if (!localStorage.getItem('rukksh.theme.v4')) localStorage.setItem('rukksh.theme.v4', JSON.stringify({
     v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false },
   }))
 })
@@ -45,7 +45,7 @@ await context.route('**/*', async route => {
     try { await route.fulfill({ path: file }) } catch { await route.fulfill({ status: 404, body: '' }) }
     return
   }
-  requests.push({ path: url.pathname, method: request.method(), token: request.headers()['x-minis-token'], body: request.postData() })
+  requests.push({ path: url.pathname, method: request.method(), token: request.headers()['x-rukksh-token'], body: request.postData() })
   if (url.pathname === '/api/auth/me') { await route.fulfill({ json: { id: 'fixture', username: 'fixture', nickname: '验收用户', role: 'user' } }); return }
   if (url.pathname.endsWith('/events')) { await route.fulfill({ contentType: 'text/event-stream', body: '' }); return }
   if (url.pathname === '/api/settings') { await route.fulfill({ json: { models: [], defaultModelId: 'env', embedding: { mode: 'llm', model: '' }, rerank: { mode: 'off', model: '' } } }); return }
@@ -69,7 +69,7 @@ await context.route('**/*', async route => {
     await route.fulfill({ json: { generationId: 'generation', profileId: 'profile-1', promptId: 'remote-task', images: [{ id: imageId, url: '/api/comfyui/images/' + imageId }] } }); return
   }
   if (url.pathname === '/api/comfyui/images/' + imageId) {
-    assert.equal(request.headers()['x-minis-token'], 'fixture-desktop-token')
+    assert.equal(request.headers()['x-rukksh-token'], 'fixture-desktop-token')
     await route.fulfill({ contentType: 'image/png', body: imageBytes }); return
   }
   await route.fulfill({ json: [] })
@@ -192,8 +192,8 @@ try {
 
   for (const theme of ['old', 'endfield', 'bluearchive', 'astrolabe']) {
     await page.evaluate(themeId => {
-      const state = JSON.parse(localStorage.getItem('minis.theme.v4'))
-      state.themeId = themeId; localStorage.setItem('minis.theme.v4', JSON.stringify(state))
+      const state = JSON.parse(localStorage.getItem('rukksh.theme.v4'))
+      state.themeId = themeId; localStorage.setItem('rukksh.theme.v4', JSON.stringify(state))
     }, theme)
     await page.reload()
     await panel.getByRole('button', { name: '添加工作流档案' }).waitFor()

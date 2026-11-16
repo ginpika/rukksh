@@ -21,7 +21,7 @@ type Props = {
   menuHost: HTMLDivElement | null
 }
 
-const hiddenDirectories = new Set(['.git', '.minis-coding', 'node_modules', 'target', 'dist', '.ssh', '.aws'])
+const hiddenDirectories = new Set(['.git', '.rukksh-coding', '.minis-coding', 'node_modules', 'target', 'dist', '.ssh', '.aws'])
 const parentOf = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.'
 
 export default function CodingProjectPicker({

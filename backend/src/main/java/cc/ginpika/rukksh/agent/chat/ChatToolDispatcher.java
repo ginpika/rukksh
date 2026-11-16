@@ -1,0 +1,200 @@
+package cc.ginpika.rukksh.agent.chat;
+
+import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolbox;
+import cc.ginpika.rukksh.ai.computer.terminal.TerminalService;
+import cc.ginpika.rukksh.agent.member.AgentDirectory;
+import cc.ginpika.rukksh.agent.peer.AgentMessageService;
+import cc.ginpika.rukksh.ai.core.AgentScope;
+import cc.ginpika.rukksh.ai.core.UserScope;
+import cc.ginpika.rukksh.ai.core.tool.ToolDomain;
+import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRisk;
+import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
+import cc.ginpika.rukksh.ai.core.tool.ToolValidator;
+import cc.ginpika.rukksh.ai.core.tool.chat.RequestUserInputTool;
+import cc.ginpika.rukksh.ai.core.tool.memory.ManageProjectTool;
+import cc.ginpika.rukksh.ai.core.tool.heartbeat.CreatePlanTool;
+import cc.ginpika.rukksh.ai.core.tool.heartbeat.DelegatePlanTool;
+import cc.ginpika.rukksh.ai.core.tool.subagent.DelegateSubagentTool;
+import cc.ginpika.rukksh.ai.core.tool.heartbeat.DeletePlanTool;
+import cc.ginpika.rukksh.ai.core.tool.subagent.ReadSubagentRunTool;
+import cc.ginpika.rukksh.ai.core.tool.heartbeat.UpdatePlanTool;
+import cc.ginpika.rukksh.todo.PersonalTodoTools;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Set;
+import java.util.function.Predicate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Service;
+
+/** 单聊工具路由：先校验参数，再交给相应能力；授权仍由能力域负责。 */
+@Service
+public class ChatToolDispatcher {
+    private final ObjectMapper om;
+    private final ToolValidator validator;
+    private final TodoService todo;
+    private final HeartbeatTool heartbeat;
+    private final SubagentTool subagent;
+    private final TerminalService terminal;
+    private final KnowledgeToolbox toolbox;
+    private final ProjectWorkflowService projectWorkflows;
+    private cc.ginpika.rukksh.coding.CodingFacade coding;
+    private cc.ginpika.rukksh.ai.computer.integration.ComputerTools computer;
+    private AgentMessageService agentMessages;
+    private ProjectTools workProjects;
+    private PersonalTodoTools personalTodos;
+    private ToolManager workToolDefinitions;
+
+    @Autowired
+    public void setAgentMessages(AgentMessageService agentMessages) {
+        this.agentMessages = agentMessages;
+    }
+
+    @Autowired
+    public void setWorkTools(@Lazy ProjectTools workProjects, PersonalTodoTools personalTodos, ToolManager definitions) {
+        this.workProjects = workProjects;
+        this.personalTodos = personalTodos;
+        this.workToolDefinitions = definitions;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setComputer(cc.ginpika.rukksh.ai.computer.integration.ComputerTools computer) { this.computer = computer; }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setCoding(@org.springframework.context.annotation.Lazy cc.ginpika.rukksh.coding.CodingFacade coding) { this.coding=coding; }
+    private static final Set<String> PLAN_TOOLS = Set.of(
+            DelegatePlanTool.NAME, CreatePlanTool.NAME, UpdatePlanTool.NAME, DeletePlanTool.NAME);
+
+    /** 由子代理模块执行的工具：派一个匿名子代理 + 按 id 翻任意一次执行的过程 */
+    private static final Set<String> SUBAGENT_TOOLS = Set.of(
+            DelegateSubagentTool.NAME, ReadSubagentRunTool.NAME);
+
+    public ChatToolDispatcher(ObjectMapper om,
+            ToolValidator validator,
+            TodoService todo,
+            HeartbeatTool heartbeat,
+            SubagentTool subagent,
+            TerminalService terminal,
+            KnowledgeToolbox toolbox,
+            ProjectWorkflowService projectWorkflows) {
+        this.om = om;
+        this.validator = validator;
+        this.todo = todo;
+        this.heartbeat = heartbeat;
+        this.subagent = subagent;
+        this.terminal = terminal;
+        this.toolbox = toolbox;
+        this.projectWorkflows = projectWorkflows;
+    }
+
+    public String runTool(JsonNode call, String batchRunId, String hubId) {
+        return runTool(call, batchRunId, hubId, false, null);
+    }
+
+    String runTool(JsonNode call, String batchRunId, String hubId, boolean scoped, String actorId) {
+        String name = call.path("function").path("name").asText("");
+        if (handlesWorkTool(name)) {
+            return "项目与个人待办工具仅在已认证的用户直接对话中可用。";
+        }
+        /* 校验节点（STEP 4）：写入 / 执行类工具落地前过一道参数自检（只读放行），拒了不落执行 */
+        String invalid = validator.validate(name,
+                call.path("function").path("arguments").asText(""));
+        if (invalid != null) {
+            return invalid;
+        }
+        if (RequestUserInputTool.NAME.equals(name)) {
+            try {
+                var question = RequestUserInputTool.read(om,
+                        call.path("function").path("arguments").asText("{}"));
+                question.put("status", "waiting_for_user");
+                return question.toString();
+            } catch (IllegalArgumentException error) {
+                return "询问参数无效：" + error.getMessage();
+            }
+        }
+        if (cc.ginpika.rukksh.ai.computer.integration.ComputerTools.handles(name)) {
+            if (computer == null) return "computer 能力未就绪";
+            try {
+                JsonNode args = om.readTree(call.path("function").path("arguments").asText("{}"));
+                if (args == null || !args.isObject()) return "computer 工具参数必须是 JSON 对象";
+                return computer.run(name, args, hubId);
+            } catch (java.io.IOException error) { return "computer 工具参数不是有效 JSON"; }
+        }
+        if (cc.ginpika.rukksh.coding.integration.CodingTaskTool.NAME.equals(name)) {
+            String owner=cc.ginpika.rukksh.ai.core.UserScope.get();
+            if(owner==null || owner.isBlank() || coding==null){return "当前执行缺少已认证用户身份，请从编程工作台发起任务。";}
+            try {
+                JsonNode args=om.readTree(call.path("function").path("arguments").asText("{}"));
+                return coding.assistantTool(owner,args,"chat:"+hubId+":"+call.path("id").asText(),hubId);
+            } catch(Exception error){return "编程任务操作失败："+error.getMessage();}
+        }
+        if (ManageProjectTool.NAME.equals(name)) {
+            try {
+                JsonNode args = om.readTree(call.path("function").path("arguments").asText("{}"));
+                return projectWorkflows.runTool(hubId, args);
+            } catch (Exception e) {
+                return "项目工具参数无效：" + e.getMessage();
+            }
+        }
+        if (TodoService.TOOLS.contains(name)) {
+            /* 个人清单归属当前 Agent：首页 = 内置 Agent，圆桌执行态 = 当前发言成员（见 AgentScope）。
+               刻意与下方 agentId（含内置兜底）分开——TodoProvider 回灌时用同一口径 AgentScope#get()，
+               两边必须逐字一致，否则写进去的清单读不回来 */
+            return todo.runTool(call, hubId, AgentScope.get());
+        }
+        /* 归属 Agent：首页对话 = 内置 Agent；圆桌那条流由 RoundtableChatService 在 AgentScope 里设好成员身份 */
+        String agentId = AgentScope.get() == null ? AgentDirectory.BUILTIN_ID : AgentScope.get();
+        if (AgentMessageService.handles(name)) {
+            return agentMessages == null ? "Agent 消息服务未就绪" : agentMessages.runTool(agentId, call, hubId);
+        }
+        if (PLAN_TOOLS.contains(name)) {
+            return heartbeat.runTool(agentId, call);
+        }
+        if (SUBAGENT_TOOLS.contains(name)) {
+            return scoped ? subagent.runScopedChatTool(agentId, call, batchRunId, hubId, actorId)
+                    : subagent.runChatTool(agentId, call, batchRunId, hubId);
+        }
+        if (TerminalService.handles(name)) {
+            return terminal.run(call, TerminalService.SOURCE_CHAT).content();
+        }
+        return toolbox.run(call, "chat").content();
+    }
+
+    static boolean handlesWorkTool(String name) {
+        return ProjectTools.handles(name) || PersonalTodoTools.handles(name);
+    }
+
+    String runWorkTool(JsonNode call, Predicate<String> userRequested) {
+        String user = UserScope.get();
+        if (user == null || user.isBlank()) return "当前执行缺少已认证用户身份。";
+        JsonNode function = call.path("function");
+        String name = function.path("name").asText("");
+        var definition = workToolDefinitions == null ? null : workToolDefinitions.find(name)
+                .filter(tool -> tool.domain() == ToolDomain.WORK && tool.available()).orElse(null);
+        if (definition == null || !definition.surfaces().contains(ToolSurface.CHAT)
+                || !handlesWorkTool(name)) return "当前工具不可用。";
+        String raw = function.path("arguments").asText("");
+        JsonNode args;
+        try {
+            args = om.readTree(raw);
+        } catch (JsonProcessingException error) {
+            return "工具参数必须是有效的 JSON 对象。";
+        }
+        if (args == null || !args.isObject()) return "工具参数必须是有效的 JSON 对象。";
+        if (definition.risk() != ToolRisk.READ) {
+            String basis = args.path("basis").textValue();
+            if (basis == null || basis.isBlank() || !userRequested.test(basis)) {
+                return "请在 basis 逐字引用本轮用户明确要求此项写入的原文。操作尚未执行。";
+            }
+            String invalid = validator.validate(name, raw);
+            if (invalid != null) return invalid;
+        }
+        if (ProjectTools.handles(name)) {
+            return workProjects == null ? "项目工具未就绪。" : workProjects.run(name, args);
+        }
+        return personalTodos == null ? "个人待办工具未就绪。" : personalTodos.execute(name, args);
+    }
+}

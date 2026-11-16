@@ -207,7 +207,7 @@ export default function Projects() {
           )}
         </>
       )}
-      <PortalAppearanceContext.Provider value="slime-surface work-surface todo-portal">
+      <PortalAppearanceContext.Provider value="rukksh-surface work-surface todo-portal">
         {editor && <ProjectEditor key={editor.project?.id ?? 'new'} project={editor.project} busy={saving} onClose={() => setEditor(null)} onSave={saveProject} />}
       </PortalAppearanceContext.Provider>
     </div>

@@ -1,4 +1,4 @@
-/** minis 前端 API client（M0：fetch + 类型；SSO 401 处理见 me/App） */
+/** rukksh 前端 API client（M0：fetch + 类型；SSO 401 处理见 me/App） */
 
 import { apiFetch } from './desktop'
 

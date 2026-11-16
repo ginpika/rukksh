@@ -1,8 +1,8 @@
-//! minis 桌面壳（Tauri 2）：把「本机后端」与「远程后端」两种模式收在同一个应用里。
+//! rukksh 桌面壳（Tauri 2）：把「本机后端」与「远程后端」两种模式收在同一个应用里。
 //!
 //! - 本机模式：壳拉起内置 JRE + fat jar 作为 sidecar，只绑回环、随机端口；壳每次启动生成
 //!   一次性令牌，既作为环境变量传给后端（DesktopTokenFilter 校验），也在页面脚本执行前注入
-//!   `window.__MINIS_LOCAL_TOKEN__`，前端统一在请求头带回来。固定本地单用户，不走 SSO。
+//!   `window.__RUKKSH_LOCAL_TOKEN__`，前端统一在请求头带回来。固定本地单用户，不走 SSO。
 //! - 远程模式：不启动 sidecar，窗口直接加载服务端站点，认证完全交由服务端的 hostid SSO。
 //!
 //! 两种模式的共同点：实例最终落在一个 **同源 HTTP 地址** 上（本机 `http://127.0.0.1:{端口}`、
@@ -40,9 +40,9 @@ use tauri::{
 use tauri_plugin_shell::process::CommandChild;
 
 /// 引导页订阅的状态事件名
-const STATUS_EVENT: &str = "minis://status";
+const STATUS_EVENT: &str = "rukksh://status";
 /// 引导页订阅的用户事件名（当前用户 / 本地用户 / hostid SSO 用户有变即推一份）
-const USER_EVENT: &str = "minis://user";
+const USER_EVENT: &str = "rukksh://user";
 /// 主窗口标签（capabilities 里也按它授权）：单窗口单 webview，
 /// 引导页与实例页是它先后加载的两份 document（见文件头说明）
 const WINDOW_LABEL: &str = "main";
@@ -55,21 +55,21 @@ const PROBE_LABEL: &str = "remote-auth-probe";
 /// 撤销 hostid 会话的隐藏窗口标签（登出用，完即销毁）
 const REVOKE_LABEL: &str = "hostid-logout";
 /// 登录窗口回传登录用户用的同源路径（见 desktop_login_hostid）
-const SSO_DONE_PATH: &str = "/__minis_sso_done";
+const SSO_DONE_PATH: &str = "/__rukksh_sso_done";
 /// 撤销会话窗口回传完成信号用的同源路径（见 revoke_hostid_session）
-const SSO_REVOKE_PATH: &str = "/__minis_sso_revoke";
+const SSO_REVOKE_PATH: &str = "/__rukksh_sso_revoke";
 /// 登录窗回传「自绘标题栏已注入」（= 这一页真的加载出来了，见 LOGIN_BAR_JS）
-const LOGIN_READY_PATH: &str = "/__minis_login_ready";
+const LOGIN_READY_PATH: &str = "/__rukksh_login_ready";
 /// 登录窗回传「这个地址没有 hostid 的会话接口」（= 不是 hostid 实例）
-const LOGIN_INVALID_PATH: &str = "/__minis_login_invalid";
+const LOGIN_INVALID_PATH: &str = "/__rukksh_login_invalid";
 /// 远程认证探测回传结果用的同源路径（见 probe_remote_auth）
-const PROBE_DONE_PATH: &str = "/__minis_remote_probe";
+const PROBE_DONE_PATH: &str = "/__rukksh_remote_probe";
 /// 登出哨兵路径：主应用（远程源）往这里导航，主窗口的 on_navigation 会拦下它并带回引导页。
 /// 用导航而非 IPC，是因为远程源调用壳自有命令受 Tauri ACL 限制，导航拦截不依赖 ACL。
-const LOGOUT_PATH: &str = "/__minis_desktop_logout";
+const LOGOUT_PATH: &str = "/__rukksh_desktop_logout";
 /// 首页哨兵路径：实例页标题栏的首页按钮往这里导航，主窗口的 on_navigation 会拦下它并带回
 /// 引导页的「启动」视图（视图一：选本机 / 远程那一屏）。与登出同走导航拦截，但不撤销会话。
-const HOME_PATH: &str = "/__minis_desktop_home";
+const HOME_PATH: &str = "/__rukksh_desktop_home";
 /// 进入远程实例时的过渡层脚本：实例页文档创建（PageLoadEvent::Started）时铺一层高斯模糊 +
 /// 居中转圈，页面就绪后自己渐出（模糊 → 清晰）并移除。与引导页那层同款参数，
 /// 于是「引导页模糊 → 跳转 → 实例页模糊 → 清晰」看起来是同一层动画，跳转被藏在里面。
@@ -78,14 +78,14 @@ const HOME_PATH: &str = "/__minis_desktop_home";
 /// 「主视图内容区」，与 index.html 的首帧骨架、以及挂载后的 {@code .df__view} 完全重合——
 /// 所以挂载前后层的边界不变，不会跟着跳。遮罩只遮主容器，菜单栏与标题栏不受影响。
 const ENTER_VEIL_JS: &str = r#"(function () {
-  var id = '__minis_enter_veil__';
+  var id = '__rukksh_enter_veil__';
   if (document.getElementById(id)) return;
 
   // 与窗口外壳同源的结构常数（desktop/ui/index.html、shell/desktopFrame.css、index.html 骨架四处同值）
   var PAD = 12, RAIL = 88, GAP = 10, TITLEBAR = 48, RADIUS = 20;
 
   var style = document.createElement('style');
-  style.textContent = '@keyframes minis-enter-spin{to{transform:rotate(360deg)}}';
+  style.textContent = '@keyframes rukksh-enter-spin{to{transform:rotate(360deg)}}';
   (document.head || document.documentElement).appendChild(style);
 
   var el = document.createElement('div');
@@ -108,7 +108,7 @@ const ENTER_VEIL_JS: &str = r#"(function () {
   spinner.style.cssText = [
     'width:28px', 'height:28px',
     'border:2px solid rgba(15,15,15,.12)', 'border-top-color:#0f0f0f',
-    'border-radius:999px', 'animation:minis-enter-spin .8s linear infinite'
+    'border-radius:999px', 'animation:rukksh-enter-spin .8s linear infinite'
   ].join(';');
   el.appendChild(spinner);
   (document.body || document.documentElement).appendChild(el);
@@ -154,11 +154,11 @@ const ENTER_VEIL_JS: &str = r#"(function () {
 /// <p>登录窗加载的是用户填的 hostid 站点，页面本身不可控，所以整条标题栏用内联样式注入，
 /// 只铺顶部 48px、不参与页面布局（否则 100vh 的登录页会被挤出滚动条）。
 const LOGIN_BAR_JS: &str = r#"(function () {
-  var ID = 'minis-login-bar';
+  var ID = 'rukksh-login-bar';
   var STROKE = 'rgba(255,255,255,.72)';
   // 「本页已加载」回传路径：open_login_window 会把占位符替换成 LOGIN_READY_PATH，
   // 免得同一条路径在 Rust 与 JS 里各写一份
-  var READY = '__MINIS_LOGIN_READY__';
+  var READY = '__RUKKSH_LOGIN_READY__';
   /**
    * 图标：样式必须落在图形元素自身。hostid 页面常有 svg/path 的全局规则
    * （例如 path { fill: currentColor }），只在 <svg> 上写、靠继承是不行的——
@@ -243,12 +243,12 @@ const LOGIN_BAR_JS: &str = r#"(function () {
 /// 停留不动——随后壳在模糊层下把窗口带回引导页（见 return_to_launcher）。
 /// 参数与进入时同款、矩形与主容器一致，所以来回看起来是同一层。
 const EXIT_VEIL_JS: &str = r#"(function () {
-  var id = '__minis_exit_veil__';
+  var id = '__rukksh_exit_veil__';
   if (document.getElementById(id)) return;
   var RADIUS = 20; // 与主容器同圆角（上沿贴标题栏，只圆下两角）
 
   var style = document.createElement('style');
-  style.textContent = '@keyframes minis-enter-spin{to{transform:rotate(360deg)}}';
+  style.textContent = '@keyframes rukksh-enter-spin{to{transform:rotate(360deg)}}';
   (document.head || document.documentElement).appendChild(style);
 
   var el = document.createElement('div');
@@ -265,7 +265,7 @@ const EXIT_VEIL_JS: &str = r#"(function () {
   spinner.style.cssText = [
     'width:28px', 'height:28px',
     'border:2px solid rgba(15,15,15,.12)', 'border-top-color:#0f0f0f',
-    'border-radius:999px', 'animation:minis-enter-spin .8s linear infinite'
+    'border-radius:999px', 'animation:rukksh-enter-spin .8s linear infinite'
   ].join(';');
   el.appendChild(spinner);
 
@@ -457,7 +457,7 @@ fn current_instance_session(app: &AppHandle) -> Option<InstanceSession> {
 }
 
 /// 页面脚本执行前注入的初始化脚本：品牌信息 + 本机模式的一次性令牌。
-/// 引导页与实例窗口都要注入——本机模式下实例窗口跑在 127.0.0.1 上，同样要带 X-Minis-Token。
+/// 引导页与实例窗口都要注入——本机模式下实例窗口跑在 127.0.0.1 上，同样要带 X-Rukksh-Token。
 fn desktop_injection(app: &AppHandle) -> String {
     let brand = serde_json::json!({
         "name": env!("BRAND_NAME"),
@@ -469,7 +469,7 @@ fn desktop_injection(app: &AppHandle) -> String {
         .map(|shell| shell.token.clone())
         .unwrap_or_default();
     format!(
-        "window.__BRAND__={brand};\nif (location.hostname === \"127.0.0.1\") {{ window.__MINIS_LOCAL_TOKEN__={}; }}",
+        "window.__BRAND__={brand};\nif (location.hostname === \"127.0.0.1\") {{ window.__RUKKSH_LOCAL_TOKEN__={}; }}",
         serde_json::to_string(&token).unwrap_or_else(|_| "\"\"".to_string())
     )
 }
@@ -522,7 +522,7 @@ fn remember_launcher_if_first(app: &AppHandle, url: &tauri::Url) {
 fn navigate_launcher(app: &AppHandle) -> bool {
     let url = app.state::<Shell>().launcher_url.lock().unwrap().clone();
     if url.is_empty() {
-        eprintln!("[minis-desktop] 未知引导页地址，无法把窗口带出后端站点");
+        eprintln!("[rukksh-desktop] 未知引导页地址，无法把窗口带出后端站点");
         return false;
     }
     navigate(app, &url)
@@ -728,14 +728,14 @@ fn mail_fit_script(radius: &str, color: &str) -> String {
     r#"(function () {
   var root = document.documentElement
   if (!root) return
-  root.style.setProperty('--minis-mail-radius', __RADIUS__)
-  root.style.setProperty('--minis-mail-corner', __COLOR__)
-  if (document.getElementById('minis-mail-style')) return
+  root.style.setProperty('--rukksh-mail-radius', __RADIUS__)
+  root.style.setProperty('--rukksh-mail-corner', __COLOR__)
+  if (document.getElementById('rukksh-mail-style')) return
   var style = document.createElement('style')
-  style.id = 'minis-mail-style'
+  style.id = 'rukksh-mail-style'
   style.textContent = [
     'html, body { background-color: transparent !important; background-image: none !important; }',
-    'html::after { content: ""; position: fixed; inset: 0; border-radius: var(--minis-mail-radius, 0px); box-shadow: 0 0 0 100vmax var(--minis-mail-corner, transparent); pointer-events: none; z-index: 2147483647; }'
+    'html::after { content: ""; position: fixed; inset: 0; border-radius: var(--rukksh-mail-radius, 0px); box-shadow: 0 0 0 100vmax var(--rukksh-mail-corner, transparent); pointer-events: none; z-index: 2147483647; }'
   ].join('\n')
   ;(document.head || root).appendChild(style)
 })()"#
@@ -775,7 +775,7 @@ fn desktop_show_mail(
         );
         let address = mail_address(&app);
         if address.is_empty() {
-            eprintln!("[minis-desktop] 还没配邮件地址：到引导页「用户」视图填，或用 hostid 地址兜底");
+            eprintln!("[rukksh-desktop] 还没配邮件地址：到引导页「用户」视图填，或用 hostid 地址兜底");
             return;
         }
         let Ok(target) = address.parse::<tauri::Url>() else {
@@ -1099,7 +1099,7 @@ fn notify_main(app: &AppHandle, text: &str) {
     let text_lit = serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string());
     let js = format!(
         r#"(function () {{
-  var id = '__minis_desktop_toast__';
+  var id = '__rukksh_desktop_toast__';
   var el = document.getElementById(id);
   if (!el) {{
     el = document.createElement('div');
@@ -1117,8 +1117,8 @@ fn notify_main(app: &AppHandle, text: &str) {
     requestAnimationFrame(function () {{ el.style.opacity = '1'; }});
   }}
   el.textContent = {text};
-  if (el.__minisTimer) clearTimeout(el.__minisTimer);
-  el.__minisTimer = setTimeout(function () {{ el.style.opacity = '0'; }}, 8000);
+  if (el.__rukkshTimer) clearTimeout(el.__rukkshTimer);
+  el.__rukkshTimer = setTimeout(function () {{ el.style.opacity = '0'; }}, 8000);
 }})();"#,
         text = text_lit,
     );
@@ -1283,7 +1283,7 @@ struct SsoSessionUser {
 ///
 /// <p>关键：hostid 的一切跳转都只发生在登录窗口内，**主窗口（我们的 SSO 消费方客户端）
 /// 始终不动** —— 不导航、不切模式、不停本机后端；登录窗口与主窗口共用 cookie 存储，
-/// 会话随之生效，之后由用户在引导页上进入 minis 实例。
+/// 会话随之生效，之后由用户在引导页上进入 rukksh 实例。
 ///
 /// <p>必须是 async 命令：Windows 上在同步命令里创建窗口会死锁（wry#583），
 /// 表现为新窗口白屏且整个应用卡死无法操作；窗口本体在 {@link open_login_window}。
@@ -1396,7 +1396,7 @@ fn open_login_window(app: &AppHandle, url: &str, then_navigate: Option<String>) 
     let invalid = Arc::new(AtomicBool::new(false));
     let invalid_nav = invalid.clone();
     // 标题栏脚本里的「已加载」回传路径占位符换成真路径
-    let bar = LOGIN_BAR_JS.replace("__MINIS_LOGIN_READY__", LOGIN_READY_PATH);
+    let bar = LOGIN_BAR_JS.replace("__RUKKSH_LOGIN_READY__", LOGIN_READY_PATH);
 
     WebviewWindowBuilder::new(app, LOGIN_LABEL, WebviewUrl::External(login_url))
         .title("登录 hostid")
@@ -1513,7 +1513,7 @@ fn persist_sso_user(app: &AppHandle, payload: &str) {
     cfg.sso_user_email = user.email;
     cfg.current_user = "sso".to_string();
     if config::save(app, &cfg).is_ok() {
-        // 登录成功：清掉「会话已失效」标记（引导页收到 minis://user 会重读状态，横幅随之撤下）
+        // 登录成功：清掉「会话已失效」标记（引导页收到 rukksh://user 会重读状态，横幅随之撤下）
         set_session_expired(app, false);
         emit_users(app);
     }
@@ -1652,7 +1652,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("minis desktop 启动失败")
+        .expect("rukksh desktop 启动失败")
         .run(|app, event| match event {
             RunEvent::Exit => backend::stop(app),
             // 主窗口一关就把附属窗口一起收掉：它们不是独立窗口，主窗口没了还留在屏幕上

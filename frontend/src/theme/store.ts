@@ -27,9 +27,9 @@ import type {
   Vars,
 } from './types'
 
-const KEY = 'minis.theme.v4'
+const KEY = 'rukksh.theme.v4'
 /** v3（双色/三色 + 自定义主题编辑器）→ 迁移后清理 */
-const LEGACY_V3 = 'minis.theme.v3'
+const LEGACY_V3 = 'rukksh.theme.v3'
 
 const EMPTY_OVERRIDE: OverrideState = { seed: {} }
 

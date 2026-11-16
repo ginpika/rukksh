@@ -56,7 +56,7 @@ function ComputerConnectionWindow({ onClose }: { onClose: () => void }) {
     const url = URL.createObjectURL(await response.blob())
     const link = document.createElement('a')
     link.href = url
-    link.download = 'slime-chrome-extension.zip'
+    link.download = 'rukksh-chrome-extension.zip'
     link.click()
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }

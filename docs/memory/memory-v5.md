@@ -6,7 +6,7 @@
 > **文档纪律**：文中每条结论标注 **【代码事实】/【设计决议】/【待验证】** 三类之一。
 > 【代码事实】= 已在代码库中确认；【设计决议】= 本次设计确定、待实施；【待验证】= 未实测，需在副本上跑通。
 >
-> **本轮范围**：只产出设计，不改动任何代码与真实库（`data/minis.db` 禁止默认重建，见 §11）。
+> **本轮范围**：只产出设计，不改动任何代码与真实库（`data/rukksh.db` 禁止默认重建，见 §11）。
 
 ---
 
@@ -53,16 +53,16 @@
 
 | 资产 | 位置 | 角色 |
 |---|---|---|
-| `memory_event` | [schema.sql](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/resources/schema.sql#L549-L560) | 只追加证据/事件层，`event_key` 幂等 |
-| `memory_item` | [schema.sql](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/resources/schema.sql#L585-L602) | 稳定条目，`agent_id`(NULL=全局) + `scope`(directive/profile/project/episode) |
+| `memory_event` | [schema.sql](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/resources/schema.sql#L549-L560) | 只追加证据/事件层，`event_key` 幂等 |
+| `memory_item` | [schema.sql](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/resources/schema.sql#L585-L602) | 稳定条目，`agent_id`(NULL=全局) + `scope`(directive/profile/project/episode) |
 | 向量投影 | `memory_event_embedding` / `memory_item_embedding` | BLOB float32 + 同模型余弦 |
-| 提炼 | [MemoryExtractor.java](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/java/cc/ginpika/minis/ai/memory/MemoryExtractor.java) | 一次 LLM 往返产 JSON 数组；失败隔离 + 信息量门槛 |
-| 攒批 | [MemoryIngest.java](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/java/cc/ginpika/minis/ai/memory/MemoryIngest.java) | 内存缓冲，攒 N 轮 / 空闲 X 分钟合并提炼 |
-| 巩固 | [MemoryConsolidator.java](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/java/cc/ginpika/minis/ai/memory/MemoryConsolidator.java) | 确定性去重 + episode 裁剪（零 LLM） |
-| 召回 | [MemoryItemRecall.java](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/java/cc/ginpika/minis/ai/memory/recall/MemoryItemRecall.java) | 候选→向量余弦→scope 加权→门控→pinned 优先 |
-| 注入 | [MemoryProvider.java](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/java/cc/ginpika/minis/agent/context/MemoryProvider.java) | `@Order(-5)`，仅 CHAT 面，top-5 硬编码 |
-| 管理 | [MemoryController.java](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/java/cc/ginpika/minis/web/controller/MemoryController.java) | 增删改查 + pin + consolidate |
-| 分层守门 | [LayeringTest.java](file:///d:/Static/worktable/ginpika-page/minis/backend/src/test/java/cc/ginpika/minis/arch/LayeringTest.java) | 钉死 `ai.memory` 不依赖 `agent` / `knowledge` |
+| 提炼 | [MemoryExtractor.java](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/java/cc/ginpika/rukksh/ai/memory/MemoryExtractor.java) | 一次 LLM 往返产 JSON 数组；失败隔离 + 信息量门槛 |
+| 攒批 | [MemoryIngest.java](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/java/cc/ginpika/rukksh/ai/memory/MemoryIngest.java) | 内存缓冲，攒 N 轮 / 空闲 X 分钟合并提炼 |
+| 巩固 | [MemoryConsolidator.java](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/java/cc/ginpika/rukksh/ai/memory/MemoryConsolidator.java) | 确定性去重 + episode 裁剪（零 LLM） |
+| 召回 | [MemoryItemRecall.java](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/java/cc/ginpika/rukksh/ai/memory/recall/MemoryItemRecall.java) | 候选→向量余弦→scope 加权→门控→pinned 优先 |
+| 注入 | [MemoryProvider.java](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/java/cc/ginpika/rukksh/agent/context/MemoryProvider.java) | `@Order(-5)`，仅 CHAT 面，top-5 硬编码 |
+| 管理 | [MemoryController.java](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/java/cc/ginpika/rukksh/web/controller/MemoryController.java) | 增删改查 + pin + consolidate |
+| 分层守门 | [LayeringTest.java](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/test/java/cc/ginpika/rukksh/arch/LayeringTest.java) | 钉死 `ai.memory` 不依赖 `agent` / `knowledge` |
 
 ### 1.2 已确认的缺口（本次要解决）
 
@@ -128,11 +128,11 @@
 
 ### 2.5 设计红线（与分层守门一致）【代码事实】
 
-`ai.memory` 与 `ai.knowledge` / `ai.terminal` 平级，**不得依赖 `agent`**（[LayeringTest](file:///d:/Static/worktable/ginpika-page/minis/backend/src/test/java/cc/ginpika/minis/arch/LayeringTest.java#L70-L89)）。
+`ai.memory` 与 `ai.knowledge` / `ai.terminal` 平级，**不得依赖 `agent`**（[LayeringTest](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/test/java/cc/ginpika/rukksh/arch/LayeringTest.java#L70-L89)）。
 因此：
 - **写入是 push**：agent 侧在发生点调用 `ai.memory` 的门面（现有 `MemoryWriter` 模式），memory 侧不回头读 `agent` 的库。
 - **读取走 provider/tool**：agent 编排层调用 `ai.memory` 的读接口，作用域由编排层组装好传入。
-- **跨层「当前是谁」用 `ai.core.AgentScope`**（已有 ThreadLocal 方案，见 [AgentScope.java](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/java/cc/ginpika/minis/ai/core/AgentScope.java)）；v5 扩展一个 `MemoryScope`（§3.4）。
+- **跨层「当前是谁」用 `ai.core.AgentScope`**（已有 ThreadLocal 方案，见 [AgentScope.java](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/java/cc/ginpika/rukksh/ai/core/AgentScope.java)）；v5 扩展一个 `MemoryScope`（§3.4）。
 
 ---
 
@@ -519,7 +519,7 @@ Agent 观察到一条可能与用户有关的信息
 ### 6.3 Token 预算（配置化；解决 G6）
 
 ```yaml
-minis:
+rukksh:
   memory:
     budget:
       total: 1600
@@ -574,7 +574,7 @@ v5 把双时态**下沉到条目本身**（不必先有全图）：
 
 ### 7.2 巩固升级（Dreaming）—— 超越 Mem0 的即时 ADD/UPDATE/DELETE
 
-现有 `MemoryConsolidator` 只有确定性去重 + 裁剪，**语义级合并未实现**（[MemoryConsolidator.java](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/java/cc/ginpika/minis/ai/memory/MemoryConsolidator.java#L88-L99)）。
+现有 `MemoryConsolidator` 只有确定性去重 + 裁剪，**语义级合并未实现**（[MemoryConsolidator.java](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/java/cc/ginpika/rukksh/ai/memory/MemoryConsolidator.java#L88-L99)）。
 v5 巩固升级为分层：
 
 | 层次 | 动作 | 成本 |
@@ -592,7 +592,7 @@ v5 巩固升级为分层：
 - **发布**：Agent 主动把 L2/L3 的结论/经验发布到指定作用域（`memory_share`，`to_kind ∈ {user, project, agent, session}`）。
 - **发现**：接收方通过 `visible` 谓词 R5 的联合查询**按需发现**，**不推送**（避免通知风暴）。
 - **权限与来源**：每次共享保留 `from_*`（来源）、`status`（published/revoked）、可撤销。
-- **与现有子代理黑板的衔接**【代码事实】：现有 [ScratchpadStore](file:///d:/Static/worktable/ginpika-page/minis/backend/src/main/java/cc/ginpika/minis/agent/subagent/ScratchpadStore.java) 是会话级「只增不改」黑板（L3/L4 的雏形）。v5 把黑板定位为 **L3 会话工作集**的实现之一，L4 则由 `memory_share` 承担跨会话/跨项目发布。
+- **与现有子代理黑板的衔接**【代码事实】：现有 [ScratchpadStore](file:///d:/Static/worktable/ginpika-page/rukksh/backend/src/main/java/cc/ginpika/rukksh/agent/subagent/ScratchpadStore.java) 是会话级「只增不改」黑板（L3/L4 的雏形）。v5 把黑板定位为 **L3 会话工作集**的实现之一，L4 则由 `memory_share` 承担跨会话/跨项目发布。
 
 ### 7.4 隔离写入 · 按需读取 · 独立保留的工程化
 
@@ -690,7 +690,7 @@ protected = (retention='pinned')
 - `consolidate` 返回冲突数
 - 会话创建支持 `projectId`
 
-**管理页**（[MemoryPanel.tsx](file:///d:/Static/worktable/ginpika-page/minis/frontend/src/pages/MemoryPanel.tsx)）：
+**管理页**（[MemoryPanel.tsx](file:///d:/Static/worktable/ginpika-page/rukksh/frontend/src/pages/MemoryPanel.tsx)）：
 按 Domain 分组替代按 scope 分组；新增「候选审批」「共享/已发布」「项目」三个视图。
 
 ---
@@ -709,7 +709,7 @@ protected = (retention='pinned')
 
 ### 11.2 备份 / 验证 / 恢复（实测流程）
 
-① 迁移前 `VACUUM INTO 'data/backups/minis-<ts>.db'` + 复制 `data/article`；
+① 迁移前 `VACUUM INTO 'data/backups/rukksh-<ts>.db'` + 复制 `data/article`；
 ② 迁移前后记录行数与抽样哈希；
 ③ 按 `_schema.version` 单事务迁移；
 ④ 后验证 `integrity_check=ok`、`foreign_key_check` 空、行数一致、`owner/status IS NULL=0`、矩阵违例清单、「待复核」计数；

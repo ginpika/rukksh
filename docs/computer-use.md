@@ -1,6 +1,6 @@
 # Computer-use 首版
 
-首版提供两个 function tools：`window_capture` 和 `chrome`。不实现系统鼠标键盘控制。终端能力已迁入 `cc.ginpika.minis.ai.computer.terminal`；既有终端 API、目标、凭证、数据库表与配置不变。
+首版提供两个 function tools：`window_capture` 和 `chrome`。不实现系统鼠标键盘控制。终端能力已迁入 `cc.ginpika.rukksh.ai.computer.terminal`；既有终端 API、目标、凭证、数据库表与配置不变。
 
 ## 部署与权限
 
@@ -10,9 +10,9 @@
 | Desktop 本机模式 | 支持 | 用户配对扩展后支持 | Windows / macOS，本机令牌与原生 helper 都就绪时开放 |
 | Desktop 远程模式 | 沿用 Web 端权限 | 不开放 | 不开放 |
 
-这些边界在服务端执行。`MINIS_DESKTOP` 开启且存在壳注入的本机令牌，才能生成 Chrome 配对地址、连接扩展或开放窗口工具。单独配置 helper 路径不授予服务端桌面权限。Chrome WebSocket 还检查回环来源、扩展 Origin 与随机配对凭证；不根据 User-Agent 或前端显示模式授予能力。
+这些边界在服务端执行。`RUKKSH_DESKTOP` 开启且存在壳注入的本机令牌，才能生成 Chrome 配对地址、连接扩展或开放窗口工具。单独配置 helper 路径不授予服务端桌面权限。Chrome WebSocket 还检查回环来源、扩展 Origin 与随机配对凭证；不根据 User-Agent 或前端显示模式授予能力。
 
-普通 Web 部署不需要安装 Chrome 扩展。若使用隔离浏览器，运行后端的环境需要安装 Google Chrome；也可用 `MINIS_COMPUTER_CHROME_EXECUTABLE` 明确指定独立浏览器的可执行文件。该路径是部署配置，模型不能修改。
+普通 Web 部署不需要安装 Chrome 扩展。若使用隔离浏览器，运行后端的环境需要安装 Google Chrome；也可用 `RUKKSH_COMPUTER_CHROME_EXECUTABLE` 明确指定独立浏览器的可执行文件。该路径是部署配置，模型不能修改。
 
 ## Desktop 使用入口
 

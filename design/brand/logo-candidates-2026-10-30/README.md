@@ -1,4 +1,4 @@
-# Slime Logo 基底与底形候选
+# Rukksh Logo 基底与底形候选
 
 日期：2026-10-30
 
@@ -13,7 +13,7 @@
 - `prompts.md`：完整生成提示词。图像使用内置 image_gen 生成；sips / iconutil 仅用于尺寸导出和格式打包。
 - `export-icons.mjs`：在 macOS 执行 `node export-icons.mjs` 可由本目录 generated 原图重新导出 PNG、iconset 与 icns。
 
-桌面客户端已选用 `png/slime-graphite-macos-white-1024.png`，通过 Tauri CLI 生成并接入 `desktop/icons/` 的 PNG、macOS ICNS 和 Windows ICO / Appx 图标，用于 macOS Dock 与 Windows 任务栏及安装包。其余文件保留为候选；`frontend/public` 的图标尚未调整。
+桌面客户端已选用 `png/rukksh-graphite-macos-white-1024.png`，通过 Tauri CLI 生成并接入 `desktop/icons/` 的 PNG、macOS ICNS 和 Windows ICO / Appx 图标，用于 macOS Dock 与 Windows 任务栏及安装包。其余文件保留为候选；`frontend/public` 的图标尚未调整。
 
 ## macOS 说明
 

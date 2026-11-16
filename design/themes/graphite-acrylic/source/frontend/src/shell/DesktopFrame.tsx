@@ -72,8 +72,8 @@ export function DesktopFrame({
     document.body.dataset.df = 'on'
     /* 首帧骨架（index.html 预置）到位即撤：形状与外壳一致，撤下时看不出变化。
        先挂 data-df 把底让给桌面、再撤骨架，中间不会闪出一帧不透明底 */
-    document.getElementById('minis-df-skeleton')?.remove()
-    document.documentElement.classList.remove('minis-df-skeleton')
+    document.getElementById('rukksh-df-skeleton')?.remove()
+    document.documentElement.classList.remove('rukksh-df-skeleton')
     return () => {
       delete document.body.dataset.df
     }

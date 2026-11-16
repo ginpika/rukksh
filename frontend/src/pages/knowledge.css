@@ -14,7 +14,7 @@
   color: var(--k-fg);
 }
 
-/* SlimePage 主区内垂直居中；内容超出视口时自动回落为顶部排布并正常滚动 */
+/* RukkshPage 主区内垂直居中；内容超出视口时自动回落为顶部排布并正常滚动 */
 .sl-page__main > [data-page='knowledge'] {
   display: flex;
   flex: 1;
@@ -268,7 +268,7 @@
 .kn-stack { display: flex; flex-direction: column; gap: .75rem; }
 .kn-import { min-height: calc(100dvh - 16rem); }
 
-/* 页头：页面标题由 SlimePage 承担，这里只放说明与页级动作 */
+/* 页头：页面标题由 RukkshPage 承担，这里只放说明与页级动作 */
 .kn-head {
   display: flex;
   flex-wrap: wrap;

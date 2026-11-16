@@ -1,6 +1,6 @@
 # 待办：个人事项与精力记录 · 设计草案
 
-状态：第一版业务模块已按此方向落地，入口 `/todos`，数据通过后端 API 持久化。本文保留设计依据；独立 HTML 仍是用于讨论的原型，所有事项和时间均为示例，不是正式页面的数据源。实际接口与边界见 `backend/src/main/java/cc/ginpika/minis/todo/README.md`。
+状态：第一版业务模块已按此方向落地，入口 `/todos`，数据通过后端 API 持久化。本文保留设计依据；独立 HTML 仍是用于讨论的原型，所有事项和时间均为示例，不是正式页面的数据源。实际接口与边界见 `backend/src/main/java/cc/ginpika/rukksh/todo/README.md`。
 
 ## 1. 产品定位
 

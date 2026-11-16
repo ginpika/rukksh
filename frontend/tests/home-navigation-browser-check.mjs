@@ -5,14 +5,14 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const frontend = fileURLToPath(new URL('../', import.meta.url))
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium, webkit } = require('playwright')
 let PNG
 try { ({ PNG } = require('pngjs')) } catch { /* Screenshots remain available for visual inspection. */ }
-const engine = process.env.MINIS_BROWSER || 'chromium'
+const engine = process.env.RUKKSH_BROWSER || 'chromium'
 assert.ok(['chromium', 'webkit'].includes(engine))
 const browser = await (engine === 'webkit' ? webkit.launch({ headless: true }) : chromium.launch({ channel: 'chrome', headless: true }))
-const dist = path.resolve(process.env.MINIS_FRONTEND_DIST || path.join(frontend, 'dist'))
+const dist = path.resolve(process.env.RUKKSH_FRONTEND_DIST || path.join(frontend, 'dist'))
 const output = path.resolve(frontend, '../backend/target/home-navigation-browser-check')
 await fs.mkdir(output, { recursive: true })
 const event = (name, data) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`
@@ -28,9 +28,9 @@ try {
     const variant = themeId === 'old' ? `old-${schemeMode}` : `astrolabe-${material}-${schemeMode}`
     const context = await browser.newContext({ viewport: { width: 1800, height: 1033 }, deviceScaleFactor: 2 })
     await context.addInitScript(({ themeId, schemeMode, material }) => {
-      window.__MINIS_LOCAL_TOKEN__ = 'fixture-token'
+      window.__RUKKSH_LOCAL_TOKEN__ = 'fixture-token'
       window.__TAURI_INTERNALS__ = {}
-      localStorage.setItem('minis.theme.v4', JSON.stringify({
+      localStorage.setItem('rukksh.theme.v4', JSON.stringify({
         v: 4, themeId, schemeMode, override: { seed: {} },
         mono: { sidebar: false, hideChrome: true }, astrolabe: { hideChrome: false, material },
       }))

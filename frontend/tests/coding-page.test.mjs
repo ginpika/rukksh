@@ -57,18 +57,18 @@ test('project restoration yields to explicit project, task, directory and start 
 test('project cookie is encoded, session-only and resilient to malformed or blocked cookies', () => {
   const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   const previousLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
-  let cookie = 'other=value; minis.coding.project=project%2F%E4%B8%AD%E6%96%87%3B%3D'
+  let cookie = 'other=value; rukksh.coding.project=project%2F%E4%B8%AD%E6%96%87%3B%3D'
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { get cookie() { return cookie }, set cookie(value) { cookie = value } } })
   Object.defineProperty(globalThis, 'location', { configurable: true, value: { protocol: 'https:' } })
   try {
     assert.equal(readCodingProject(), 'project/中文;=')
     rememberCodingProject('project/中文;=')
-    assert.match(cookie, /^minis\.coding\.project=project%2F%E4%B8%AD%E6%96%87%3B%3D;/)
+    assert.match(cookie, /^rukksh\.coding\.project=project%2F%E4%B8%AD%E6%96%87%3B%3D;/)
     assert.match(cookie, /Path=\/; SameSite=Lax; Secure/)
     assert.doesNotMatch(cookie, /Expires|Max-Age/i)
     rememberCodingProject('')
     assert.match(cookie, /Max-Age=0/)
-    cookie = 'minis.coding.project=%invalid'
+    cookie = 'rukksh.coding.project=%invalid'
     assert.equal(readCodingProject(), '')
     Object.defineProperty(globalThis, 'document', { configurable: true, value: { get cookie() { throw new Error('blocked') }, set cookie(_) { throw new Error('blocked') } } })
     assert.equal(readCodingProject(), '')

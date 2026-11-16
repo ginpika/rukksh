@@ -25,7 +25,7 @@ pub struct Config {
     /// 上次使用的模式（引导页据此默认高亮，不自动连）
     #[serde(default)]
     pub mode: Mode,
-    /// 远程模式的服务端地址（形如 https://minis.example.com，不带结尾斜杠）
+    /// 远程模式的服务端地址（形如 https://rukksh.example.com，不带结尾斜杠）
     #[serde(default, rename = "remoteBaseUrl")]
     pub remote_base_url: String,
     /// 本地用户：进入本机模式后顶替后端的 local-dev 用户名（空 = 用后端默认）

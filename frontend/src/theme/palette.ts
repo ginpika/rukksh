@@ -25,7 +25,7 @@ export const DEFAULT_THEME_ID: ThemeId = 'old'
 /** 主题 → 两档种子 */
 export const SEEDS: Record<ThemeId, Record<Scheme, ThemeSeed>> = {
   astrolabe: ASTROLABE_PALETTES.brass,
-  /* -------------------------------------------------------- Slime / Mono
+  /* -------------------------------------------------------- Rukksh / Mono
    * 浅档采用 GitHub 的白底、冷灰文字与绿色行动色；深档用纯暗底与荧光绿。 */
   old: {
     light: { primary: '#1f2328', secondary: '#8ca0b2', accent: '#1f883d', base: '#ffffff' },

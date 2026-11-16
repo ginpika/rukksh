@@ -5,13 +5,13 @@ import {createRequire} from 'node:module'
 import {fileURLToPath} from 'node:url'
 
 const frontend=fileURLToPath(new URL('../',import.meta.url))
-const require=createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR||frontend,'package.json'))
+const require=createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR||frontend,'package.json'))
 const {chromium}=require('playwright')
-const dist=path.resolve(process.env.MINIS_FRONTEND_DIST||path.join(frontend,'dist')),output=path.resolve(frontend,'../backend/target/economy-browser-check')
+const dist=path.resolve(process.env.RUKKSH_FRONTEND_DIST||path.join(frontend,'dist')),output=path.resolve(frontend,'../backend/target/economy-browser-check')
 await fs.mkdir(output,{recursive:true})
 const browser=await chromium.launch({channel:'chrome',headless:true})
 const context=await browser.newContext({viewport:{width:1680,height:1100}})
-await context.addInitScript(()=>localStorage.setItem('minis.theme.v4',JSON.stringify({v:4,themeId:'old',schemeMode:'light',override:{seed:{}},mono:{sidebar:true,hideChrome:false}})))
+await context.addInitScript(()=>localStorage.setItem('rukksh.theme.v4',JSON.stringify({v:4,themeId:'old',schemeMode:'light',override:{seed:{}},mono:{sidebar:true,hideChrome:false}})))
 const page=await context.newPage();page.setDefaultTimeout(10000)
 const errors=[],commands=[],stepRequests=[],summaryRequests=[],retryRequests=[],listRequests=[],imageRequests=[],studies=new Map()
 page.on('pageerror',e=>errors.push(e.message))

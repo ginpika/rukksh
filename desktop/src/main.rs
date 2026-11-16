@@ -1,4 +1,4 @@
-//! minis 桌面壳（Tauri 2）：把「本机后端」与「远程后端」两种模式收在同一个应用里。
+//! rukksh 桌面壳（Tauri 2）：把「本机后端」与「远程后端」两种模式收在同一个应用里。
 //!
 //! - 本机模式：壳拉起内置 JRE + fat jar 作为 sidecar，只绑回环、随机端口；壳每次启动生成
 //!   一次性令牌，既作为环境变量传给后端（DesktopTokenFilter 校验），也交给本机后端的主页面，
@@ -40,25 +40,25 @@ use tauri::{
 };
 
 /// 引导页订阅的状态事件名
-const STATUS_EVENT: &str = "minis://status";
+const STATUS_EVENT: &str = "rukksh://status";
 /// 引导页订阅的用户事件名（当前用户 / 本地用户 / hostid SSO 用户有变即推一份）
-const USER_EVENT: &str = "minis://user";
+const USER_EVENT: &str = "rukksh://user";
 /// 主窗口标签（capabilities 里也按它授权）：单窗口单 webview，
 /// 引导页与实例页是它先后加载的两份 document（见文件头说明）
 const WINDOW_LABEL: &str = "main";
 /// 首页哨兵路径：实例页标题栏的首页按钮往这里导航，主窗口的 on_navigation 会拦下它并带回
 /// 引导页（壳页面）。与登出同走导航拦截，但不撤销会话。
-const HOME_PATH: &str = "/__minis_desktop_home";
+const HOME_PATH: &str = "/__rukksh_desktop_home";
 /// 进入实例时的过渡层脚本：实例页文档创建（PageLoadEvent::Started）时铺一层高斯模糊 +
 /// 居中转圈，页面就绪后自己渐出（模糊 → 清晰）并移除。与引导页那层同款参数，
 /// 于是「引导页模糊 → 跳转 → 实例页模糊 → 清晰」看起来是同一层动画，跳转被藏在里面。
 const ENTER_VEIL_JS: &str = r#"(function () {
-  var id = '__minis_enter_veil__';
+  var id = '__rukksh_enter_veil__';
   if (document.getElementById(id)) return;
 
   var dark = false;
   try {
-    var raw = localStorage.getItem('minis.theme.v4');
+    var raw = localStorage.getItem('rukksh.theme.v4') ?? localStorage.getItem('minis.theme.v4');
     var parsed = raw ? JSON.parse(raw) : null;
     if (parsed && parsed.scheme) dark = parsed.scheme === 'dark';
     else if (document.documentElement.dataset.scheme) dark = document.documentElement.dataset.scheme === 'dark';
@@ -69,7 +69,7 @@ const ENTER_VEIL_JS: &str = r#"(function () {
   var mac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
 
   var style = document.createElement('style');
-  style.textContent = '@keyframes minis-enter-spin{to{transform:rotate(360deg)}}';
+  style.textContent = '@keyframes rukksh-enter-spin{to{transform:rotate(360deg)}}';
   (document.head || document.documentElement).appendChild(style);
 
   var el = document.createElement('div');
@@ -87,7 +87,7 @@ const ENTER_VEIL_JS: &str = r#"(function () {
     'width:28px', 'height:28px',
     'border:2px solid ' + (dark ? 'rgba(230,237,243,.16)' : 'rgba(31,35,40,.14)'),
     'border-top-color:' + (dark ? '#e6edf3' : '#1f2328'),
-    'border-radius:999px', 'animation:minis-enter-spin .8s linear infinite'
+    'border-radius:999px', 'animation:rukksh-enter-spin .8s linear infinite'
   ].join(';');
   el.appendChild(spinner);
   (document.body || document.documentElement).appendChild(el);
@@ -125,13 +125,13 @@ const ENTER_VEIL_JS: &str = r#"(function () {
 /// 离开实例时的过渡层脚本：在当前页主视图内容区上渐入高斯模糊 + 居中转圈（清晰 → 模糊），
 /// 停留不动——随后壳在模糊层下把窗口带回引导页（见 return_to_launcher）。
 const EXIT_VEIL_JS: &str = r#"(function () {
-  var id = '__minis_exit_veil__';
+  var id = '__rukksh_exit_veil__';
   if (document.getElementById(id)) return;
   var dark = document.documentElement.dataset.scheme === 'dark' ||
     (!document.documentElement.dataset.scheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   var style = document.createElement('style');
-  style.textContent = '@keyframes minis-enter-spin{to{transform:rotate(360deg)}}';
+  style.textContent = '@keyframes rukksh-enter-spin{to{transform:rotate(360deg)}}';
   (document.head || document.documentElement).appendChild(style);
 
   var el = document.createElement('div');
@@ -149,7 +149,7 @@ const EXIT_VEIL_JS: &str = r#"(function () {
     'width:28px', 'height:28px',
     'border:2px solid ' + (dark ? 'rgba(230,237,243,.16)' : 'rgba(31,35,40,.14)'),
     'border-top-color:' + (dark ? '#e6edf3' : '#1f2328'),
-    'border-radius:999px', 'animation:minis-enter-spin .8s linear infinite'
+    'border-radius:999px', 'animation:rukksh-enter-spin .8s linear infinite'
   ].join(';');
   el.appendChild(spinner);
 
@@ -333,7 +333,7 @@ mod mac_window {
             let ns_window = &*(ptr as *const NSWindow);
             let toolbar = NSToolbar::initWithIdentifier(
                 NSToolbar::alloc(mtm),
-                ns_string!("minis-main-toolbar"),
+                ns_string!("rukksh-main-toolbar"),
             );
             toolbar.setAllowsUserCustomization(false);
             toolbar.setAutosavesConfiguration(false);
@@ -371,9 +371,9 @@ fn deliver_local_token(app: &AppHandle, webview: &Webview, url: &tauri::Url) {
     let token = serde_json::json!(backend::token_for_port(app, url.port_or_known_default()));
     let _ = webview.eval(format!(
         r#"if (window.top === window && location.protocol === "http:" && location.origin === {origin}) {{
-            window.__MINIS_LOCAL_TOKEN__ = {token};
-            window.__MINIS_LOCAL_API_READY__ = true;
-            window.dispatchEvent(new Event("minis:desktop-api-ready"));
+            window.__RUKKSH_LOCAL_TOKEN__ = {token};
+            window.__RUKKSH_LOCAL_API_READY__ = true;
+            window.dispatchEvent(new Event("rukksh:desktop-api-ready"));
         }}"#
     ));
 }
@@ -423,7 +423,7 @@ fn remember_launcher_if_first(app: &AppHandle, url: &tauri::Url) {
 fn navigate_launcher(app: &AppHandle) -> bool {
     let url = app.state::<Shell>().launcher_url.lock().unwrap().clone();
     if url.is_empty() {
-        eprintln!("[minis-desktop] 未知引导页地址，无法把窗口带出后端站点");
+        eprintln!("[rukksh-desktop] 未知引导页地址，无法把窗口带出后端站点");
         return false;
     }
     navigate(app, &url)
@@ -608,7 +608,7 @@ fn notify_main(app: &AppHandle, text: &str) {
     let text_lit = serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_string());
     let js = format!(
         r#"(function () {{
-  var id = '__minis_desktop_toast__';
+  var id = '__rukksh_desktop_toast__';
   var el = document.getElementById(id);
   if (!el) {{
     el = document.createElement('div');
@@ -628,8 +628,8 @@ fn notify_main(app: &AppHandle, text: &str) {
   }}
   el.textContent = {text};
   requestAnimationFrame(function () {{ el.style.opacity = '1'; }});
-  if (el.__minisTimer) clearTimeout(el.__minisTimer);
-  el.__minisTimer = setTimeout(function () {{ el.style.opacity = '0'; }}, 8000);
+  if (el.__rukkshTimer) clearTimeout(el.__rukkshTimer);
+  el.__rukkshTimer = setTimeout(function () {{ el.style.opacity = '0'; }}, 8000);
 }})();"#,
         text = text_lit,
     );
@@ -805,7 +805,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("minis desktop 启动失败")
+        .expect("rukksh desktop 启动失败")
         .run(|app, event| match event {
             RunEvent::Exit => backend::stop(app),
             // 主窗口一关就把附属窗口一起收掉：它们不是独立窗口，主窗口没了还留在屏幕上

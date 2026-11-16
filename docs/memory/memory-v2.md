@@ -2,7 +2,7 @@
 
 > 状态：**草案（评审中）**。本文只定方向、边界、步骤与验收，不含实现细节；进度见各 STEP 下的「进度」注记。
 > 命名约定：步骤统一用 `STEP M1 / STEP M2 / …`（M = Memory），与 `agent-runtime-architecture.md` 的 `STEP 1…7` 并列、不占用其编号。
-> 适用范围：`minis` 后端（`backend/`）+ 智能体页 / 首页对话前端（`frontend/`）。
+> 适用范围：`rukksh` 后端（`backend/`）+ 智能体页 / 首页对话前端（`frontend/`）。
 > 代码基线：`agent-runtime-architecture.md`（STEP 7）、`ai/memory/**`、`agent/context/**`、`agent/heartbeat/**`。
 
 ---
@@ -24,7 +24,7 @@
 4. **提炼提示词内置常量**：`MemoryExtractor` / `SessionTitleService` 的提示词先内置在 Java 里，
    未迁到提示词页（`PromptStore`）——迁入为后续项。
 5. **`recall_memory` 默认读条目**，保留 `mode=event` 走事件下钻（`MemoryRecall` 因此仍有用途，非死代码）。
-6. **默认开**：`minis.memory.enabled=true` 且 `minis.context.inject-memory=true`——记忆是产品能力，
+6. **默认开**：`rukksh.memory.enabled=true` 且 `rukksh.context.inject-memory=true`——记忆是产品能力，
    默认就该工作；未配置模型时自动空转（不提炼 / 不注入、不报错），需要时可显式关闭。
 7. **提炼改为攒批触发**：会话侧 push 进缓冲（`MemoryIngest`），攒够 `batch-turns` 或被停 `idle-ms` 后
    **合并提炼一次**——把逐轮的固定提示词与输出开销摊薄一个数量级；命中「记住」类指令仍立即提炼。
@@ -65,7 +65,7 @@
 
 ### 1.2 实测：这条链路目前产出的东西不可用
 
-以本地库 `data/minis.db` 实测（2026-10-11）：
+以本地库 `data/rukksh.db` 实测（2026-10-11）：
 
 | 指标 | 实测值 |
 |---|---|
@@ -240,7 +240,7 @@ ALTER TABLE hub_session ADD COLUMN memory_off INTEGER NOT NULL DEFAULT 0;
 | `MemoryEmbeddingWriter` / `MemoryEventEmbeddingStore` | **保留 + 复用模式** | 条目向量照抄「异步补齐 + backfill」两条入口 |
 | `MemoryRecall` | **改造** | 增加「按条目检索」读侧；新渲染不再有 title 刷屏 / 160 截断 |
 | `recall_memory`（`RecallMemoryTool` + `KnowledgeToolbox.recallMemoryTool`） | **改造** | 默认查条目；新增下钻参数查 L4 |
-| `MemoryProvider`（STEP 2） | **改造** | 注入对象换条目 + 门控；默认仍关（`minis.context.inject-memory`） |
+| `MemoryProvider`（STEP 2） | **改造** | 注入对象换条目 + 门控；默认仍关（`rukksh.context.inject-memory`） |
 | `RagRecallRecorder` / `rag_recall` | **复用** | `recall_memory` 埋点不变，仍走 `memory` channel |
 | `HeartbeatService.scan()` 骨架 | **复用** | 巩固调度照抄「单扫描器 + 预筛 + 虚拟线程」 |
 | `OpenAiChatClient.chat(target, msgs, source)` | **复用** | 提炼/巩固 LLM 调用；`source` 走 token 统计 |
@@ -298,7 +298,7 @@ ALTER TABLE hub_session ADD COLUMN memory_off INTEGER NOT NULL DEFAULT 0;
 ## 9. 配置（草案）
 
 ```yaml
-minis:
+rukksh:
   memory:
     enabled: true                  # 总开关：关时提炼 / 巩固 / 条目召回短路（默认开）
     extract-model: ""              # 提炼/巩固用模型；空 = 沿用 chatModel()
@@ -311,7 +311,7 @@ minis:
     episode-max: 50                # 情景层保留条数上限（超出由巩固裁剪）
 ```
 
-`minis.context.inject-memory` 语义升级为「注入条目」，默认 **true**（记忆是产品能力，默认就该工作）。
+`rukksh.context.inject-memory` 语义升级为「注入条目」，默认 **true**（记忆是产品能力，默认就该工作）。
 
 ---
 
@@ -407,7 +407,7 @@ minis:
 - `MemoryController`（§7.1 接口）+ 智能体页「系统」tab 新增「记忆」子页（列表/编辑/删除/指令/清空/手动巩固）。
 - 对话内 `Memory updated` 轻提示；命中时的「引用记忆」badge。
 - 观测：`rag_recall` 的 `memory` 通道留痕继续可用；补充「本次注入命中哪些条目」可回看。
-- 设置页暴露 `minis.memory.*` 关键开关。
+- 设置页暴露 `rukksh.memory.*` 关键开关。
 
 **验收**
 - 用户能看见"系统记得我什么"，并能改/删；删除后不再注入。
@@ -505,7 +505,7 @@ minis:
 | **触发时机** | 首个 Turn 完成、且 `title` 仍为空时触发**一次**；异步执行，**不阻塞回答、不增加首字延迟** |
 | **输入** | 首条用户输入（可选附首个回答的首段，帮助概括） |
 | **输出** | 单行标题，≤16 字，无引号、无结尾标点、无「标题：」前缀；解析失败视为失败 |
-| **调用** | 复用 `OpenAiChatClient.chat(target, messages, source="session-title")`；模型取 `SettingsService.chatModel()`（可另配 `minis.title.model`） |
+| **调用** | 复用 `OpenAiChatClient.chat(target, messages, source="session-title")`；模型取 `SettingsService.chatModel()`（可另配 `rukksh.title.model`） |
 | **落库** | `HubSessionStore` 新增 `setTitleIfAbsent(id, title)`，沿用 `COALESCE` 语义——**不覆盖**用户手动命名或已生成标题 |
 | **前端刷新** | 经 `SessionEventBus` 推一次标题更新（复用/新增事件类型），会话列表即时改名，无需刷新 |
 | **降级** | 未配置 / 调用失败 / 超时 / 空输出 → 回落到 `abbreviate(input)`（与现状一致） |

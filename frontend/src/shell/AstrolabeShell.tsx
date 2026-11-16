@@ -89,7 +89,7 @@ export function AstrolabeShell({ route, activePath, fullBleed, hideChrome = fals
                     : <a href={`#${item.path}`} onClick={event => {
                       if (item.path === '/' && route === '/') {
                         event.preventDefault()
-                        window.dispatchEvent(new Event('minis:home-search'))
+                        window.dispatchEvent(new Event('rukksh:home-search'))
                       }
                     }}>{item.label}</a>}
                 </li>

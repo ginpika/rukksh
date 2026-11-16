@@ -11,7 +11,7 @@ type Props = { project: CodingProject; events: CodingEvent[]; hasRun: boolean; e
 const compactTitle = (terminal: CodingTerminal): CodingTerminal => ({ ...terminal, title: terminal.title.replace(/^终端\s*(\d+)$/, 'T$1') })
 
 export default function CodingTerminalPanel({ project, events, hasRun, embedded, visible, open, onOpenChange, tabsHost, onActivate, onEmpty }: Props) {
-  const [terminals, setTerminals] = useState<CodingTerminal[]>([]), [active, setActive] = useState(() => sessionStorage.getItem(`minis.coding.terminal.${project.id}`) || '')
+  const [terminals, setTerminals] = useState<CodingTerminal[]>([]), [active, setActive] = useState(() => sessionStorage.getItem(`rukksh.coding.terminal.${project.id}`) || '')
   const [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false), [error, setError] = useState(''), [revision, setRevision] = useState(0)
   const id = useId(), alive = useRef(true)
   const panel = useRef<HTMLElement>(null)
@@ -39,7 +39,7 @@ export default function CodingTerminalPanel({ project, events, hasRun, embedded,
     return () => { stopped = true }
   }, [project.id, revision])
   useEffect(() => { if (!hasRun) setActive(previous => previous === 'agent' ? terminals[0]?.id || '' : previous) }, [hasRun, terminals])
-  useEffect(() => { sessionStorage.setItem(`minis.coding.terminal.${project.id}`, active) }, [project.id, active])
+  useEffect(() => { sessionStorage.setItem(`rukksh.coding.terminal.${project.id}`, active) }, [project.id, active])
   const create = async () => {
     if (busy) return; setBusy(true); setError('')
     try { const terminal = compactTitle(await createCodingTerminal(project.id)); if (alive.current) { setTerminals(previous => [...previous, terminal]); setActive(terminal.id); onOpenChange(true); if (embedded) onActivate() } }

@@ -60,8 +60,8 @@ export default function MemoryPanel() {
   const refresh = () => setTick(v => v + 1)
   useEffect(() => {
     const reset = () => { setSelected(null); setHomeItem(null); setData(initial); setLoaded({}); setResetVersion(v=>v+1); setTick(v=>v+1) }
-    window.addEventListener('minis:memory-reset',reset)
-    return ()=>window.removeEventListener('minis:memory-reset',reset)
+    window.addEventListener('rukksh:memory-reset',reset)
+    return ()=>window.removeEventListener('rukksh:memory-reset',reset)
   }, [])
   useEffect(() => {
     let live = true

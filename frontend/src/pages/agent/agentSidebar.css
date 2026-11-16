@@ -27,10 +27,10 @@
 .sl-agents__search:focus-within { border-color: var(--sl-focus-line); }
 .sl-agents__search > svg { flex: none; }
 .sl-agents__search input { width: 100%; min-width: 0; padding: 2px 0; border: 0; outline: none; background: transparent; color: var(--sl-fg); font-size: 13px; }
-.slime-surface .sl-agents__search input:focus { outline: none; box-shadow: none; }
+.rukksh-surface .sl-agents__search input:focus { outline: none; box-shadow: none; }
 .sl-agents__search button { display: flex; flex: none; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--sl-muted); }
 .sl-agents__search button:hover { background: var(--sl-hover); color: var(--sl-fg); }
-.slime-surface .sl-agents__search button:focus-visible { border-color: var(--sl-focus-line); outline: none; box-shadow: none; color: var(--sl-fg); }
+.rukksh-surface .sl-agents__search button:focus-visible { border-color: var(--sl-focus-line); outline: none; box-shadow: none; color: var(--sl-fg); }
 
 /* Main card: y=70, 96x92, 56px avatar. The list starts at y=180. */
 .sl-agents__primary-wrap { display: flex; flex: none; justify-content: center; padding: 10px 16px 18px; }

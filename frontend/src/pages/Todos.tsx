@@ -212,7 +212,7 @@ export default function Todos() {
   )
 
   return (
-    <PortalAppearanceContext value="slime-surface work-surface todo-portal">
+    <PortalAppearanceContext value="rukksh-surface work-surface todo-portal">
       <div className="personal-todo-page">
         <div className="todo-view-bar">
           <div className="todo-view-tabs" role="tablist" aria-label="待办视图">

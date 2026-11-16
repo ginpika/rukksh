@@ -12,7 +12,8 @@
       "path": "source/frontend/src/shell/DesktopFrame.tsx",
       "gitPath": "frontend/src/shell/DesktopFrame.tsx",
       "gitBlob": "ae7e7f67becfbbc3e48f5224f90e19872a8ef60d",
-      "sha256": "ff20f4c9dcd432293ee10fac893a2d9078ae0e63b293c361ebfaa28440df0200"
+      "sha256": "39662ad74923933641b799b6a81c6e728f7b34d46c8fff229ba77f990c52d589",
+      "sourceSha256": "ff20f4c9dcd432293ee10fac893a2d9078ae0e63b293c361ebfaa28440df0200"
     },
     {
       "path": "source/frontend/src/shell/desktopFrame.css",
@@ -42,13 +43,15 @@
       "path": "source/frontend/src/api/desktop.ts",
       "gitPath": "frontend/src/api/desktop.ts",
       "gitBlob": "7d3abdd9b74b13d017544cc80a945120f3b85c41",
-      "sha256": "0fb3d0f5770d405415cd65b0ee2977b729742c80a3f24026c536b978eec4a640"
+      "sha256": "389d2e03be135daaca5aaab89642e2ae96980207c0a2670e6ac265fe449098f2",
+      "sourceSha256": "0fb3d0f5770d405415cd65b0ee2977b729742c80a3f24026c536b978eec4a640"
     },
     {
       "path": "source/frontend/index.html",
       "gitPath": "frontend/index.html",
       "gitBlob": "4e0fba36248eb56b58b69f5ffd014ff22e1c4de3",
-      "sha256": "c0cafff2b4a0f57074fe29b5be0cca004ac395a56f9f27bfe2bd473b31108d27"
+      "sha256": "ae563a2fcfd00c5ba186a9dfd674d613f10fd1c6d4df44f663b897fb6ced7857",
+      "sourceSha256": "c0cafff2b4a0f57074fe29b5be0cca004ac395a56f9f27bfe2bd473b31108d27"
     },
     {
       "path": "source/frontend/public/icon-64x64.png",
@@ -60,7 +63,8 @@
       "path": "source/desktop/ui/index.html",
       "gitPath": "desktop/ui/index.html",
       "gitBlob": "0abb79df292e4a0a56da8c0e59b876d853b56186",
-      "sha256": "600eae6cb93af9269e5649940713b9e6cafc7e5229ba8ae1df6edd9512385241"
+      "sha256": "fdba98df06245021641ae09e22ed28a447d2ea3f3540cd919018277833bfc10b",
+      "sourceSha256": "600eae6cb93af9269e5649940713b9e6cafc7e5229ba8ae1df6edd9512385241"
     },
     {
       "path": "source/desktop/ui/icon-64x64.png",
@@ -84,19 +88,22 @@
       "path": "source/desktop/src/main.rs",
       "gitPath": "desktop/src/main.rs",
       "gitBlob": "9f7052b9b1bcc98e25a70e74855a55993e572de5",
-      "sha256": "b9372bbc279394103c66dc0fabd0ae9ef30a95c1654db87dcf7d0d92ead96ac0"
+      "sha256": "571294be523b51e7cf71c4cdc20c75e532a9ec418d27bbc2ceefd01b3db1d268",
+      "sourceSha256": "b9372bbc279394103c66dc0fabd0ae9ef30a95c1654db87dcf7d0d92ead96ac0"
     },
     {
       "path": "source/desktop/tauri.conf.json",
       "gitPath": "desktop/tauri.conf.json",
       "gitBlob": "ab742278cb90cfbb81aec6452fa234a1b7b06d02",
-      "sha256": "97fe2b856b1b59a02442650774b442fb43a2d15a2aae037476a86068a05f7448"
+      "sha256": "58cedeeb1360dfdc72d227bc90bcc38148ae40026d46c2a91471b28a1a405bd0",
+      "sourceSha256": "97fe2b856b1b59a02442650774b442fb43a2d15a2aae037476a86068a05f7448"
     },
     {
       "path": "source/desktop/Cargo.toml",
       "gitPath": "desktop/Cargo.toml",
       "gitBlob": "8c7eb186cb91cb905c4738640799bce83a19694d",
-      "sha256": "468b44b3faee814806697a0b2f19958ab626006ffcd4a549dbfd96b555e9f61d"
+      "sha256": "c97e7b4605c0c7ecff306080754f13b0bfdbeb8760eb7a60d87d7826194c77ff",
+      "sourceSha256": "468b44b3faee814806697a0b2f19958ab626006ffcd4a549dbfd96b555e9f61d"
     }
   ]
 }

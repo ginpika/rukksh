@@ -5,10 +5,10 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const frontend = fileURLToPath(new URL('../', import.meta.url))
-const dist = path.resolve(process.env.MINIS_FRONTEND_DIST || path.join(frontend, 'dist'))
+const dist = path.resolve(process.env.RUKKSH_FRONTEND_DIST || path.join(frontend, 'dist'))
 const output = path.resolve(frontend, '../backend/target/collaboration-browser-check')
 await fs.mkdir(output, { recursive: true })
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const now = Date.now(), errors = [], requests = [], sent = [], checks = []
 const peers = ['规划成员', '研究成员', '执行成员'].map((name, i) => ({ id: ['a', 'b', 'c'][i], name, role: ['产品经理', '研究员', '工程师'][i], roleColor: '#2563eb', builtin: false, terminals: [], modelId: null, sort: i, avatar: null, note: null }))
@@ -52,7 +52,7 @@ let gateRelease, workflowGate = new Promise(resolve => { gateRelease = resolve }
 const streamGate = new Promise(resolve => { releaseStream = resolve })
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
-await context.addInitScript(() => { if (!localStorage.getItem('minis.theme.v4')) localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })) })
+await context.addInitScript(() => { if (!localStorage.getItem('rukksh.theme.v4')) localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })) })
 await context.route('**/*', async route => {
   const url = new URL(route.request().url()), method = route.request().method()
   if (url.origin !== 'http://collaboration.test') return route.abort()
@@ -569,7 +569,7 @@ try {
   for (const theme of ['old', 'astrolabe', 'endfield', 'bluearchive']) {
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 })
-      await page.evaluate(theme => localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: theme, schemeMode: theme === 'endfield' ? 'dark' : 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })), theme)
+      await page.evaluate(theme => localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: theme, schemeMode: theme === 'endfield' ? 'dark' : 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })), theme)
       await page.goto('http://collaboration.test/#/collaboration?project=p1&task=s1')
       await page.reload(); await page.getByRole('button', { name: '发送', exact: true }).waitFor()
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, theme + '/' + width + ': 不能横向溢出')
@@ -743,7 +743,7 @@ try {
   checks.push('项目列表和任务设置支持归档、恢复、确认删除；归档会话及议题只读；失败保留记录；删除后回到项目且其他任务保留；归档列表适配桌面与320/390窄屏')
   const typography = []
   for (const theme of ['old', 'astrolabe', 'endfield', 'bluearchive']) {
-    await page.evaluate(theme => localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: theme, schemeMode: theme === 'endfield' ? 'dark' : 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })), theme)
+    await page.evaluate(theme => localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: theme, schemeMode: theme === 'endfield' ? 'dark' : 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })), theme)
     await page.goto('http://collaboration.test/#/collaboration?project=p1')
     await page.reload()
     await tab('成果与进度')

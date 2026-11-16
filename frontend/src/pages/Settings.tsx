@@ -380,7 +380,7 @@ function ResetKnowledgeDialog({
 export default function Settings() {
   return (
     <PageKitProvider value={settingsKit}>
-      <PortalAppearanceContext value="slime-surface sl-settings-popover">
+      <PortalAppearanceContext value="rukksh-surface sl-settings-popover">
         <SettingsContent />
       </PortalAppearanceContext>
     </PageKitProvider>
@@ -645,7 +645,7 @@ function SettingsContent() {
     try {
       const r = await resetKnowledgeBase(deleteProjectKnowledge)
       resetWindowStates('analyze:', 'extract:', 'enhance:')
-      window.dispatchEvent(new Event('minis:memory-reset'))
+      window.dispatchEvent(new Event('rukksh:memory-reset'))
       setToast({
         kind: 'success',
         msg:

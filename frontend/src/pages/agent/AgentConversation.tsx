@@ -4,7 +4,7 @@ import { AppIcon } from '../../components/AppIcon'
 import ChatMarkdown from '../../components/ChatMarkdown'
 import { requestOpenSession } from '../../components/ChatNotifier'
 import PeerAvatar from '../../components/PeerAvatar'
-import SlimePage from '../../components/SlimePage'
+import RukkshPage from '../../components/RukkshPage'
 import { routeFromHash } from '../../shell/routes'
 import './agentConversation.css'
 
@@ -154,13 +154,13 @@ export default function AgentConversation() {
   const { sessionId, messageId, backHref } = location
   const valid = sessionId && Number.isSafeInteger(messageId) && messageId > 0
   return (
-    <SlimePage title="Agent 通信" backHref={backHref} backLabel="返回原会话" onBack={event => {
+    <RukkshPage title="Agent 通信" backHref={backHref} backLabel="返回原会话" onBack={event => {
       if (sessionId && backHref === '#/' && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
         requestOpenSession(sessionId)
       }
     }}>
       {valid ? <ConversationMessages key={`${sessionId}:${messageId}`} sessionId={sessionId} messageId={messageId} />
         : <p className="agent-conversation__notice" role="status">这条通信链接缺少会话或消息编号。</p>}
-    </SlimePage>
+    </RukkshPage>
   )
 }

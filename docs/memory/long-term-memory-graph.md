@@ -92,11 +92,11 @@
 
 新增生产文件：
 
-- `backend/src/main/java/cc/ginpika/minis/ai/memory/graph/MemoryGraphStore.java`
-- `backend/src/main/java/cc/ginpika/minis/ai/memory/store/MemoryIngestStore.java`
-- `backend/src/main/java/cc/ginpika/minis/config/GraphDatabaseInitialization.java`
-- `backend/src/main/java/cc/ginpika/minis/coding/integration/CodingMemory.java`
-- `backend/src/main/java/cc/ginpika/minis/web/controller/MemoryGraphController.java`
+- `backend/src/main/java/cc/ginpika/rukksh/ai/memory/graph/MemoryGraphStore.java`
+- `backend/src/main/java/cc/ginpika/rukksh/ai/memory/store/MemoryIngestStore.java`
+- `backend/src/main/java/cc/ginpika/rukksh/config/GraphDatabaseInitialization.java`
+- `backend/src/main/java/cc/ginpika/rukksh/coding/integration/CodingMemory.java`
+- `backend/src/main/java/cc/ginpika/rukksh/web/controller/MemoryGraphController.java`
 
 修改的生产链路：
 
@@ -108,6 +108,6 @@
 - 结构：`schema.sql`、`SchemaColumnPatches`、`SchemaIndexes`、`SchemaMigrations`。
 - 其他正本名称和预算注释同步：`WorkingSetService`、`MemoryVocabulary`、`MemoryProps`、`MemoryCandidateStore`、`MemoryWorkStore`、`SettingsDtos`、`SettingsService`。
 
-以上 Java 路径均位于 `backend/src/main/java/cc/ginpika/minis/`；包含工作区尚未跟踪的生产文件，提交时不能只收录测试。
+以上 Java 路径均位于 `backend/src/main/java/cc/ginpika/rukksh/`；包含工作区尚未跟踪的生产文件，提交时不能只收录测试。
 
 没有新增 Maven 或 npm 依赖；复用 SQLite FTS5、现有 JDBC、Jackson 和向量格式。测试配置在命令行使用现有 Mockito javaagent，未修改用户的 Maven 依赖配置。

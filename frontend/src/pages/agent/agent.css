@@ -289,7 +289,7 @@
 .sl-chat__historypanel-search { display: flex; flex: none; align-items: center; gap: 8px; min-height: 36px; margin-bottom: 9px; padding: 6px 10px; border: 1px solid var(--sl-line); border-radius: 7px; color: var(--sl-muted); }
 .sl-chat__historypanel-search:focus-within { border-color: var(--sl-focus-line); }
 .sl-chat__historypanel-search input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--sl-fg); font-size: 13px; }
-.slime-surface .sl-chat__historypanel-search input:focus { outline: none; box-shadow: none; }
+.rukksh-surface .sl-chat__historypanel-search input:focus { outline: none; box-shadow: none; }
 .sl-chat__historypanel-new { display: flex; flex: none; align-items: center; gap: 8px; width: 100%; padding: 9px 11px; border: 0; border-radius: 7px; background: var(--sl-accent-soft); color: var(--sl-accent); font-size: 12px; text-align: left; }
 .sl-chat__historypanel-new:hover { background: var(--sl-hover); }
 .sl-chat__historypanel-list { min-height: 0; overflow-y: auto; margin-top: 13px; overscroll-behavior-y: contain; }

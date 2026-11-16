@@ -2,11 +2,11 @@
   "bases": [
     {
       "color": "graphite",
-      "source": "/Users/yuzhou.jin/.codex/visualizations/2026/10/30/01a18bf9-fa07-7df0-9155-0319f6bfaf03/slime-logo-concepts/slime-A-graphite.png"
+      "source": "bases/rukksh-graphite.png"
     },
     {
       "color": "yellow",
-      "source": "/Users/yuzhou.jin/.codex/visualizations/2026/10/30/01a18bf9-fa07-7df0-9155-0319f6bfaf03/slime-logo-concepts/slime-C-yellow.png"
+      "source": "bases/rukksh-yellow.png"
     }
   ],
   "variants": [
@@ -42,4 +42,3 @@
     }
   ]
 }
-

@@ -8,7 +8,7 @@ const frontend = fileURLToPath(new URL('../', import.meta.url))
 const dist = path.join(frontend, 'dist')
 const output = path.resolve(frontend, '../backend/target/agent-capabilities-browser-check')
 await fs.mkdir(output, { recursive: true })
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const peers = ['builtin', 'member'].map((id, sort) => ({
   id, sort, name: ['核心助手', '专业成员'][sort], builtin: id !== 'member',
@@ -21,8 +21,8 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true })
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
   await context.addInitScript(() => {
-    window.__MINIS_LOCAL_TOKEN__ = 'fixture-desktop-token'
-    localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } }))
+    window.__RUKKSH_LOCAL_TOKEN__ = 'fixture-desktop-token'
+    localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } }))
   })
   const page = await context.newPage()
   page.setDefaultTimeout(10000)

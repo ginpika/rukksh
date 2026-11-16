@@ -287,7 +287,7 @@ export default function Workspace() {
   }
 
   return (
-    <PortalAppearanceContext value="slime-surface workspace-popover">
+    <PortalAppearanceContext value="rukksh-surface workspace-popover">
       <div className="workspace-page">
         <div className="workspace-toolbar">
           <p>管理智能体可访问的运行环境。</p>

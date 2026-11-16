@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
 
 const frontend = fileURLToPath(new URL('../', import.meta.url))
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const output = path.resolve(frontend, '../backend/target/chat-markdown-browser-check')
 await fs.mkdir(output, { recursive: true })

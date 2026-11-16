@@ -3,7 +3,7 @@
 //! 运行时（jlink 裁剪出的 jre/ + 后端 jar）由 `desktop/assemble-runtime.ps1`（Windows）
 //! 或 `desktop/assemble-runtime.sh`（macOS / Linux）组装到
 //! `desktop/runtime/`，打包时作为 Tauri resources 随应用分发，运行期从 resource_dir 取。
-//! 开发时可用环境变量 `MINIS_DESKTOP_RUNTIME` 直接指向该目录，省去每次重新打包。
+//! 开发时可用环境变量 `RUKKSH_DESKTOP_RUNTIME` 直接指向该目录，省去每次重新打包。
 
 use crate::{config, emit_status, enter_instance, Shell};
 use std::path::{Path, PathBuf};
@@ -13,7 +13,7 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 /// 后端启动握手行的前缀（见后端 DesktopReadyReporter）
-const READY_MARKER: &str = "MINIS_READY port=";
+const READY_MARKER: &str = "RUKKSH_READY port=";
 
 /// 运行时里那个可执行 jar 的文件名（assemble 脚本按它落盘；名称随 branding.json 的 slug 变）
 const JAR_NAME: &str = concat!(env!("BRAND_SLUG"), "-backend.jar");
@@ -54,7 +54,7 @@ fn plain_path(path: PathBuf) -> PathBuf {
 /// 让 `tauri dev` 不依赖资源拷贝也能直接跑。
 fn runtime_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Ok(dir) = std::env::var("MINIS_DESKTOP_RUNTIME") {
+    if let Ok(dir) = std::env::var("RUKKSH_DESKTOP_RUNTIME") {
         candidates.push(plain_path(PathBuf::from(dir)));
     }
     if let Ok(dir) = app.path().resolve("runtime", BaseDirectory::Resource) {
@@ -77,7 +77,7 @@ fn runtime_dir(app: &AppHandle) -> Result<PathBuf, String> {
                     .map_err(|e| format!("无法定位桌面启动目录：{e}"))?
                     .join(dir)
             };
-            eprintln!("[minis-desktop] 使用运行时目录 {}", absolute.display());
+            eprintln!("[rukksh-desktop] 使用运行时目录 {}", absolute.display());
             return Ok(absolute);
         }
     }
@@ -111,13 +111,13 @@ pub fn log_probe(app: &AppHandle) {
         Ok(dir) => {
             let jar = dir.join(JAR_NAME);
             eprintln!(
-                "[minis-desktop] 本地服务器运行时 {}（java 存在={}，jar {} 字节）",
+                "[rukksh-desktop] 本地服务器运行时 {}（java 存在={}，jar {} 字节）",
                 dir.display(),
                 java_launcher(&dir).exists(),
                 std::fs::metadata(&jar).map(|m| m.len()).unwrap_or(0)
             );
         }
-        Err(err) => eprintln!("[minis-desktop] {err}"),
+        Err(err) => eprintln!("[rukksh-desktop] {err}"),
     }
 }
 
@@ -134,15 +134,20 @@ pub fn start(app: &AppHandle) -> Result<(), String> {
 
     // 排查「起不来」的第一手证据：实际用的路径 + jar 大小（可执行 fat jar 约 60MB，瘦包只有几 MB）
     eprintln!(
-        "[minis-desktop] java={} jar={} ({} 字节)",
+        "[rukksh-desktop] java={} jar={} ({} 字节)",
         java.display(),
         jar.display(),
         std::fs::metadata(&jar).map(|m| m.len()).unwrap_or(0)
     );
 
-    // 数据落各平台的应用数据目录：Windows %APPDATA%\minis、macOS ~/Library/Application Support/minis
+    // 使用由应用标识定位的平台数据目录。
     // （同样归一化，避免 verbatim 前缀混进 JDBC URL 与日志路径）
     let data = plain_path(app.path().app_data_dir().map_err(|e| e.to_string())?);
+    let mut database = data.join("rukksh.db");
+    let legacy_database = data.join("minis.db");
+    if !database.exists() && legacy_database.is_file() {
+        database = legacy_database;
+    }
     for sub in ["article", "logs"] {
         std::fs::create_dir_all(data.join(sub)).map_err(|e| e.to_string())?;
     }
@@ -170,30 +175,27 @@ pub fn start(app: &AppHandle) -> Result<(), String> {
             "--server.address=127.0.0.1".to_string(),
             "--server.port=0".to_string(),
         ])
-        .env("MINIS_DESKTOP", "1")
-        .env("MINIS_DESKTOP_RUNTIME", &runtime)
+        .env("RUKKSH_DESKTOP", "1")
+        .env("RUKKSH_DESKTOP_RUNTIME", &runtime)
         .env(
-            "MINIS_COMPUTER_WINDOW_HELPER",
+            "RUKKSH_COMPUTER_WINDOW_HELPER",
             std::env::current_exe()
                 .map_err(|e| format!("无法定位窗口截图程序：{e}"))?
                 .to_string_lossy()
                 .to_string(),
         )
-        .env("MINIS_LOCAL_TOKEN", &token)
-        .env("MINIS_LOCAL_USER_NAME", user_name)
-        .env("MINIS_LOCAL_USER_AVATAR", user_avatar)
+        .env("RUKKSH_LOCAL_TOKEN", &token)
+        .env("RUKKSH_LOCAL_USER_NAME", user_name)
+        .env("RUKKSH_LOCAL_USER_AVATAR", user_avatar)
+        .env("RUKKSH_DB_PATH", database.to_string_lossy().to_string())
         .env(
-            "MINIS_DB_PATH",
-            data.join("minis.db").to_string_lossy().to_string(),
-        )
-        .env(
-            "MINIS_ARTICLE_DIR",
+            "RUKKSH_ARTICLE_DIR",
             data.join("article").to_string_lossy().to_string(),
         )
         .env(
-            "MINIS_LOG_FILE",
+            "RUKKSH_LOG_FILE",
             data.join("logs")
-                .join("minis.log")
+                .join("rukksh.log")
                 .to_string_lossy()
                 .to_string(),
         )
@@ -216,7 +218,7 @@ pub fn start(app: &AppHandle) -> Result<(), String> {
                     let line = String::from_utf8_lossy(&bytes);
                     // 原样转发：后端起不来时，失败现场就在这儿（Spring Boot 把启动异常也写 stdout），
                     // 只挑 READY 行等于把最关键的诊断信息丢掉
-                    print!("[minis-backend] {line}");
+                    print!("[rukksh-backend] {line}");
                     if let Some(port) = parse_ready(&line) {
                         {
                             let shell = handle.state::<Shell>();
@@ -241,7 +243,7 @@ pub fn start(app: &AppHandle) -> Result<(), String> {
                     }
                 }
                 CommandEvent::Stderr(bytes) => {
-                    eprint!("[minis-backend] {}", String::from_utf8_lossy(&bytes));
+                    eprint!("[rukksh-backend] {}", String::from_utf8_lossy(&bytes));
                 }
                 CommandEvent::Terminated(payload) => {
                     let shell = handle.state::<Shell>();

@@ -1,8 +1,8 @@
 [package]
-name = "minis-desktop"
+name = "rukksh-desktop"
 version = "0.1.0"
 edition = "2021"
-description = "minis 桌面壳（本机 / 远程双模式）"
+description = "rukksh 桌面壳（本机 / 远程双模式）"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

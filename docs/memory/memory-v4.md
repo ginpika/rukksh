@@ -277,7 +277,7 @@ dedupe 跨 agent/project 归一是否有意；`min-score` 门控实际效果依�
 ④ 资料版本化拆 P4，不进 P0。
 
 ### 1.3 现有库与迁移现状（代码事实）
-真实库 `data/minis.db` 存在（gitignore），含真实数据 → **禁止默认重建**。`schema.sql` 全 `IF NOT EXISTS`、启动即执行。
+真实库 `data/rukksh.db` 存在（gitignore），含真实数据 → **禁止默认重建**。`schema.sql` 全 `IF NOT EXISTS`、启动即执行。
 `SchemaColumnPatches` 仅做「可空、无默认值」的 `ADD COLUMN`（`PRAGMA table_info` 判存在，幂等）。
 `_schema.version` 恒为 1、无任何代码读/递增 → 无真正迁移执行器。
 
@@ -452,7 +452,7 @@ reject→rejected + 写墓碑。防重建：同 fingerprint 有 pending/active/�
 ## 8. Token 预算（配置化，无设置页）
 
 ```yaml
-minis:
+rukksh:
   memory:
     budget:
       total: 1600
@@ -491,7 +491,7 @@ V2 `project` 表（P0a）；V3 memory_item 加列回填（P1）；V4 候选/共�
 **P0 只做迁移器基础设施 + 备份/校验/回滚工具，不塞业务迁移。**
 
 ### 11.3 备份/验证/恢复（实测流程）
-① 迁移前 `VACUUM INTO 'data/backups/minis-<ts>.db'` + 复制 `data/article`；
+① 迁移前 `VACUUM INTO 'data/backups/rukksh-<ts>.db'` + 复制 `data/article`；
 ② 迁移前后记录行数与抽样哈希；③ 按 `_schema.version` 单事务迁移；
 ④ 后验证 `integrity_check`=ok、`foreign_key_check` 空、行数一致、`owner/status IS NULL=0`、矩阵违例清单、「待复核」计数；
 ⑤ 失败中止（不递增版本）；⑥ 重复启动跳过；⑦ 失败恢复=备份覆盖 + 回滚旧程序。

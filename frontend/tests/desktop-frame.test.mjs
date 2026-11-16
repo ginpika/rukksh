@@ -10,8 +10,8 @@ import vm from 'node:vm'
 
 const frontend = fileURLToPath(new URL('..', import.meta.url))
 const root = resolve(tmpdir())
-const output = mkdtempSync(join(root, 'minis-desktop-frame-test-'))
-if (dirname(resolve(output)) !== root || !basename(output).startsWith('minis-desktop-frame-test-')) {
+const output = mkdtempSync(join(root, 'rukksh-desktop-frame-test-'))
+if (dirname(resolve(output)) !== root || !basename(output).startsWith('rukksh-desktop-frame-test-')) {
   throw new Error('临时测试目录校验失败')
 }
 after(() => rmSync(output, { recursive: true, force: true }))
@@ -41,7 +41,7 @@ try {
       '--ignoreDeprecations',
       '6.0',
       'src/shell/DesktopFrame.tsx',
-      'src/components/SlimePage.tsx',
+      'src/components/RukkshPage.tsx',
       'src/pages/coding/CodingToolbar.tsx',
     ],
     { cwd: frontend, stdio: 'inherit' },
@@ -67,7 +67,7 @@ try {
   const { renderToStaticMarkup } = require('react-dom/server')
   const buildSrc = join(output, 'frontend/src')
   const { DesktopFrame } = require(join(buildSrc, 'shell/DesktopFrame.js'))
-  const SlimePage = require(join(buildSrc, 'components/SlimePage.js')).default
+  const RukkshPage = require(join(buildSrc, 'components/RukkshPage.js')).default
   const CodingToolbar = require(join(buildSrc, 'pages/coding/CodingToolbar.js')).default
 
   test('standalone content pages drop outer bezel, rail and titlebar slots on desktop', () => {
@@ -155,10 +155,10 @@ try {
     }
   })
 
-  test('SlimePage and CodingToolbar expose window drag attributes on headers', () => {
+  test('RukkshPage and CodingToolbar expose window drag attributes on headers', () => {
     const pageHtml = renderToStaticMarkup(
       React.createElement(
-        SlimePage,
+        RukkshPage,
         { title: 'Dashboard', backHref: '#/', backLabel: '回到对话' },
         React.createElement('div', null, 'grid'),
       ),
@@ -188,7 +188,7 @@ try {
       assert.equal(css.includes(fakeColor), false, `desktopFrame.css should not draw fake traffic light ${fakeColor}`)
     }
 
-    const pageCss = readFileSync(join(frontend, 'src/components/slimePage.css'), 'utf8')
+    const pageCss = readFileSync(join(frontend, 'src/components/rukkshPage.css'), 'utf8')
     assert.match(pageCss, /\.sl-page__header\s*\{[\s\S]*grid-template-columns:\s*minmax\(max-content,\s*1fr\)\s+minmax\(0,\s*auto\)\s+minmax\(max-content,\s*1fr\)/)
     assert.match(pageCss, /\.sl-page__back\s*\{\s*justify-self:\s*end;\s*\}/)
 
@@ -223,27 +223,27 @@ try {
     }
 
     const homeClasses = classesFor('#/')
-    assert.equal(homeClasses.has('minis-df-frameless'), true)
-    assert.equal(homeClasses.has('minis-df-conversation'), true)
-    assert.equal(homeClasses.has('minis-df-mac'), false)
+    assert.equal(homeClasses.has('rukksh-df-frameless'), true)
+    assert.equal(homeClasses.has('rukksh-df-conversation'), true)
+    assert.equal(homeClasses.has('rukksh-df-mac'), false)
 
     const macHomeClasses = classesFor('#/', 'MacIntel')
-    assert.equal(macHomeClasses.has('minis-df-mac'), true)
-    assert.equal(macHomeClasses.has('minis-df-frameless'), true)
-    assert.equal(macHomeClasses.has('minis-df-conversation'), true)
+    assert.equal(macHomeClasses.has('rukksh-df-mac'), true)
+    assert.equal(macHomeClasses.has('rukksh-df-frameless'), true)
+    assert.equal(macHomeClasses.has('rukksh-df-conversation'), true)
 
     for (const hash of ['#/dashboard', '#/coding', '#/knowledge', '#/todos', '#/memory', '#/article/1']) {
       const classes = classesFor(hash)
-      assert.equal(classes.has('minis-df-skeleton'), true, hash)
-      assert.equal(classes.has('minis-df-frameless'), true, hash)
-      assert.equal(classes.has('minis-df-conversation'), false, hash)
+      assert.equal(classes.has('rukksh-df-skeleton'), true, hash)
+      assert.equal(classes.has('rukksh-df-frameless'), true, hash)
+      assert.equal(classes.has('rukksh-df-conversation'), false, hash)
     }
 
     for (const hash of ['#/search?q=test', '#/memory/ops']) {
       const classes = classesFor(hash)
-      assert.equal(classes.has('minis-df-skeleton'), true, hash)
-      assert.equal(classes.has('minis-df-frameless'), false, hash)
-      assert.equal(classes.has('minis-df-conversation'), false, hash)
+      assert.equal(classes.has('rukksh-df-skeleton'), true, hash)
+      assert.equal(classes.has('rukksh-df-frameless'), false, hash)
+      assert.equal(classes.has('rukksh-df-conversation'), false, hash)
     }
   })
 } catch (error) {

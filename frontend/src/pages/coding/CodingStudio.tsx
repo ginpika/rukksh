@@ -82,7 +82,7 @@ export default function CodingStudio({ project, requestedGlobalProject = '', mod
   const run = loadedRun?.id === runId ? loadedRun : null
   const [events, setEvents] = useState<CodingEvent[]>([])
   const [children, setChildren] = useState<CodingChild[]>([]), [childError, setChildError] = useState(''), [session, setSession] = useState<CodingSession | null>(null), [history, setHistory] = useState<CodingRun[]>([]), [sessionError, setSessionError] = useState('')
-  const [transcript, setTranscript] = useState<TranscriptView>(() => { const saved = localStorage.getItem('minis.coding.transcript'); return saved === 'normal' || saved === 'verbose' ? saved : 'thinking' })
+  const [transcript, setTranscript] = useState<TranscriptView>(() => { const saved = localStorage.getItem('rukksh.coding.transcript'); return saved === 'normal' || saved === 'verbose' ? saved : 'thinking' })
   const modeLoaded = useRef(false)
   const [diff, setDiff] = useState<CodingDiff | null>(null)
   const [diffError, setDiffError] = useState('')
@@ -137,7 +137,7 @@ export default function CodingStudio({ project, requestedGlobalProject = '', mod
   const [mode, setMode] = useState<CodingMode>(initialDraft?.mode || 'EDIT')
   const [model, setModel] = useState('')
   const [settings, setSettings] = useState(false)
-  const [autoReview, setAutoReview] = useState(() => localStorage.getItem('minis.coding.autoReview') !== 'false')
+  const [autoReview, setAutoReview] = useState(() => localStorage.getItem('rukksh.coding.autoReview') !== 'false')
   const [permissionLoading, setPermissionLoading] = useState(!!runId), [permissionError, setPermissionError] = useState(''), [permissionRevision, setPermissionRevision] = useState(0)
   const [acknowledge, setAcknowledge] = useState(false)
   const [reviewedDiff, setReviewedDiff] = useState<CodingDiff | null>(null)
@@ -171,7 +171,7 @@ export default function CodingStudio({ project, requestedGlobalProject = '', mod
   }, [runId, initialDraft])
   useEffect(() => {
     setPermissionError(''); setPermissionLoading(!!runId)
-    if (!runId) { setAutoReview(localStorage.getItem('minis.coding.autoReview') !== 'false'); return }
+    if (!runId) { setAutoReview(localStorage.getItem('rukksh.coding.autoReview') !== 'false'); return }
     let stopped = false
     void codingPermissions(runId).then(policy => { if (!stopped) setAutoReview(policy.autoReview) }).catch(e => { if (!stopped) setPermissionError(codingError(e)) }).finally(() => { if (!stopped) setPermissionLoading(false) })
     return () => { stopped = true }
@@ -357,7 +357,7 @@ export default function CodingStudio({ project, requestedGlobalProject = '', mod
       <section className="coding-agent"><div className="coding-pane-heading"><CodingAgentProfileLink agent={caps.agent} working={working} /><Button size="sm" variant="quiet" onClick={() => selectRun('')}>新任务<CodingIcon name="plus" /></Button></div>
         <div key={runId} className="coding-agent-scroll scrollbar-slim" ref={scroll} onScroll={() => { const el = scroll.current; if (el) setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < 80) }}>
           {!run ? <div className="coding-agent-empty"><span><AppIcon name="chat" size={20} /></span><h3>一起完成这个项目</h3><p>告诉 Agent 你要实现、修复或理解的内容。</p></div> : <>
-            <div className="coding-transcript-controls"><span>{session ? '持续编程会话' : '编程任务'}</span><Select menuClassName="coding-select-menu" size="compact" label="过程展示" value={transcript} onChange={value => { const next = value as TranscriptView; setTranscript(next); localStorage.setItem('minis.coding.transcript', next) }} options={[{ value: 'normal', label: 'Normal · 摘要' }, { value: 'thinking', label: 'Thinking · 思考' }, { value: 'verbose', label: 'Verbose · 详细' }]} /></div>
+            <div className="coding-transcript-controls"><span>{session ? '持续编程会话' : '编程任务'}</span><Select menuClassName="coding-select-menu" size="compact" label="过程展示" value={transcript} onChange={value => { const next = value as TranscriptView; setTranscript(next); localStorage.setItem('rukksh.coding.transcript', next) }} options={[{ value: 'normal', label: 'Normal · 摘要' }, { value: 'thinking', label: 'Thinking · 思考' }, { value: 'verbose', label: 'Verbose · 详细' }]} /></div>
             {previousTurns.map(item => <details className="coding-history" key={item.id}><summary>{item.prompt}</summary><div className="coding-markdown"><Markdown remarkPlugins={[remarkGfm]}>{item.answer || item.error || STATUS[item.status]}</Markdown></div><button onClick={() => selectRun(item.id)}>查看本轮完整过程 ↗</button></details>)}
             {historical && <div className="coding-notice">这是历史轮次。<button onClick={() => selectRun(session!.lastRunId!)}>回到会话最新轮次 ↗</button></div>}
             <div className="coding-user-message"><span>你</span><p>{run.prompt}</p></div>
@@ -384,7 +384,7 @@ export default function CodingStudio({ project, requestedGlobalProject = '', mod
             <div className="coding-composer-controls">
               <Select className="coding-mode-select" size="compact" label="任务模式" value={currentMode} disabled={working || historical} onChange={value => setMode(value as CodingMode)} options={[{ value: 'PLAN', label: '分析 / 规划' }, { value: 'EDIT', label: '修改' }, { value: 'EXECUTE', label: '执行' }]} />
               <Select className="coding-model-select" size="compact" searchable label="编程模型" value={run && run.status !== 'COMPLETED' ? run.modelId || '' : model} disabled={!!run && run.status !== 'COMPLETED'} onChange={setModel} options={[{ value: '', label: caps.agent?.modelId ? `Agent · ${models.find(item => item.id === caps.agent?.modelId)?.name || caps.agent.modelId}` : '跟随默认 Agent' }, ...models.map(item => ({ value: item.id, label: item.name, icon: <ModelBrandIcon model={item.model} /> }))]} />
-              <Select className="coding-permission-select" size="compact" label="权限" value={autoReview ? 'auto' : 'manual'} disabled={working || historical || busy || permissionLoading || !!permissionError} onChange={value => { const enabled = value === 'auto'; setAutoReview(enabled); localStorage.setItem('minis.coding.autoReview', String(enabled)) }} options={[{ value: 'auto', label: '权限 · 自动审查', icon: <AppIcon name="permissions" /> }, { value: 'manual', label: '权限 · 手动审阅', icon: <AppIcon name="code" /> }]} />
+              <Select className="coding-permission-select" size="compact" label="权限" value={autoReview ? 'auto' : 'manual'} disabled={working || historical || busy || permissionLoading || !!permissionError} onChange={value => { const enabled = value === 'auto'; setAutoReview(enabled); localStorage.setItem('rukksh.coding.autoReview', String(enabled)) }} options={[{ value: 'auto', label: '权限 · 自动审查', icon: <AppIcon name="permissions" /> }, { value: 'manual', label: '权限 · 手动审阅', icon: <AppIcon name="code" /> }]} />
               <div className="coding-composer-actions">
                 <button type="button" className="coding-composer-settings" title="运行设置" aria-label="运行设置" aria-haspopup="dialog" aria-expanded={settings} onClick={() => setSettings(true)}><CodingIcon name="settings" /></button>
                 {working && <Button size="sm" variant="quiet" disabled={busy || run?.status === 'CANCELLING'} onClick={() => void action(async () => { if (run) update(await cancelCodingRun(run.id)) })}>停止</Button>}

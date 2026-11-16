@@ -6,12 +6,12 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
 
 const frontend = fileURLToPath(new URL('../', import.meta.url))
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const output = path.resolve(frontend, '../backend/target/raw-context-browser-check')
 await fs.mkdir(output, { recursive: true })
 const marker = '系统正文唯一标记😀'
-const system = `前言\n<persona mode="a>b">${marker}\n<rules>嵌套规则正文</rules></persona>\n\n   \n<minis-memory>\n  记忆正文\n\n</minis-memory>\n\n<minis-web-search provider="deepseek">\n  <results>\n    <result id="web:1">\n      <title>网页标题</title>\n\n      <summary>网页摘要</summary>\n    </result>\n  </results>\n</minis-web-search>\n尾声`
+const system = `前言\n<persona mode="a>b">${marker}\n<rules>嵌套规则正文</rules></persona>\n\n   \n<rukksh-memory>\n  记忆正文\n\n</rukksh-memory>\n\n<rukksh-web-search provider="deepseek">\n  <results>\n    <result id="web:1">\n      <title>网页标题</title>\n\n      <summary>网页摘要</summary>\n    </result>\n  </results>\n</rukksh-web-search>\n尾声`
 const plain = '无标签长字符串唯一标记\n' + '长文本验证。'.repeat(45)
 const body = { model: 'deepseek-chat', messages: [{ role: 'system', content: system }, { role: 'system', content: plain }, { role: 'user', content: '<short>短内容</short>' }, { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'test', arguments: '{}' } }] }], tools: [{ type: 'function', function: { name: 'search_web', description: '搜索网页', parameters: { type: 'object', properties: { query: { type: 'string' } } } } }], temperature: 0.5 }
 const turns = [{ from: 2, to: 4, source: 'USER_INPUT', replyMessageId: 7 }]
@@ -108,9 +108,9 @@ try {
   for (const themeId of ['old', 'endfield', 'astrolabe', 'bluearchive']) {
     for (const schemeMode of ['light', 'dark']) {
     await page.evaluate(({ themeId, schemeMode }) => {
-      const config = JSON.parse(localStorage.getItem('minis.theme.v4'))
+      const config = JSON.parse(localStorage.getItem('rukksh.theme.v4'))
       config.themeId = themeId; config.schemeMode = schemeMode
-      localStorage.setItem('minis.theme.v4', JSON.stringify(config))
+      localStorage.setItem('rukksh.theme.v4', JSON.stringify(config))
     }, { themeId, schemeMode })
     await page.reload()
     await page.getByRole('button', { name: '展开全部', exact: true }).click()

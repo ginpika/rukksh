@@ -174,8 +174,8 @@ export default function Coding() {
     onReload={load}
   />
   return (
-    <PortalAppearanceContext.Provider value="coding-popover slime-surface">
-      <div data-page="coding" className="coding-page slime-surface">
+    <PortalAppearanceContext.Provider value="coding-popover rukksh-surface">
+      <div data-page="coding" className="coding-page rukksh-surface">
         {project && caps ? <CodingStudio
           key={project.id}
           project={project}

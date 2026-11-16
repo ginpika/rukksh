@@ -1,5 +1,5 @@
 import { AppIcon, type AppIconName } from '../components/AppIcon'
-import SlimePage from '../components/SlimePage'
+import RukkshPage from '../components/RukkshPage'
 import { NAV } from '../shell/nav'
 import { codingPickerHref } from './coding/navigation'
 import './dashboard.css'
@@ -29,7 +29,7 @@ const tools = SHORTCUTS.flatMap(({ path, href = `#${path}`, label, icon }) => {
 
 export default function Dashboard() {
   return (
-    <SlimePage title="Dashboard" backHref="#/" backLabel="回到对话">
+    <RukkshPage title="Dashboard" backHref="#/" backLabel="回到对话">
       <nav className="dash-launcher" aria-label="工具入口">
         <ul className="dash-grid" role="list">
           {tools.map(({ path, href, label, icon }) => (
@@ -42,6 +42,6 @@ export default function Dashboard() {
           ))}
         </ul>
       </nav>
-    </SlimePage>
+    </RukkshPage>
   )
 }

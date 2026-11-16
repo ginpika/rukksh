@@ -6,7 +6,7 @@
  * Agent 私有 / 任务情景）分组展示，并按 <b>Layer</b>（L1 共享 / L2 私有 / L3 任务 / L4 发布）标注；
  * 另设「画像候选」（审批前不进正式画像）与「共享」（L4 发布/撤销）两个视图。
  *
- * <p>记忆是产品能力：开启 `minis.memory.enabled` 后自动提炼与注入；本页只做管理。
+ * <p>记忆是产品能力：开启 `rukksh.memory.enabled` 后自动提炼与注入；本页只做管理。
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'

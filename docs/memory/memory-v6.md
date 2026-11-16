@@ -8,7 +8,7 @@
 > **文档纪律**：每条结论标 **【代码事实】/【设计决议】/【待验证】**。
 > 【代码事实】= 已在源码确认；【设计决议】= 本次确定、待实施；【待验证】= 需在副本库实测。
 >
-> **本轮范围**：只产出标准，不改动任何代码与真实库（`data/minis.db` 禁止默认重建）。
+> **本轮范围**：只产出标准，不改动任何代码与真实库（`data/rukksh.db` 禁止默认重建）。
 > 实施按 §19 分阶段，先测试后实施。
 
 ---
@@ -478,7 +478,7 @@ score = cosine(query, item) × W_layer(layer) × W_domain(domain) × W_evidence(
 ### 8.3 Token 预算按层（修 `budget.shared` 未生效）
 
 ```yaml
-minis:
+rukksh:
   memory:
     budget:
       total: 1600
@@ -713,7 +713,7 @@ v5 把 `directive` 与 `profile` 同归「画像类」进候选闸门；v6 区�
 ## 16. 配置
 
 ```yaml
-minis:
+rukksh:
   memory:
     enabled: true
     scope:
@@ -751,7 +751,7 @@ minis:
 
 ### 17.1 备份 / 校验 / 恢复（P0 首验收项，必须在副本实测）
 
-① 迁移前 `VACUUM INTO 'data/backups/minis-<ts>.db'` + 复制 `data/article`；
+① 迁移前 `VACUUM INTO 'data/backups/rukksh-<ts>.db'` + 复制 `data/article`；
 ② 记录行数与抽样哈希；③ 单事务按 `_schema.version` 迁移；④ 后验证 `integrity_check=ok`、
 `foreign_key_check` 空、行数一致、`owner/status/identity IS NULL = 0`、§3.3 矩阵违例清单 = 0（或全落「待复核」）；
 ⑤ 失败中止不递增版本；⑥ 重复启动跳过；⑦ 失败恢复 = 备份覆盖 + 回滚旧程序。

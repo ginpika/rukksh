@@ -149,7 +149,7 @@ function flushMicrotasks() {
 }
 
 function runLauncherSandbox({
-  brand = { name: 'Slime', tagline: 'Minimal Launcher', slug: 'slime' },
+  brand = { name: 'Rukksh', tagline: 'Minimal Launcher', slug: 'rukksh' },
   initialScheme = 'system',
   prefersDark = false,
   platform = 'MacIntel',
@@ -224,7 +224,7 @@ function runLauncherSandbox({
   const outsideEl = makeEl('main', 'outside')
 
   const storage = new Map()
-  if (initialScheme) storage.set('minis.shell.scheme', initialScheme)
+  if (initialScheme) storage.set('rukksh.shell.scheme', initialScheme)
 
   const docListeners = new Map()
   const documentMock = {
@@ -378,7 +378,7 @@ test('mail adaptation and legacy shell artifacts are completely removed', () => 
   }
 })
 
-test('shell UI uses Slime minimalist v2 structure, tokens, icons, and assets', () => {
+test('shell UI uses Rukksh minimalist v2 structure, tokens, icons, and assets', () => {
   const indexHtml = readUtf8('desktop/ui/index.html')
   for (const required of [
     '--sl-bg',
@@ -447,7 +447,7 @@ test('shell UI uses Slime minimalist v2 structure, tokens, icons, and assets', (
 test('launcher v2 UI handles remote expand/collapse, account popover, identity switch, and theme cycling', async () => {
   let state = {
     mode: 'local',
-    remoteBaseUrl: 'https://api.slime.example.com',
+    remoteBaseUrl: 'https://api.rukksh.example.com',
     phase: 'idle',
     detail: '',
     sessionExpired: false,
@@ -477,9 +477,9 @@ test('launcher v2 UI handles remote expand/collapse, account popover, identity s
   await flushMicrotasks()
 
   // Branding + initial minimal 2-button stage
-  assert.equal(sandbox.doc.title, 'Slime')
-  assert.equal(sandbox.el('brand-name').textContent, 'Slime')
-  assert.equal(sandbox.el('remote-url').placeholder, 'https://slime.example.com')
+  assert.equal(sandbox.doc.title, 'Rukksh')
+  assert.equal(sandbox.el('brand-name').textContent, 'Rukksh')
+  assert.equal(sandbox.el('remote-url').placeholder, 'https://rukksh.example.com')
   assert.equal(sandbox.doc.body.classList.contains('is-mac'), true)
   assert.equal(sandbox.el('launch-stage').classList.contains('is-remote'), false)
   assert.equal(sandbox.el('remote-expand').getAttribute('aria-hidden'), 'true')
@@ -519,7 +519,7 @@ test('launcher v2 UI handles remote expand/collapse, account popover, identity s
   await sandbox.el('open-remote').click()
   assert.equal(sandbox.el('launch-stage').classList.contains('is-remote'), true)
   assert.equal(sandbox.el('remote-expand').getAttribute('aria-hidden'), 'false')
-  assert.equal(sandbox.el('remote-url').value, 'https://api.slime.example.com')
+  assert.equal(sandbox.el('remote-url').value, 'https://api.rukksh.example.com')
 
   // Submit remote URL
   sandbox.el('remote-url').value = 'remote.example.com/'

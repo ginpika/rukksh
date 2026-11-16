@@ -11,8 +11,8 @@ type TauriInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unkn
 declare global {
   interface Window {
     /** 桌面壳在本机后端的主文档中交付的令牌 */
-    __MINIS_LOCAL_TOKEN__?: string | null
-    __MINIS_LOCAL_API_READY__?: boolean
+    __RUKKSH_LOCAL_TOKEN__?: string | null
+    __RUKKSH_LOCAL_API_READY__?: boolean
     /** 桌面壳注入的全局 Tauri API（withGlobalTauri）；只用到 core.invoke */
     __TAURI__?: { core?: { invoke?: TauriInvoke } }
   }
@@ -20,12 +20,12 @@ declare global {
 
 /** 桌面壳的标志字段：Tauri v2 会挂在 window 上 */
 const TAURI_FLAG = '__TAURI_INTERNALS__'
-const LOCAL_API_READY = 'minis:desktop-api-ready'
+const LOCAL_API_READY = 'rukksh:desktop-api-ready'
 let localApiReady: Promise<void> | undefined
 
 /** 本机模式令牌；浏览器 / 远程模式下为 null */
 export function localToken(): string | null {
-  const token = window.__MINIS_LOCAL_TOKEN__
+  const token = window.__RUKKSH_LOCAL_TOKEN__
   return typeof token === 'string' && token.length > 0 ? token : null
 }
 
@@ -35,7 +35,7 @@ export function isDesktopShell(): boolean {
 }
 
 /**
- * 统一请求出口：桌面本机模式带上 X-Minis-Token，其余与原生 fetch 完全一致。
+ * 统一请求出口：桌面本机模式带上 X-Rukksh-Token，其余与原生 fetch 完全一致。
  *
  * <p>后端的 DesktopTokenFilter 只校验 /api/**，静态资源不受影响；令牌为空则不加头，
  * 因此 Web 部署与本地开发（浏览器直连）的行为不变。
@@ -52,13 +52,13 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   }
   if (!token) return fetch(input, init)
   const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
-  headers.set('X-Minis-Token', token)
+  headers.set('X-Rukksh-Token', token)
   return fetch(input instanceof Request ? input : url, { ...init, headers, redirect: 'error' })
 }
 
 /** 原生页面提交事件和前端脚本可能先后到达，首个请求等待壳完成令牌交付。 */
 function waitForLocalApi(): Promise<void> | undefined {
-  if (window.__MINIS_LOCAL_API_READY__) return
+  if (window.__RUKKSH_LOCAL_API_READY__) return
   return localApiReady ??= new Promise<void>(resolve => {
     const finish = () => {
       window.removeEventListener(LOCAL_API_READY, finish)
@@ -136,7 +136,7 @@ export function resizeWindow(dir: string): void {
 }
 
 /** 登出哨兵路径：与 desktop/src/main.rs 的 LOGOUT_PATH 一致（主窗口 on_navigation 会拦截它） */
-const LOGOUT_PATH = '/__minis_desktop_logout'
+const LOGOUT_PATH = '/__rukksh_desktop_logout'
 
 /**
  * 桌面端登出：请求壳把主窗口带回引导页（壳页面），后续重新登录 / 换身份由壳接管。
@@ -150,7 +150,7 @@ export function backToLauncher(): void {
 }
 
 /** 首页哨兵路径：与 desktop/src/main.rs 的 HOME_PATH 一致（主窗口 on_navigation 会拦截它） */
-const HOME_PATH = '/__minis_desktop_home'
+const HOME_PATH = '/__rukksh_desktop_home'
 
 /**
  * 桌面端首页入口：请求壳把主窗口带回引导页的「启动」视图（视图一：选本机 / 远程那一屏）。

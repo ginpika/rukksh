@@ -9,12 +9,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>__BRAND_TITLE__</title>
     <script>
+      // Preferences are migrated before the theme and the app first read them.
+      ;(function () {
+        var previousPrefix = 'minis.'
+        function migrate(storage) {
+          var keys = Object.keys(storage)
+          for (var key of keys) {
+            if (!key.startsWith(previousPrefix)) continue
+            var current = 'rukksh.' + key.slice(previousPrefix.length)
+            if (storage.getItem(current) === null) storage.setItem(current, storage.getItem(key))
+            storage.removeItem(key)
+          }
+        }
+        try { migrate(localStorage) } catch (e) { /* Storage may be disabled. */ }
+        try { migrate(sessionStorage) } catch (e) { /* Storage may be disabled. */ }
+      })()
       // 防闪烁（FOUC）：React 挂载前把持久化的主题令牌写入 :root，
       // 并同步 data-theme / data-scheme（供无法变量化的样式分支使用）
       ;(function () {
         try {
           var root = document.documentElement
-          var raw = localStorage.getItem('minis.theme.v4')
+          var raw = localStorage.getItem('rukksh.theme.v4')
           if (!raw) return
           var s = JSON.parse(raw)
           var vars = s && s.vars
@@ -47,7 +62,7 @@
        *
        * 尺寸和明暗配色与 shell/desktopFrame.css 同步，使用纯色窗缘与细边框。
        * ========================================================================== */
-      #minis-df-skeleton {
+      #rukksh-df-skeleton {
         --mds-bg: #ffffff;
         --mds-chrome: #f6f8fa;
         --mds-line: #d1d9e0;
@@ -55,7 +70,7 @@
         --mds-frame: #eaeef2;
         display: none;
       }
-      :root[data-scheme='dark'] #minis-df-skeleton {
+      :root[data-scheme='dark'] #rukksh-df-skeleton {
         --mds-bg: #0d0f10;
         --mds-chrome: #141719;
         --mds-line: #2c3236;
@@ -63,7 +78,7 @@
         --mds-frame: #0d0f10;
       }
       @media (prefers-color-scheme: dark) {
-        :root:not([data-scheme]) #minis-df-skeleton {
+        :root:not([data-scheme]) #rukksh-df-skeleton {
           --mds-bg: #0d0f10;
           --mds-chrome: #141719;
           --mds-line: #2c3236;
@@ -72,11 +87,11 @@
         }
       }
       /* 把底让给桌面：否则首帧仍是一块不透明的 --c-bg（跳变的一半来自这里） */
-      html.minis-df-skeleton,
-      html.minis-df-skeleton body {
+      html.rukksh-df-skeleton,
+      html.rukksh-df-skeleton body {
         background: transparent;
       }
-      html.minis-df-skeleton #minis-df-skeleton {
+      html.rukksh-df-skeleton #rukksh-df-skeleton {
         position: fixed;
         inset: 0;
         z-index: 60;
@@ -88,7 +103,7 @@
         /* 骨架是占位：可看不可点，免得挡住真实窗口按钮 */
         pointer-events: none;
       }
-      html.minis-df-skeleton #minis-df-skeleton::after {
+      html.rukksh-df-skeleton #rukksh-df-skeleton::after {
         content: '';
         position: absolute;
         inset: 0;
@@ -177,32 +192,32 @@
         border-radius: 50%;
       }
       /* Standalone pages (conversation, Dashboard and tool pages) fill the window cleanly. */
-      html.minis-df-frameless #minis-df-skeleton {
+      html.rukksh-df-frameless #rukksh-df-skeleton {
         padding: 0;
         gap: 0;
       }
-      html.minis-df-frameless .mds-acrylic,
-      html.minis-df-frameless .mds-rail,
-      html.minis-df-frameless .mds-logo,
-      html.minis-df-frameless .mds-titlebar {
+      html.rukksh-df-frameless .mds-acrylic,
+      html.rukksh-df-frameless .mds-rail,
+      html.rukksh-df-frameless .mds-logo,
+      html.rukksh-df-frameless .mds-titlebar {
         display: none;
       }
-      html.minis-df-frameless .mds-stage {
+      html.rukksh-df-frameless .mds-stage {
         border-radius: 0;
         box-shadow: none;
       }
-      :root[data-scheme='dark'].minis-df-frameless #minis-df-skeleton {
+      :root[data-scheme='dark'].rukksh-df-frameless #rukksh-df-skeleton {
         --mds-bg: #101213;
         --mds-chrome: #151819;
       }
       @media (prefers-color-scheme: dark) {
-        :root:not([data-scheme]).minis-df-frameless #minis-df-skeleton {
+        :root:not([data-scheme]).rukksh-df-frameless #rukksh-df-skeleton {
           --mds-bg: #101213;
           --mds-chrome: #151819;
         }
       }
       /* The conversation starts at the window origin, including its 280px rail. */
-      html.minis-df-conversation .mds-rail {
+      html.rukksh-df-conversation .mds-rail {
         display: flex;
         width: 280px;
         padding: 0;
@@ -210,44 +225,44 @@
         box-shadow: inset -1px 0 var(--mds-line);
       }
       /* macOS 使用原生系统窗口：不画自绘圆角/描边/右侧窗口按钮，外框路由给栏顶让出红绿灯位 */
-      html.minis-df-mac #minis-df-skeleton,
-      html.minis-df-mac .mds-acrylic {
+      html.rukksh-df-mac #rukksh-df-skeleton,
+      html.rukksh-df-mac .mds-acrylic {
         border-radius: 0;
       }
-      html.minis-df-mac #minis-df-skeleton::after {
+      html.rukksh-df-mac #rukksh-df-skeleton::after {
         content: none;
       }
-      html.minis-df-mac:not(.minis-df-conversation) .mds-rail {
+      html.rukksh-df-mac:not(.rukksh-df-conversation) .mds-rail {
         padding-top: 42px;
       }
-      html.minis-df-mac .mds-wbtn {
+      html.rukksh-df-mac .mds-wbtn {
         display: none;
       }
     </style>
     <script>
       ;(function () {
-        // 只在本机桌面壳里铺骨架（浏览器里 #minis-df-skeleton 保持 display:none）
+        // 只在本机桌面壳里铺骨架（浏览器里 #rukksh-df-skeleton 保持 display:none）
         if (!('__TAURI_INTERNALS__' in window)) return
-        document.documentElement.classList.add('minis-df-skeleton')
+        document.documentElement.classList.add('rukksh-df-skeleton')
         if (typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)) {
-          document.documentElement.classList.add('minis-df-mac')
+          document.documentElement.classList.add('rukksh-df-mac')
         }
         var raw = (window.location.hash || '').replace(/^#/, '').split('?')[0]
         var path = raw.charAt(0) === '/' ? raw : '/' + raw
         if (path === '/') {
-          document.documentElement.classList.add('minis-df-frameless', 'minis-df-conversation')
+          document.documentElement.classList.add('rukksh-df-frameless', 'rukksh-df-conversation')
         } else if (path !== '/search' && path !== '/memory/ops') {
-          document.documentElement.classList.add('minis-df-frameless')
+          document.documentElement.classList.add('rukksh-df-frameless')
         }
         // 兜底：bundle 跑不起来时也别让骨架一直挂着
         setTimeout(function () {
-          var el = document.getElementById('minis-df-skeleton')
+          var el = document.getElementById('rukksh-df-skeleton')
           if (el) el.remove()
           document.documentElement.classList.remove(
-            'minis-df-skeleton',
-            'minis-df-conversation',
-            'minis-df-frameless',
-            'minis-df-mac',
+            'rukksh-df-skeleton',
+            'rukksh-df-conversation',
+            'rukksh-df-frameless',
+            'rukksh-df-mac',
           )
         }, 6000)
       })()
@@ -255,7 +270,7 @@
   </head>
   <body>
     <!-- 桌面壳首帧骨架：形状与窗口外壳一致，React 挂载后由 DesktopFrame 撤掉（见上方的样式） -->
-    <div id="minis-df-skeleton" aria-hidden="true">
+    <div id="rukksh-df-skeleton" aria-hidden="true">
       <div class="mds-acrylic"></div>
       <aside class="mds-rail">
         <span class="mds-logo"><img src="/icon-64x64.png" alt="" /></span>

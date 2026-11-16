@@ -13,10 +13,10 @@ export function pageOperation(command) {
   if (['click', 'fill', 'select'].includes(action)) {
     const ref = String(command.ref || '')
     if (!/^r[a-f0-9]{32}-\d+$/.test(ref)) throw new Error('ref 无效，请先 read')
-    const element = document.querySelector(`[data-slime-computer-ref="${ref}"]`)
+    const element = document.querySelector(`[data-rukksh-computer-ref="${ref}"]`)
     if (!element || !element.getClientRects().length || getComputedStyle(element).visibility === 'hidden' || element.disabled) throw new Error('元素已失效或不可操作，请重新 read')
     // Consume refs before acting. A partial failure must never leave old references executable.
-    document.querySelectorAll('[data-slime-computer-ref]').forEach(e => e.removeAttribute('data-slime-computer-ref'))
+    document.querySelectorAll('[data-rukksh-computer-ref]').forEach(e => e.removeAttribute('data-rukksh-computer-ref'))
     if (action === 'click') {
       if (element.tagName === 'A' || element.tagName === 'FORM') element.target = '_self'
       if (element.form) element.form.target = '_self'
@@ -37,12 +37,12 @@ export function pageOperation(command) {
     return { acted: true }
   }
   const prefix = `r${[...crypto.getRandomValues(new Uint8Array(16))].map(byte => byte.toString(16).padStart(2, '0')).join('')}-`
-  document.querySelectorAll('[data-slime-computer-ref]').forEach(e => e.removeAttribute('data-slime-computer-ref'))
+  document.querySelectorAll('[data-rukksh-computer-ref]').forEach(e => e.removeAttribute('data-rukksh-computer-ref'))
   const elements = [...document.querySelectorAll('a,button,input,textarea,select,[role=button]')]
     .filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden')
     .slice(0, 120).map((e, i) => {
       const ref = prefix + i
-      e.setAttribute('data-slime-computer-ref', ref)
+      e.setAttribute('data-rukksh-computer-ref', ref)
       return { ref, tag: e.tagName.toLowerCase(), label: (e.getAttribute('aria-label') || e.innerText || e.placeholder || e.name || e.type || '').slice(0, 160), href: e.href || '', ...(e.tagName === 'SELECT' ? { options: [...e.options].slice(0, 40).map(o => ({ value: o.value, label: o.label })) } : {}) }
     })
   const body = document.body?.innerText || ''

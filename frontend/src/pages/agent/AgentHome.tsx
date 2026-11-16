@@ -1,4 +1,4 @@
-/** The everyday Slime surface. Existing specialist tools live in Dashboard. */
+/** The everyday Rukksh surface. Existing specialist tools live in Dashboard. */
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowDown, BookOpen, Check, ChevronDown, Copy, History, MessageSquare, PanelLeftOpen, PenLine, Plus, Search, ShieldCheck, Sparkles, X } from 'lucide-react'
@@ -8,7 +8,7 @@ import { AppIcon } from '../../components/AppIcon'
 import AgentMessageReceipt from '../../components/AgentMessageReceipt'
 import ChatMarkdown from '../../components/ChatMarkdown'
 import UserQuestionCard from '../../components/UserQuestionCard'
-import { SlimeAppearanceButton } from '../../components/SlimeAppearance'
+import { RukkshAppearanceButton } from '../../components/RukkshAppearance'
 import { useRememberedState } from '../../components/windowState'
 import { registerChatOpener } from '../../components/ChatNotifier'
 import { subscribeSessionEvents } from '../../components/sessionEvents'
@@ -23,7 +23,7 @@ import { useDictation } from './useDictation'
 import { useWelcomeSlogan } from './useWelcomeSlogan'
 import './agent.css'
 
-const LAST_SESSION_KEY = 'minis.agent.lastSession'
+const LAST_SESSION_KEY = 'rukksh.agent.lastSession'
 type ComposerDrafts = Record<string, string>
 const sessionDraftKey = (id: string) => `session:${id}`
 const newDraftKey = (agentId: string | null) => `new:${agentId ?? CORE_AGENT_ID}`
@@ -74,7 +74,7 @@ function canExpandBubble(event: ReactMouseEvent<HTMLElement>): boolean {
 }
 
 /** 全屏阅读层在历史栈里那一格的标记：手机返回手势先消费这一格，不会直接退出页面。 */
-const READER_HISTORY_KEY = 'minisAgentReader'
+const READER_HISTORY_KEY = 'rukkshAgentReader'
 export default function AgentHome({ connErr, userSlot }: { connErr?: string | null; userSlot?: ReactNode }) {
   const { slogan, randomize: randomizeSlogan } = useWelcomeSlogan()
   const [sessions, setSessions] = useState<SessionItem[]>([])
@@ -593,9 +593,9 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   }, [])
 
   return (
-    <div className={`slime-surface sl-chat${sidebarOpen ? ' is-sidebar-open' : ''}${empty ? ' is-welcome' : ''}`}>
+    <div className={`rukksh-surface sl-chat${sidebarOpen ? ' is-sidebar-open' : ''}${empty ? ' is-welcome' : ''}`}>
       {narrow && sidebarOpen && <button type="button" className="sl-chat__scrim" tabIndex={-1} aria-label="关闭会话列表" onClick={closeSidebar} />}
-      <aside className="sl-chat__side" id="slime-history" ref={sideRef} inert={!sidebarOpen || reader !== null} aria-label="Agent 导航" role={narrow && sidebarOpen ? 'dialog' : undefined} aria-modal={narrow && sidebarOpen ? true : undefined}>
+      <aside className="sl-chat__side" id="rukksh-history" ref={sideRef} inert={!sidebarOpen || reader !== null} aria-label="Agent 导航" role={narrow && sidebarOpen ? 'dialog' : undefined} aria-modal={narrow && sidebarOpen ? true : undefined}>
         <AgentSidebar mainAgent={mainAgent} agents={peers.filter(peer => peer.id !== CORE_AGENT_ID)}
           selectedAgentId={selectedAgentId} previews={agentPreviews} loading={peersLoading} error={peersError}
           disabled={creating} narrow={narrow} userSlot={userSlot} onSelectAgent={selectAgent}
@@ -604,19 +604,19 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
 
       <main ref={mainRef} className="sl-chat__main" aria-label="对话" tabIndex={-1} inert={reader !== null || (narrow && sidebarOpen)}>
         <header className="sl-chat__header" data-tauri-drag-region>
-          {narrow && <button ref={menuRef} type="button" className={`sl-chat__icon sl-chat__menubtn${sidebarOpen ? ' is-hidden' : ''}`} title="展开 Agent 列表" aria-label="展开 Agent 列表" aria-expanded={sidebarOpen} aria-controls="slime-history" onClick={() => { setHistoryOpen(false); setDrawerOpen(true) }}><PanelLeftOpen size={19} /></button>}
+          {narrow && <button ref={menuRef} type="button" className={`sl-chat__icon sl-chat__menubtn${sidebarOpen ? ' is-hidden' : ''}`} title="展开 Agent 列表" aria-label="展开 Agent 列表" aria-expanded={sidebarOpen} aria-controls="rukksh-history" onClick={() => { setHistoryOpen(false); setDrawerOpen(true) }}><PanelLeftOpen size={19} /></button>}
           <div className="sl-chat__heading sl-chat__agent-heading">
             {avatarBadge}
             <span className="sl-chat__agent-title"><strong>{agentName}</strong><small>{busy ? '处理中…' : title ? sessionTitle(title) : '新对话'}</small></span>
             {busy && <span className="sl-chat__running" aria-hidden="true" />}
           </div>
           <div className="sl-chat__headtools">
-            <SlimeAppearanceButton />
-            <button ref={historyButtonRef} type="button" className="sl-chat__icon" title="历史对话" aria-label="历史对话" aria-expanded={historyOpen} aria-controls="slime-agent-history" onClick={() => { setHistoryOpen(!historyOpen); setQuery('') }}><History size={18} /></button>
+            <RukkshAppearanceButton />
+            <button ref={historyButtonRef} type="button" className="sl-chat__icon" title="历史对话" aria-label="历史对话" aria-expanded={historyOpen} aria-controls="rukksh-agent-history" onClick={() => { setHistoryOpen(!historyOpen); setQuery('') }}><History size={18} /></button>
             <button type="button" className="sl-chat__icon" title="新对话" aria-label="新对话" disabled={creating} onClick={newChat}><PenLine size={18} /></button>
           </div>
         </header>
-        {historyOpen && <div ref={historyRef} className="sl-chat__historypanel" id="slime-agent-history" role="dialog" aria-label={`${agentName} 的历史对话`}>
+        {historyOpen && <div ref={historyRef} className="sl-chat__historypanel" id="rukksh-agent-history" role="dialog" aria-label={`${agentName} 的历史对话`}>
           <div className="sl-chat__historypanel-head"><span>与 {agentName} 的对话</span><button type="button" className="sl-chat__icon" aria-label="关闭历史对话" onClick={() => { setHistoryOpen(false); historyButtonRef.current?.focus() }}><X size={16} /></button></div>
           <label className="sl-chat__historypanel-search"><Search size={15} /><input autoFocus aria-label="搜索历史对话" placeholder="搜索对话…" value={query} onChange={event => setQuery(event.target.value)} /></label>
           <button type="button" className="sl-chat__historypanel-new" onClick={newChat} disabled={creating}><Plus size={16} />新对话</button>
@@ -723,7 +723,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
       {reader && createPortal(
         <section
           ref={readerRef}
-          className="slime-surface sl-chat__reader"
+          className="rukksh-surface sl-chat__reader"
           role="dialog"
           aria-modal="true"
           aria-labelledby="sl-chat-reader-title"

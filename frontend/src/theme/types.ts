@@ -110,7 +110,7 @@ export type ThemeManifest = {
   swatch: string[]
 }
 
-/** 运行时主题状态（localStorage: minis.theme.v4） */
+/** 运行时主题状态（localStorage: rukksh.theme.v4） */
 export type ThemeState = {
   v: 4
   themeId: ThemeId

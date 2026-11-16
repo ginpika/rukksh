@@ -76,6 +76,6 @@ flowchart TD
 
 `LayeringTest` 检查能力域不反向依赖编排，以及编排不依赖 Web 控制器、上下文组装不执行模型或工具。执行内核、历史窗口、任务状态、记忆与项目续接由各自回归测试验证。测试使用模型替身，不代表真实供应商接口或浏览器端到端验证。
 
-Computer-use 的部署权限、扩展连接和 function calling 示例见 [`docs/computer-use.md`](../docs/computer-use.md)。终端迁入 `ai.computer.terminal`，既有 `/api/terminal`、`term_target`、`term_command` 与 `minis.terminal` 配置保持兼容。截图通过通用 `ToolOutput` 图像观察送入共享模型循环；计算机能力不另建 Agent 循环。
+Computer-use 的部署权限、扩展连接和 function calling 示例见 [`docs/computer-use.md`](../docs/computer-use.md)。终端迁入 `ai.computer.terminal`，既有 `/api/terminal`、`term_target`、`term_command` 与 `rukksh.terminal` 配置保持兼容。截图通过通用 `ToolOutput` 图像观察送入共享模型循环；计算机能力不另建 Agent 循环。
 
 2026-10-13 本次整理聚焦单聊执行与圆桌发言两个主要入口。知识入库、心跳和其他大型模块保留原有行为，后续整理应继续依据实际调用链，而非单凭文件行数拆分。

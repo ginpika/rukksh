@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const frontend = fileURLToPath(new URL('../', import.meta.url))
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const dist = path.join(frontend, 'dist')
 const output = path.resolve(frontend, '../backend/target/user-question-browser-check')
@@ -24,8 +24,8 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true })
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 1000 } })
   await context.addInitScript(() => {
-    window.__MINIS_LOCAL_TOKEN__ = 'fixture-token'
-    localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } }))
+    window.__RUKKSH_LOCAL_TOKEN__ = 'fixture-token'
+    localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } }))
   })
   const page = await context.newPage()
   page.setDefaultTimeout(10000)

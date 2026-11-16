@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const frontend = fileURLToPath(new URL('../', import.meta.url))
-const require = createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR || frontend, 'package.json'))
+const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || frontend, 'package.json'))
 const { chromium } = require('playwright')
 const dist = path.join(frontend, 'dist')
 const output = path.resolve(frontend, '../backend/target/workspace-docker-browser-check')
@@ -17,7 +17,7 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 1000
 const page = await context.newPage()
 page.setDefaultTimeout(10000)
 page.on('pageerror', error => errors.push(error.message))
-await context.addInitScript(() => localStorage.setItem('minis.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })))
+await context.addInitScript(() => localStorage.setItem('rukksh.theme.v4', JSON.stringify({ v: 4, themeId: 'old', schemeMode: 'light', override: { seed: {} }, mono: { sidebar: false, hideChrome: false } })))
 await context.route('**/*', async route => {
   const req = route.request(), url = new URL(req.url()), method = req.method()
   if (url.origin !== 'http://workspace.test') return route.abort()
