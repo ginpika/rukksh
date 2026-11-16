@@ -51,6 +51,14 @@
 	],
 	"syscalls": [
 		{
+			"comment": "Return ENOSYS for clone3 so glibc falls back to clone when creating threads",
+			"names": [
+				"clone3"
+			],
+			"action": "SCMP_ACT_ERRNO",
+			"errnoRet": 38
+		},
+		{
 			"comment": "Allow create user namespaces",
 			"names": [
 				"clone",

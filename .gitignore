@@ -17,7 +17,9 @@ data/
 *.db-shm
 
 /*.md
-# 例外：品牌配置说明文档需要入库
+# 例外：面向读者的根目录文档
+!/README.md
+!/README-zh-CN.md
 !/BRANDING.md
 
 # 密钥（本地环境参数，模板见 backend/.env.example）

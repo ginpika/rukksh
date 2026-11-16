@@ -1,0 +1,8 @@
+# Use with docker-compose.yml to deploy the corresponding prebuilt images.
+services:
+  backend:
+    build: !reset null
+    image: ${RUKKSH_IMAGE_NAMESPACE:-ghcr.io/ginpika/open-slime}-backend:${RUKKSH_IMAGE_TAG:?Set RUKKSH_IMAGE_TAG to a published tag}
+  frontend:
+    build: !reset null
+    image: ${RUKKSH_IMAGE_NAMESPACE:-ghcr.io/ginpika/open-slime}-frontend:${RUKKSH_IMAGE_TAG:?Set RUKKSH_IMAGE_TAG to a published tag}
