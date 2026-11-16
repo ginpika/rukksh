@@ -3,6 +3,7 @@ package cc.ginpika.minis.coding.workspace;
 import cc.ginpika.minis.agent.workspace.WorkspaceDtos;
 import cc.ginpika.minis.agent.workspace.WorkspaceService;
 import cc.ginpika.minis.ai.computer.terminal.ExecTarget;
+import cc.ginpika.minis.ai.computer.terminal.exec.LocalExecTarget;
 import cc.ginpika.minis.ai.computer.terminal.store.TerminalStore;
 import cc.ginpika.minis.coding.api.CodingDtos.*;
 import cc.ginpika.minis.coding.config.CodingProps;
@@ -37,7 +38,12 @@ public class WorkspaceProjects {
         this.terminals=terminals;this.browser=browser;this.jdbc=jdbc;this.tx=tx;this.store=store;this.files=files;this.props=props;this.json=json;
         Map<String,ExecTarget> map=new HashMap<>();targets.forEach(t->map.put(t.kind(),t));this.targets=Map.copyOf(map);
     }
-    public List<Workspace> workspaces(){return terminals.targets().stream().map(t->new Workspace(t.id(),t.name(),t.kind(),t.enabled(),t.workdir())).toList();}
+    public List<Workspace> workspaces(){
+        return terminals.targets().stream()
+                .filter(t -> !LocalExecTarget.KIND.equals(t.kind()))
+                .map(t -> new Workspace(t.id(),t.name(),t.kind(),t.enabled(),t.workdir()))
+                .toList();
+    }
     public Binding binding(String repositoryId){
         return jdbc.query("SELECT * FROM coding_workspace_project WHERE repository_id=?",(r,n)->new Binding(r.getString("repository_id"),r.getString("workspace_id"),r.getString("directory"),r.getString("root_path"),r.getString("target_fingerprint")),repositoryId).stream().findFirst().orElse(null);
     }
@@ -61,7 +67,7 @@ public class WorkspaceProjects {
         if(repo==null || binding==null){throw new ResponseStatusException(HttpStatus.NOT_FOUND,"编程项目不存在");}
         var target=terminals.targetById(binding.workspaceId()).orElse(null);
         boolean recentHidden=jdbc.queryForObject("SELECT COUNT(*) FROM coding_hidden_recent_project WHERE repository_id=?",Integer.class,id)>0;
-        return new CodingProject(id,repo.name(),binding.workspaceId(),target==null?"工作空间已删除":target.name(),target==null?"unknown":target.kind(),binding.directory(),repo.validationCommand(),target!=null && target.enabled() && fingerprint(target).equals(binding.fingerprint()),repo.createdAt(),recentHidden);
+        return new CodingProject(id,repo.name(),binding.workspaceId(),target==null?"工作空间已删除":target.name(),target==null?"unknown":target.kind(),binding.directory(),repo.validationCommand(),target!=null && target.enabled() && !LocalExecTarget.KIND.equals(target.kind()) && fingerprint(target).equals(binding.fingerprint()),repo.createdAt(),recentHidden);
     }
     public CodingProject open(String owner,OpenProject req){
         if(req==null){throw bad("请选择工作空间与项目目录");}
@@ -285,6 +291,7 @@ public class WorkspaceProjects {
     }
     private TerminalStore.TargetRow target(String id,boolean enabled){
         var target=terminals.targetById(id).orElseThrow(()->bad("工作空间不存在"));
+        if(LocalExecTarget.KIND.equals(target.kind())){throw bad("本机工作空间支持 Agent 命令，编程项目需要 Docker 或 SSH 工作空间");}
         if(enabled && !target.enabled()){throw bad("工作空间未启用，请先在工作空间页面启用");}
         if(!targets.containsKey(target.kind())){throw bad("工作空间类型不可用");}return target;
     }

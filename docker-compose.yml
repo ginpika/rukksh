@@ -1,8 +1,7 @@
 # minis 生产编排：前后端分离两个容器
 #   frontend = nginx（托管 Vite 产物 + 反代 /api → backend）
 #   backend  = Spring Boot jar（SQLite；模型等业务配置在页面维护并存入数据库）
-# 用法：
-#   cp backend/.env.example backend/.env   # 首次：可保留全注释，部署参数按需覆盖
+# 用法（Docker Compose 2.24.0+）：
 #   docker compose up -d --build
 #   访问 http://localhost:18081
 services:
@@ -10,16 +9,17 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    image: slime-backend:latest
-    container_name: slime-backend
+    image: rukksh-backend:latest
+    container_name: rukksh-backend
     restart: unless-stopped
     init: true
     shm_size: '256mb'
     security_opt:
       - seccomp=./backend/browser-seccomp.json
-    # 可选部署参数（如 SSO / 代理）；文件可为空，模型等业务配置由页面维护
+    # 按需用 backend/.env 覆盖部署参数（如 SSO / 代理）
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     environment:
       # 容器内固定为挂载卷路径，覆盖 .env 里相对 maven 工作目录的默认值
       MINIS_DB_PATH: /data/minis.db
@@ -28,6 +28,8 @@ services:
     volumes:
       # 持久化：SQLite 库 + markdown 文章目录
       - minis-data:/data
+      # 本机工作空间：按需挂载宿主机项目目录，在页面填写容器内路径。
+      # - /srv/projects:/workspaces
       # 若想直接复用仓库 ./data 目录，可改用 bind mount（Windows 上 WAL 可能受文件系统影响，慎用）：
       # - ./data:/data
     # 仅内网可达：由 frontend 反代访问，无需对外暴露端口
@@ -38,8 +40,8 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    image: slime-frontend:latest
-    container_name: slime-frontend
+    image: rukksh-frontend:latest
+    container_name: rukksh-frontend
     restart: unless-stopped
     depends_on:
       - backend

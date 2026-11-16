@@ -1,6 +1,7 @@
 package cc.ginpika.minis.ai.llm;
 
 import cc.ginpika.minis.config.LlmProps;
+import cc.ginpika.minis.config.ModelApiFormat;
 import cc.ginpika.minis.config.ModelTarget;
 import cc.ginpika.minis.config.SettingsService;
 import cc.ginpika.minis.stats.TokenUsageService;
@@ -28,8 +29,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * OpenAI Compatible 聊天客户端（POST {base}/chat/completions，SSE 流式）。
- * base-url 需指向带版本前缀的端点，如 https://api.openai.com/v1。
+ * 聊天传输客户端，支持 OpenAI Chat Completions 和 Anthropic Messages 的 SSE。
  *
  * <p>流式消费并聚合 delta，对调用方暴露与非流式一致的 message 节点
  * （content / reasoning_content / tool_calls），rawResponse 为重组后的等价 JSON。
@@ -38,8 +38,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>调试：请求期间每 1s 打印 tokens/s（按 SSE chunk 计数，约等于 token 数）。
  *
- * <p>用量：请求带 stream_options.include_usage，流末尾的 usage 尾包按来源标签记入 token_usage
- * （统计页数据源）；供应商未回传时按请求/输出文本估算兜底。
+ * <p>用量：优先记录供应商回传的 usage，缺失时按请求和输出估算。
  *
  * <p>messages 由调用方组装（可选 system + 历史 + 本次 user）；本类只负责协议与解析。
  * 失败统一抛 IllegalStateException，由上层映射 502。
@@ -66,15 +65,14 @@ public class OpenAiChatClient {
     private static final Logger log = LoggerFactory.getLogger(OpenAiChatClient.class);
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
-    private final LlmProps props;
     private final SettingsService settings;
     private final ObjectMapper objectMapper;
     private final TokenUsageService tokenUsage;
     private final OkHttpClient client;
+    private final OkHttpClient anthropicClient;
 
     public OpenAiChatClient(LlmProps props, SettingsService settings, ObjectMapper objectMapper,
                             TokenUsageService tokenUsage) {
-        this.props = props;
         this.settings = settings;
         this.objectMapper = objectMapper;
         this.tokenUsage = tokenUsage;
@@ -95,6 +93,8 @@ public class OpenAiChatClient {
                     }
                 })
                 .build();
+        // OkHttp strips Authorization on cross-host redirects, but would forward x-api-key.
+        this.anthropicClient = client.newBuilder().followRedirects(false).build();
     }
 
     /** 默认聊天模型是否就绪（设置页模型或 .env 任一） */
@@ -211,7 +211,7 @@ public class OpenAiChatClient {
 
     /**
      * 低层补全 + token 用量留痕：source 为统计来源标签（见 {@link TokenUsageService} 的 SOURCE_* 常量）。
-     * 请求带 stream_options.include_usage，供应商回传 usage 时按真实值落库，否则本地估算兜底。
+     * 供应商回传 usage 时按真实值落库，否则本地估算兜底。
      */
     public RawResult chatRaw(ModelTarget target, ObjectNode body, DeltaListener listener,
                              String source) {
@@ -229,24 +229,22 @@ public class OpenAiChatClient {
             throw new IllegalStateException("LLM 未配置：请在设置页添加模型，或在 .env 填写 "
                     + "LLM_BASE_URL / LLM_API_KEY / LLM_CHAT_MODEL");
         }
-        body.put("model", target.model());
-        body.put("stream", true);
-        /* 要求流末尾补一个 usage 尾包（choices 为空），否则多数供应商不下发用量 */
-        body.putObject("stream_options").put("include_usage", true);
+        boolean anthropic = target.apiFormat() == ModelApiFormat.ANTHROPIC_MESSAGES;
         StreamRateLogger rate = new StreamRateLogger(target.model());
         StreamMeter meter = new StreamMeter();
         boolean attempted = false;
         boolean succeeded = false;
         try {
-            Request.Builder request = new Request.Builder()
+            ObjectNode wire = anthropic ? AnthropicMessagesRequest.body(body, target) : openAiBody(body, target);
+            Request.Builder request = anthropic ? AnthropicMessagesRequest.request(target) : new Request.Builder()
                     .url(join(target.baseUrl(), "chat/completions"))
-                    .post(RequestBody.create(objectMapper.writeValueAsString(body), JSON))
                     .header("Authorization", "Bearer " + target.apiKey());
+            request.post(RequestBody.create(objectMapper.writeValueAsString(wire), JSON));
             if (submissionListener != null) {
-                request.tag(Submission.class, new Submission(submissionListener, body));
+                request.tag(Submission.class, new Submission(submissionListener, wire));
             }
             rate.start();
-            okhttp3.Call call = client.newCall(request.build());
+            Call call = (anthropic ? anthropicClient : client).newCall(request.build());
             if (control != null) { control.attach(call); }
             attempted = true;
             try (Response response = call.execute()) {
@@ -254,7 +252,8 @@ public class OpenAiChatClient {
                     String respBody = response.body() == null ? "" : response.body().string();
                     throw new ChatFailure(response.code(),"HTTP " + response.code() + " " + abbreviate(respBody),null);
                 }
-                StreamOutcome outcome = readStream(response, rate, listener, meter);
+                StreamOutcome outcome = anthropic ? readAnthropicStream(response, target.model(), rate, listener, meter)
+                        : readStream(response, rate, listener, meter);
                 meter.usage = outcome.usage();
                 succeeded = true;
                 return outcome.raw();
@@ -277,6 +276,22 @@ public class OpenAiChatClient {
                     control != null && control.cancelled());
             rate.finish();
         }
+    }
+
+    private static ObjectNode openAiBody(ObjectNode body, ModelTarget target) {
+        body.put("model", target.model());
+        body.put("stream", true);
+        body.putObject("stream_options").put("include_usage", true);
+        for (JsonNode message : body.path("messages")) {
+            if (message.has(AnthropicMessagesRequest.NATIVE_CONTENT)) {
+                ObjectNode wire = body.deepCopy();
+                for (JsonNode item : wire.path("messages")) {
+                    if (item instanceof ObjectNode object) object.remove(AnthropicMessagesRequest.NATIVE_CONTENT);
+                }
+                return wire;
+            }
+        }
+        return body;
     }
 
     /** 落库本次用量：供应商回传 usage 用真实值，否则按请求/输出文本估算（estimated=true） */
@@ -321,6 +336,21 @@ public class OpenAiChatClient {
 
     /** 流式读取结果：聚合后的 message + 供应商回传的 usage（未回传为 null） */
     private record StreamOutcome(RawResult raw, TokenUsageService.Usage usage) {
+    }
+
+    private StreamOutcome readAnthropicStream(Response response, String model, StreamRateLogger rate,
+                                               DeltaListener listener, StreamMeter meter) throws IOException {
+        ResponseBody body = response.body();
+        if (body == null) throw new IOException("空响应体");
+        var stream = new AnthropicMessagesStream(objectMapper, listener, rate::addToken);
+        try (BufferedReader reader = new BufferedReader(body.charStream())) {
+            stream.read(reader);
+            return streamOutcome(stream.message(model), stream.finishReason(), stream.usage());
+        } finally {
+            meter.received = stream.received();
+            meter.usage = stream.usage();
+            if (meter.usage == null) stream.appendObservedText(meter.text);
+        }
     }
 
     /** 逐行消费 SSE 流，聚合 delta 为 message 节点；listener 非空时把每段 delta 实时透出 */
@@ -435,6 +465,10 @@ public class OpenAiChatClient {
         if (!toolCalls.isEmpty()) {
             message.set("tool_calls", toolCalls);
         }
+        return streamOutcome(message, finishReason, usage);
+    }
+
+    private StreamOutcome streamOutcome(ObjectNode message, String finishReason, TokenUsageService.Usage usage) {
         ObjectNode raw = objectMapper.createObjectNode();
         ObjectNode rawChoice = raw.putArray("choices").addObject();
         rawChoice.set("message", message);

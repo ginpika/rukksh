@@ -6,6 +6,8 @@ import cc.ginpika.minis.ai.core.tool.terminal.RunCommandTool;
 import cc.ginpika.minis.ai.core.util.LlmJson;
 import cc.ginpika.minis.ai.computer.terminal.dto.TerminalDtos;
 import cc.ginpika.minis.ai.computer.terminal.exec.DockerExecTarget;
+import cc.ginpika.minis.ai.computer.terminal.exec.LocalExecTarget;
+import cc.ginpika.minis.ai.computer.terminal.exec.LocalSandbox;
 import cc.ginpika.minis.ai.computer.terminal.exec.SshExecTarget;
 import cc.ginpika.minis.ai.computer.terminal.store.TerminalStore;
 import cc.ginpika.minis.config.TerminalProps;
@@ -29,7 +31,7 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * 命令行终端的入口：模型侧的一次工具调用、设置页的目标维护与试跑，都从这里进出。
  *
- * <p>它自己不做协议（docker / ssh 各由 {@link ExecTarget} 的实现负责），只做三件事：
+ * <p>执行环境由各自的 {@link ExecTarget} 实现负责。这里做三件事：
  * <ol>
  *   <li><b>选目标</b>：按名取库里的目标，逐目标开关打开才放行；调用方还可再叠一层「授权名单」——
  *       多智能体成员只在自己绑定的工作空间里选（见 {@link #run(JsonNode, String, Set)}）</li>
@@ -132,7 +134,7 @@ public class TerminalService {
 
     private String scopedTargetText(Set<String> allowed,String id,String directory) {
         if(allowed==null || !allowed.contains(id)) return "项目工作空间不在当前成员获准的工作空间内，请用户调整成员配置。";
-        return store.targetById(id).filter(TerminalStore.TargetRow::enabled)
+        return store.targetById(id).filter(this::enabledForAgent)
                 .map(t -> "本项目唯一工作空间："+t.name()+" ["+t.kind()+"]；项目工作目录："+directory+"。不得切换到其他项目。")
                 .orElse("项目工作空间未启用或已删除，请用户检查绑定。");
     }
@@ -147,7 +149,7 @@ public class TerminalService {
         List<TerminalStore.TargetRow> rows = enabledTargets(allowedTargetIds);
         if (rows.isEmpty()) {
             return allowedTargetIds == null || allowedTargetIds.isEmpty()
-                    ? "当前没有启用的工作空间。请在工作空间页添加并启用一个（docker 容器或 SSH 服务器）。"
+                    ? "当前没有启用的工作空间。请在工作空间页添加并启用一个。"
                     : "你没有可用的工作空间：绑定的目标已被删除或未启用。";
         }
         StringBuilder sb = new StringBuilder("可用工作空间（run_command 的 target 取下列名字）：");
@@ -185,7 +187,13 @@ public class TerminalService {
         }
         ExecTarget impl = impls.get(target.kind());
         if (impl == null) {
-            return "未知的目标类型：" + target.kind() + "（只支持 docker / ssh）";
+            return "未知的目标类型：" + target.kind();
+        }
+        if (impl instanceof LocalExecTarget local) {
+            String unavailable = local.unavailableReason();
+            if (unavailable != null) {
+                return unavailable;
+            }
         }
         ExecTarget.ExecOptions options = options(target);
         if(scopedTarget!=null) {
@@ -292,8 +300,10 @@ public class TerminalService {
 
     // ---------- 设置页：目标维护 ----------
 
-    public TerminalDtos.TerminalView view() {
-        return new TerminalDtos.TerminalView(store.targets().stream().map(this::toView).toList());
+    public TerminalDtos.TerminalView view(boolean localManageable) {
+        String unavailable = localUnavailableReason();
+        return new TerminalDtos.TerminalView(store.targets().stream().map(this::toView).toList(),
+                unavailable == null, unavailable, localManageable);
     }
 
     public TerminalDtos.TargetView create(TerminalDtos.TargetRequest req) {
@@ -304,9 +314,17 @@ public class TerminalService {
         return toView(store.save(row));
     }
 
+    public boolean isLocalTarget(String id) {
+        return store.targetById(id).map(row -> LocalExecTarget.KIND.equals(row.kind())).orElse(false);
+    }
+
     public TerminalDtos.TargetView update(String id, TerminalDtos.TargetRequest req) {
         TerminalStore.TargetRow existing = store.targetById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "目标不存在: " + id));
+        if (req != null
+                && LocalExecTarget.KIND.equals(existing.kind()) != LocalExecTarget.KIND.equals(trim(req.kind()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "要更换为其他类型，请新建工作空间");
+        }
         TerminalStore.TargetRow row = fromRequest(req, existing.id());
         if (store.nameTaken(row.name(), id)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标名已存在：" + row.name());
@@ -376,11 +394,24 @@ public class TerminalService {
     private List<TerminalStore.TargetRow> enabledTargets(Set<String> allowedTargetIds) {
         List<TerminalStore.TargetRow> out = new ArrayList<>();
         for (TerminalStore.TargetRow row : store.targets()) {
-            if (row.enabled() && (allowedTargetIds == null || allowedTargetIds.contains(row.id()))) {
+            if (enabledForAgent(row) && (allowedTargetIds == null || allowedTargetIds.contains(row.id()))) {
                 out.add(row);
             }
         }
         return out;
+    }
+
+    private boolean enabledForAgent(TerminalStore.TargetRow row) {
+        return row.enabled() && (!LocalExecTarget.KIND.equals(row.kind()) || localAvailable());
+    }
+
+    private boolean localAvailable() {
+        return impls.get(LocalExecTarget.KIND) instanceof LocalExecTarget local && local.available();
+    }
+
+    private String localUnavailableReason() {
+        return impls.get(LocalExecTarget.KIND) instanceof LocalExecTarget local
+                ? local.unavailableReason() : LocalExecTarget.UNAVAILABLE;
     }
 
     private TerminalStore.TargetRow require(String id) {
@@ -419,6 +450,8 @@ public class TerminalService {
                     "kind 只能是 " + String.join(" / ", impls.keySet()));
         }
         boolean isDocker = DockerExecTarget.KIND.equals(kind);
+        boolean isSsh = SshExecTarget.KIND.equals(kind);
+        boolean isLocal = LocalExecTarget.KIND.equals(kind);
         String name = trim(req.name());
         if (name.isEmpty() && isDocker && id == null) {
             name = "docker-" + UUID.randomUUID().toString().substring(0, 8);
@@ -430,6 +463,7 @@ public class TerminalService {
         String container = blankToNull(req.container());
         String hostWorkdir = isDocker ? blankToNull(req.hostWorkdir()) : null;
         String workdir = blankToNull(req.workdir());
+        List<String> writePaths = List.of();
         List<String> allow = clean(req.allowPatterns());
         List<String> deny = clean(req.denyPatterns());
         for (String rule : allow) {
@@ -464,7 +498,7 @@ public class TerminalService {
                     || workdir.contains("\\") || List.of(workdir.split("/")).contains(".."))) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "绑定路径须为容器内绝对路径，不能为根目录或包含 ..");
             }
-        } else {
+        } else if (isSsh) {
             if (trim(req.sshHost()).isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ssh 目标需指定 sshHost");
             }
@@ -474,6 +508,21 @@ public class TerminalService {
             if (SshExecTarget.AUTH_PASSWORD.equals(sshAuth) && trim(req.sshPassword()).isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码认证需提供 sshPassword");
             }
+        } else if (isLocal) {
+            String unavailable = localUnavailableReason();
+            if (unavailable != null) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, unavailable);
+            }
+            try {
+                var directory = LocalSandbox.resolveDirectory(workdir);
+                writePaths = LocalSandbox.validateWritePaths(req.writePaths());
+                ((LocalExecTarget) impls.get(kind)).validateConfiguration(directory, writePaths);
+                workdir = directory.toString();
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+            } catch (IllegalStateException e) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), e);
+            }
         }
         return new TerminalStore.TargetRow(id, name, kind, Boolean.TRUE.equals(req.enabled()),
                 workdir, req.timeoutMs(), req.maxOutput(),
@@ -481,16 +530,16 @@ public class TerminalService {
                 isDocker ? blankToNull(req.dockerHost()) : null,
                 isDocker && container == null ? image : null,
                 isDocker ? container : null,
-                isDocker ? null : blankToNull(req.sshHost()),
-                isDocker ? null : req.sshPort(),
-                isDocker ? null : blankToNull(req.sshUser()),
-                isDocker ? null : sshAuth,
-                isDocker ? null : blankToNull(req.sshPassword()),
-                isDocker ? null : blankToNull(req.sshPrivateKey()),
-                isDocker ? null : blankToNull(req.sshPassphrase()),
-                isDocker ? null : hostKeyCheck,
+                isSsh ? blankToNull(req.sshHost()) : null,
+                isSsh ? req.sshPort() : null,
+                isSsh ? blankToNull(req.sshUser()) : null,
+                isSsh ? sshAuth : null,
+                isSsh ? blankToNull(req.sshPassword()) : null,
+                isSsh ? blankToNull(req.sshPrivateKey()) : null,
+                isSsh ? blankToNull(req.sshPassphrase()) : null,
+                isSsh ? hostKeyCheck : null,
                 blankToNull(req.note()),
-                hostWorkdir,
+                hostWorkdir, write(writePaths),
                 0L, 0L);
     }
 
@@ -503,16 +552,22 @@ public class TerminalService {
     }
 
     /** 给模型看的一句话：这台环境是什么、起点在哪 */
-    private static String describe(TerminalStore.TargetRow row) {
+    private String describe(TerminalStore.TargetRow row) {
         StringBuilder sb = new StringBuilder();
         if (DockerExecTarget.KIND.equals(row.kind())) {
             sb.append(row.container() != null ? "容器 " + row.container() : "镜像 " + row.image());
+        } else if (LocalExecTarget.KIND.equals(row.kind())) {
+            sb.append("后端本机");
         } else {
             sb.append(nullTo(row.sshUser(), "root")).append('@').append(row.sshHost())
                     .append(':').append(row.sshPort() == null ? 22 : row.sshPort());
         }
         if (row.workdir() != null) {
             sb.append("｜工作目录 ").append(row.workdir());
+        }
+        if (LocalExecTarget.KIND.equals(row.kind())) {
+            List<String> paths = read(row.writePaths());
+            sb.append(paths.isEmpty() ? "｜文件只读" : "｜可写目录 " + String.join("、", paths));
         }
         if (row.note() != null) {
             sb.append("｜").append(row.note());
@@ -528,7 +583,8 @@ public class TerminalService {
                 row.workdir(), row.timeoutMs(), row.maxOutput(), read(row.allowPatterns()),
                 read(row.denyPatterns()), row.dockerHost(), row.image(), row.container(),
                 row.sshHost(), row.sshPort(), row.sshUser(), row.sshAuth(), row.sshPassword(),
-                row.sshPrivateKey(), row.sshPassphrase(), row.hostKeyCheck(), row.note(), row.hostWorkdir());
+                row.sshPrivateKey(), row.sshPassphrase(), row.hostKeyCheck(), row.note(), row.hostWorkdir(),
+                read(row.writePaths()));
     }
 
     private static TerminalDtos.CommandView toView(TerminalStore.CommandRow row) {

@@ -1,8 +1,10 @@
 .sl-page {
+  --sl-page-control-size: 2.25rem;
   display: flex;
   height: 100dvh;
   min-height: 0;
   flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   overflow: hidden;
 }
 
@@ -11,9 +13,9 @@
 .sl-page__header {
   display: grid;
   flex: none;
-  grid-template-columns: minmax(2.25rem, 1fr) minmax(0, auto) minmax(2.25rem, 1fr);
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: center;
-  gap: .75rem;
+  gap: clamp(.75rem, 1.5vw, 1rem);
   min-height: 68px;
   padding: .75rem clamp(1rem, 3vw, 1.875rem);
 }
@@ -27,18 +29,20 @@
   overflow-wrap: anywhere;
 }
 
+.sl-page__header > h1[tabindex='-1']:focus { outline: none; }
+
 .sl-page__back,
 .sl-page__header .sl-appearance {
   display: grid;
   place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--sl-page-control-size);
+  height: var(--sl-page-control-size);
   padding: 0;
   border-radius: 7px;
   color: var(--sl-muted);
 }
 
-.sl-page__back { justify-self: start; }
+.sl-page__back { justify-self: end; }
 .sl-page__back:hover { background: var(--sl-hover); color: var(--sl-fg); }
 .sl-page__header .sl-appearance { justify-self: end; }
 .sl-page__header .sl-appearance:hover { color: var(--sl-fg); }
@@ -50,4 +54,8 @@
   min-height: 0;
   flex-direction: column;
   overflow-y: auto;
+}
+
+@media (pointer: coarse) {
+  .sl-page { --sl-page-control-size: 2.75rem; }
 }

@@ -52,28 +52,13 @@ public class ProjectController {
 
     @PutMapping("/{id}")
     public ProjectRow update(@PathVariable String id, @RequestBody ProjectRequest req) {
-        require(id);
-        String name = req == null ? null : blank(req.name());
-        String kind = req == null ? null : blank(req.kind());
-        String status = req == null ? null : blank(req.status());
-        Boolean narrative = req == null ? null : req.narrative();
-        String note = req == null ? null : req.note();
-        projects.update(id, name, kind, narrative, status, note);
-        return require(id);
+        return workflows.updateProject(id, req == null ? null : req.name(), req == null ? null : req.kind(),
+                req == null ? null : req.narrative(), req == null ? null : req.status(), req == null ? null : req.note());
     }
 
     @DeleteMapping("/{id}")
     public CountResult delete(@PathVariable String id) {
         return new CountResult(projects.delete(id));
-    }
-
-    private ProjectRow require(String id) {
-        return projects.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "项目不存在: " + id));
-    }
-
-    private static String blank(String s) {
-        return s == null || s.isBlank() ? null : s.trim();
     }
 
     /** 新建 / 编辑请求体 */

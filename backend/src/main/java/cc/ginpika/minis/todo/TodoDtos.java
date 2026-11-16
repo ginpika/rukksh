@@ -33,9 +33,12 @@ public final class TodoDtos {
 
     public record ItemRequest(String title, String note, String projectId, String plannedOn,
                               Long dueAt, Long version) {}
+    public record ItemPatch(String title, String note, String projectId, boolean changeProject,
+                            String plannedOn, boolean changePlan, Long dueAt, boolean changeDue, long version) {}
     public record TransitionRequest(String action, Long version) {}
     public record StartRequest(String expectedActiveId) {}
     public record FocusRequest(String todoId, Long startedAt, Long endedAt, String note, Long version) {}
+    public record FocusPatch(Long startedAt, Long endedAt, String note, long version) {}
     public record NoteRequest(String body, Long version) {}
     public record Deleted(boolean deleted) {}
 }

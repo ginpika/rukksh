@@ -15,7 +15,7 @@
  * 全部、复制原始 JSON。原始请求体与真实发出去的那一份完全一致（见后端 requestBody）。
  */
 import { AppIcon } from './AppIcon'
-import { memo, useMemo, useState, type ReactNode } from 'react'
+import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { parseTaggedText, type TaggedTextPart } from './taggedText'
 import './jsonViewer.css'
 import {
@@ -254,7 +254,7 @@ const JsonNode = memo(function JsonNode({ value, name, index, depth, openDepth, 
       {/* 只有容器遍历子项；Object.entries(string) 会把整段正文再逐字符渲染一次。 */}
       {isContainer && open && !emptyContainer && (
         <>
-          <div className="ml-3.5 border-l border-line/50 pl-2">
+          <div className="jv-node-children ml-3.5 border-l border-line/50 pl-2" data-compact={depth >= 8 || undefined}>
             {isArray
               ? (value as unknown[]).map((v, i, arr) => (
                   <JsonNode
@@ -554,27 +554,11 @@ const TurnBlock = memo(function TurnBlock({
   nodeDepth: number
 }) {
   const [open, setOpen] = useState(turnOpen)
-  const [showCalls, setShowCalls] = useState(false)
-  const [calls, setCalls] = useState<TurnLlmCall[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
+  const callHistory = useTurnCalls(sessionId, replyMessageId)
+  const { showCalls, toggleCalls } = callHistory
 
   const rounds = messages.filter(hasToolCalls).length
   const label = SOURCE_LABEL[source] ?? source
-
-  /* 首次点开「请求 / 响应」才拉取：留痕可能很大，不随主请求体一起加载 */
-  const toggleCalls = () => {
-    const next = !showCalls
-    setShowCalls(next)
-    if (next && calls === null && !loading && replyMessageId !== null) {
-      setLoading(true)
-      setErr(null)
-      sessionTurnCalls(sessionId, replyMessageId)
-        .then((r) => setCalls(r.calls))
-        .catch(() => setErr('调用留痕加载失败'))
-        .finally(() => setLoading(false))
-    }
-  }
 
   return (
     <div className="raw-turn">
@@ -624,33 +608,64 @@ const TurnBlock = memo(function TurnBlock({
       )}
 
       {showCalls && replyMessageId !== null && (
-        <div className="mb-1 mr-1.5 space-y-1.5 rounded-sm border border-line/60 bg-fg/[0.03] p-1.5">
-          <div className="text-2xs text-faint">
-            {loading
-              ? '加载中…'
-              : err
-                ? err
-                : calls && calls.length > 0
-                  ? `共 ${calls.length} 轮 LLM 调用`
-                  : '暂无调用留痕（该回答早于本功能，或本轮未调用模型）'}
-          </div>
-          {calls?.map((c) => (
-            <CallRound key={c.round} call={c} />
-          ))}
-        </div>
+        <TurnCalls {...callHistory} className="mb-1 mr-1.5 space-y-1.5 rounded-sm border border-line/60 bg-fg/[0.03] p-1.5" />
       )}
     </div>
   )
 })
 
-/** 原始请求体入口：messages（按后端 Turn 切片分组）+ 请求参数 + tools。
- *  sessionId 用于回看某个 Turn 的调用留痕（见 TurnBlock 的「请求 / 响应」按钮） */
-export function RawContextView({ ctx, sessionId }: { ctx: RawContext; sessionId: string }) {
-  const [gen, setGen] = useState(0)
-  /** 全局展开态：null=初始（消息默认折叠），true=全展开，false=全折叠 */
-  const [all, setAll] = useState<boolean | null>(null)
-  const [copied, setCopied] = useState(false)
+function useTurnCalls(sessionId: string, replyMessageId: number | null, read = sessionTurnCalls) {
+  const [showCalls, setShowCalls] = useState(false)
+  const [calls, setCalls] = useState<TurnLlmCall[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
 
+  const load = () => {
+    if (loading || replyMessageId === null) return
+    setLoading(true)
+    setErr(null)
+    read(sessionId, replyMessageId)
+      .then(result => setCalls(result.calls))
+      .catch(() => setErr('调用留痕加载失败'))
+      .finally(() => setLoading(false))
+  }
+
+  /* 首次点开「请求 / 响应」才拉取：留痕可能很大，不随主请求体一起加载 */
+  const toggleCalls = () => {
+    const next = !showCalls
+    setShowCalls(next)
+    if (next && calls === null) load()
+  }
+  return { showCalls, toggleCalls, calls, loading, err, load }
+}
+
+function TurnCalls({ calls, loading, err, className, onRetry }: {
+  calls: TurnLlmCall[] | null
+  loading: boolean
+  err: string | null
+  className: string
+  onRetry?: () => void
+}) {
+  return (
+    <div className={className}>
+      <p className="text-2xs text-faint" role="status">
+        {loading
+          ? '加载中…'
+          : err
+            ? err
+            : calls && calls.length > 0
+              ? `共 ${calls.length} 轮 LLM 调用`
+              : '暂无调用留痕（该回答早于本功能，或本轮未调用模型）'}
+      </p>
+      {err && onRetry && <button type="button" className="debug-assembly-button" onClick={onRetry}>重试读取留痕</button>}
+      {calls?.map((c) => (
+        <CallRound key={c.round} call={c} />
+      ))}
+    </div>
+  )
+}
+
+function useContextBody(ctx: RawContext) {
   const body = ctx.body
   const messages = useMemo(() => (body.messages ?? []) as Msg[], [body])
   const items = useMemo(() => buildItems(messages, ctx.turns ?? []), [messages, ctx.turns])
@@ -661,6 +676,23 @@ export function RawContextView({ ctx, sessionId }: { ctx: RawContext; sessionId:
   )
   const turnCount = useMemo(() => items.filter((i) => i.type === 'turn').length, [items])
   const roundCount = useMemo(() => messages.filter(hasToolCalls).length, [messages])
+  return { body, messages, items, tools, parameters, turnCount, roundCount }
+}
+
+/** 复制请求体本身，排除仅用于预览的 Turn 切片。 */
+function copyRequestBody(body: RawContext['body']) {
+  return navigator.clipboard.writeText(JSON.stringify(body, null, 2))
+}
+
+/** 原始请求体入口：messages（按后端 Turn 切片分组）+ 请求参数 + tools。
+ *  sessionId 用于回看某个 Turn 的调用留痕（见 TurnBlock 的「请求 / 响应」按钮） */
+export function RawContextView({ ctx, sessionId }: { ctx: RawContext; sessionId: string }) {
+  const [gen, setGen] = useState(0)
+  /** 全局展开态：null=初始（消息默认折叠），true=全展开，false=全折叠 */
+  const [all, setAll] = useState<boolean | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const { body, messages, items, tools, parameters, turnCount, roundCount } = useContextBody(ctx)
 
   const msgOpen = all === true
   const nodeDepth = all === true ? 999 : 1
@@ -672,8 +704,7 @@ export function RawContextView({ ctx, sessionId }: { ctx: RawContext; sessionId:
 
   const copy = async () => {
     try {
-      /* 只复制请求体本身（turns 切片是预览用的元信息，不属于发给大模型的内容） */
-      await navigator.clipboard.writeText(JSON.stringify(body, null, 2))
+      await copyRequestBody(body)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
@@ -746,6 +777,231 @@ export function RawContextView({ ctx, sessionId }: { ctx: RawContext; sessionId:
             </section>
           )}
       </div>
+    </div>
+  )
+}
+
+const ASSEMBLY_VIEWS = [
+  ['messages', '消息'],
+  ['parameters', '请求参数'],
+  ['tools', '工具定义'],
+] as const
+type AssemblyView = (typeof ASSEMBLY_VIEWS)[number][0]
+type IndexedGroup = { key: string; title: string; item: Item }
+type Expansion = { generation: number; expanded: boolean }
+const INITIAL_EXPANSION: Expansion = { generation: 0, expanded: false }
+const RECENT_CALL_TRACES = 6
+
+function indexGroups(items: Item[]): IndexedGroup[] {
+  let looseCount = 0
+  return items.map(item => {
+    if (item.type === 'turn') {
+      const reply = item.span.replyMessageId
+      return { item, key: reply === null ? `turn:${item.index}` : `reply:${reply}`, title: `Turn ${item.index}` }
+    }
+    looseCount += 1
+    return { item, key: `loose:${looseCount}`, title: `未分组消息 ${looseCount}` }
+  }).reverse()
+}
+
+function AssemblyGroup({ group, sessionId, expansion, readHistory }: {
+  group: IndexedGroup
+  sessionId: string
+  expansion: Expansion
+  readHistory: typeof sessionTurnCalls
+}) {
+  const callsButtonRef = useRef<HTMLButtonElement>(null)
+  const { item, title } = group
+  const reply = item.type === 'turn' ? item.span.replyMessageId : null
+  const source = item.type === 'turn' ? SOURCE_LABEL[item.span.source] ?? item.span.source : null
+  const history = useTurnCalls(sessionId, reply, readHistory)
+  const rounds = item.msgs.filter(hasToolCalls).length
+
+  return (
+    <section className="debug-assembly-reader" aria-label={title}>
+      <header className="debug-assembly-reader__head">
+        <div>
+          <h3>{title}</h3>
+          <p>{[source, `${item.msgs.length} 条消息`, rounds > 0 ? `${rounds} 轮工具调用` : null].filter(Boolean).join(' · ')}</p>
+        </div>
+        {reply !== null && (
+          <button ref={callsButtonRef} type="button" className="debug-assembly-button" aria-expanded={history.showCalls} onClick={history.toggleCalls}>
+            <AppIcon name="code" size={15} />实际请求 / 响应
+          </button>
+        )}
+      </header>
+      {history.showCalls && (
+        <TurnCalls
+          {...history}
+          className="debug-assembly-calls"
+          onRetry={() => {
+            callsButtonRef.current?.focus({ preventScroll: true })
+            history.load()
+          }}
+        />
+      )}
+      {item.msgs.length > 0 ? (
+        <div key={expansion.generation} className="debug-assembly-messages">
+          {item.msgs.map((message, index) => (
+            <MessageCard key={index} msg={message} defaultOpen={expansion.expanded} openDepth={expansion.expanded ? 999 : 1} />
+          ))}
+        </div>
+      ) : <p className="debug-assembly-empty">这组没有消息</p>}
+    </section>
+  )
+}
+
+/** 调试页的请求体阅读器，每次只显示选中的轮次或请求字段。 */
+export function DebugAssemblyView({ ctx, sessionId }: { ctx: RawContext; sessionId: string }) {
+  const indexId = useId()
+  const browserRef = useRef<HTMLDivElement>(null)
+  const { body, messages, items, tools, parameters, turnCount, roundCount } = useContextBody(ctx)
+  const groups = useMemo(() => indexGroups(items), [items])
+  const recentHistory = useMemo(() => new Map<number, ReturnType<typeof sessionTurnCalls>>(), [ctx, sessionId])
+  const [view, setView] = useState<AssemblyView>('messages')
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [expansion, setExpansion] = useState(INITIAL_EXPANSION)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle')
+  const group = groups.find(entry => entry.key === selectedKey) ?? groups[0]
+  const canExpand = view === 'messages' ? Boolean(group?.item.msgs.length) : view === 'parameters' || Boolean(tools?.length)
+
+  const readHistory: typeof sessionTurnCalls = (id, replyId) => {
+    const cached = recentHistory.get(replyId)
+    if (cached) {
+      recentHistory.delete(replyId)
+      recentHistory.set(replyId, cached)
+      return cached
+    }
+    // Keep a small cache for comparing nearby turns. Refreshing the preview creates a new cache.
+    const request = sessionTurnCalls(id, replyId)
+    recentHistory.set(replyId, request)
+    const oldest = recentHistory.keys().next()
+    if (recentHistory.size > RECENT_CALL_TRACES && !oldest.done) recentHistory.delete(oldest.value)
+    void request.then(
+      result => { if (!result.calls.length && recentHistory.get(replyId) === request) recentHistory.delete(replyId) },
+      () => { if (recentHistory.get(replyId) === request) recentHistory.delete(replyId) },
+    )
+    return request
+  }
+
+  useEffect(() => {
+    if (copyStatus !== 'copied') return
+    const timer = window.setTimeout(() => setCopyStatus('idle'), 1500)
+    return () => window.clearTimeout(timer)
+  }, [copyStatus])
+
+  const copy = async () => {
+    setCopyStatus('copying')
+    try {
+      await copyRequestBody(body)
+      setCopyStatus('copied')
+    } catch {
+      setCopyStatus('failed')
+    }
+  }
+
+  const changeView = (next: AssemblyView) => {
+    setView(next)
+    if (view !== next) setExpansion(INITIAL_EXPANSION)
+  }
+  const selectGroup = (key: string) => {
+    setSelectedKey(key)
+    if (key === group?.key) return
+    setExpansion(INITIAL_EXPANSION)
+    const index = browserRef.current?.querySelector('.debug-assembly-index')
+    const reader = browserRef.current?.querySelector('.debug-assembly-reader')
+    if (index && reader && reader.getBoundingClientRect().top < index.getBoundingClientRect().top) {
+      reader.scrollIntoView({ block: 'start' })
+    }
+  }
+  const expand = (expanded: boolean) => setExpansion(({ generation }) => ({ generation: generation + 1, expanded }))
+
+  return (
+    <div className="debug-assembly">
+      <div className="debug-assembly-overview">
+        <div className="debug-assembly-model">
+          <span><AppIcon name="code" />预览模型</span>
+          <strong>{body.model || '未记录模型'}</strong>
+        </div>
+        <p>
+          {messages.length} 条消息 · {turnCount} 个 Turn
+          {roundCount > 0 && ` · ${roundCount} 轮工具往返`}
+        </p>
+        <button type="button" className="debug-assembly-button debug-assembly-copy" onClick={() => void copy()} disabled={copyStatus === 'copying'}>
+          <AppIcon name={copyStatus === 'copied' ? 'check' : 'restore'} />
+          {copyStatus === 'copied' ? '已复制' : '复制预览 JSON'}
+        </button>
+      </div>
+      <span className="sr-only" role="status">{copyStatus === 'copied' ? '已复制预览 JSON' : ''}</span>
+      {copyStatus === 'failed' && <p className="debug-assembly-error" role="status">无法复制预览 JSON，请检查剪贴板权限。</p>}
+
+      <div className="debug-assembly-toolbar">
+        <div className="debug-assembly-views" role="group" aria-label="请求体组成">
+          {ASSEMBLY_VIEWS.map(([key, label]) => (
+            <button key={key} type="button" aria-pressed={key === view} onClick={() => changeView(key)}>
+              {label}{key === 'tools' && tools && <span>{tools.length}</span>}
+            </button>
+          ))}
+        </div>
+        <div className="debug-assembly-actions" role="group" aria-label="当前视图展开方式">
+          <button type="button" className="debug-assembly-button" disabled={!canExpand} onClick={() => expand(true)}>{view === 'messages' ? '展开本组' : '展开全部'}</button>
+          <button type="button" className="debug-assembly-button" disabled={!canExpand} onClick={() => expand(false)}>{view === 'messages' ? '折叠本组' : '折叠全部'}</button>
+        </div>
+      </div>
+
+      {view === 'messages' && (group ? (
+        <div className="debug-assembly-browser" ref={browserRef}>
+          <nav className="debug-assembly-index" aria-label="消息轮次">
+            <ul className="scrollbar-slim" role="list">
+              {groups.map((entry, index) => (
+                <li key={entry.key}>
+                  <button
+                    id={`${indexId}-${index}`}
+                    type="button"
+                    aria-pressed={entry.key === group.key}
+                    tabIndex={entry.key === group.key ? 0 : -1}
+                    onClick={() => selectGroup(entry.key)}
+                    onKeyDown={event => {
+                      let next: number
+                      switch (event.key) {
+                        case 'ArrowDown': next = Math.min(index + 1, groups.length - 1); break
+                        case 'ArrowUp': next = Math.max(index - 1, 0); break
+                        case 'Home': next = 0; break
+                        case 'End': next = groups.length - 1; break
+                        default: return
+                      }
+                      event.preventDefault()
+                      selectGroup(groups[next].key)
+                      document.getElementById(`${indexId}-${next}`)?.focus()
+                    }}
+                  >
+                    <span><strong>{entry.title}</strong><small>{entry.item.msgs.length} 条</small></span>
+                    {entry.item.msgs[0] && <span className="debug-assembly-preview">{summarize(entry.item.msgs[0])}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <label className="debug-assembly-picker">
+            <span>消息轮次</span>
+            <select value={group.key} onChange={event => selectGroup(event.target.value)}>
+              {groups.map(entry => <option key={entry.key} value={entry.key}>{entry.title} · {entry.item.msgs.length} 条</option>)}
+            </select>
+          </label>
+          <AssemblyGroup key={group.key} group={group} sessionId={sessionId} expansion={expansion} readHistory={readHistory} />
+        </div>
+      ) : <p className="debug-assembly-empty">暂无消息</p>)}
+
+      {view === 'parameters' && (
+        <section className="debug-assembly-reader" aria-label="请求参数">
+          <div className="debug-assembly-json"><JsonViewer key={expansion.generation} value={parameters} openDepth={expansion.expanded ? 999 : expansion.generation ? 0 : 1} /></div>
+        </section>
+      )}
+      {view === 'tools' && (tools?.length ? (
+        <section className="debug-assembly-reader" aria-label="工具定义">
+          <div className="debug-assembly-json"><JsonViewer key={expansion.generation} value={tools} openDepth={expansion.expanded ? 999 : 0} /></div>
+        </section>
+      ) : <p className="debug-assembly-empty">此请求未附带工具定义</p>)}
     </div>
   )
 }

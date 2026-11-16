@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import cc.ginpika.minis.ai.core.prompt.store.PromptStore;
+import cc.ginpika.minis.config.ModelApiFormat;
 
 /**
  * 设置页持久化：llm_model / app_setting / embedding_config / rerank_config。
@@ -18,8 +19,16 @@ import cc.ginpika.minis.ai.core.prompt.store.PromptStore;
 public class SettingsStore {
 
     public record ModelRow(String id, String name, String baseUrl, String apiKey, String model,
-                           Integer contextWindow,Integer maxOutputTokens) {
-        public ModelRow(String id,String name,String baseUrl,String apiKey,String model,Integer contextWindow){this(id,name,baseUrl,apiKey,model,contextWindow,null);}
+                           Integer contextWindow, Integer maxOutputTokens, ModelApiFormat apiFormat) {
+        public ModelRow(String id, String name, String baseUrl, String apiKey, String model,
+                        Integer contextWindow, Integer maxOutputTokens) {
+            this(id, name, baseUrl, apiKey, model, contextWindow, maxOutputTokens,
+                    ModelApiFormat.OPENAI_CHAT_COMPLETIONS);
+        }
+
+        public ModelRow(String id, String name, String baseUrl, String apiKey, String model, Integer contextWindow) {
+            this(id, name, baseUrl, apiKey, model, contextWindow, null);
+        }
     }
 
     /** 默认模型选择、Embedding 与 Rerank 配置均为单行（id=1），无行时返回 null */
@@ -44,14 +53,14 @@ public class SettingsStore {
 
     public List<ModelRow> models() {
         return jdbc.query(
-                "SELECT id, name, base_url, api_key, model, context_window, max_output_tokens FROM llm_model "
+                "SELECT id, name, base_url, api_key, model, context_window, max_output_tokens, api_format FROM llm_model "
                         + "ORDER BY created_at",
                 SettingsStore::mapModel);
     }
 
     public Optional<ModelRow> model(String id) {
         return jdbc.query(
-                        "SELECT id, name, base_url, api_key, model, context_window, max_output_tokens "
+                        "SELECT id, name, base_url, api_key, model, context_window, max_output_tokens, api_format "
                                 + "FROM llm_model WHERE id = ?",
                         SettingsStore::mapModel, id)
                 .stream().findFirst();
@@ -61,16 +70,17 @@ public class SettingsStore {
         long now = System.currentTimeMillis();
         jdbc.update(
                 "INSERT INTO llm_model(id, name, base_url, api_key, model, context_window, max_output_tokens, "
-                        + "created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                m.id(), m.name(), m.baseUrl(), m.apiKey(), m.model(), m.contextWindow(),m.maxOutputTokens(), now, now);
+                        + "api_format, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                m.id(), m.name(), m.baseUrl(), m.apiKey(), m.model(), m.contextWindow(), m.maxOutputTokens(),
+                m.apiFormat().wireValue(), now, now);
     }
 
     public void updateModel(ModelRow m) {
         jdbc.update(
                 "UPDATE llm_model SET name = ?, base_url = ?, api_key = ?, model = ?, "
-                        + "context_window = ?, max_output_tokens = ?, updated_at = ? WHERE id = ?",
-                m.name(), m.baseUrl(), m.apiKey(), m.model(), m.contextWindow(),m.maxOutputTokens(),
-                System.currentTimeMillis(), m.id());
+                        + "context_window = ?, max_output_tokens = ?, api_format = ?, updated_at = ? WHERE id = ?",
+                m.name(), m.baseUrl(), m.apiKey(), m.model(), m.contextWindow(), m.maxOutputTokens(),
+                m.apiFormat().wireValue(), System.currentTimeMillis(), m.id());
     }
 
     public void deleteModel(String id) {
@@ -144,6 +154,7 @@ public class SettingsStore {
     private static ModelRow mapModel(ResultSet rs, int rowNum) throws SQLException {
         return new ModelRow(rs.getString("id"), rs.getString("name"), rs.getString("base_url"),
                 rs.getString("api_key"), rs.getString("model"),
-                (Integer) rs.getObject("context_window"),(Integer) rs.getObject("max_output_tokens"));
+                (Integer) rs.getObject("context_window"), (Integer) rs.getObject("max_output_tokens"),
+                ModelApiFormat.fromWireValue(rs.getString("api_format")));
     }
 }

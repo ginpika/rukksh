@@ -8,6 +8,7 @@
   --sl-active: #e8edf2;
   --sl-line: #d1d9e0;
   --sl-line-strong: #a6b0bb;
+  --sl-focus-line: var(--sl-muted);
   --sl-fg: #1f2328;
   --sl-fg-2: #424a53;
   --sl-muted: #656d76;
@@ -63,9 +64,14 @@
 }
 
 .slime-surface button, .slime-surface input, .slime-surface textarea { font-family: inherit; }
-.slime-surface :is(button, a, input, textarea, summary):focus-visible {
-  outline: 2px solid var(--sl-accent);
-  outline-offset: 3px;
+.slime-surface :is(button:not([role='combobox']), a, summary, input:is([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'])):focus-visible {
+  outline: 2px solid var(--sl-focus-line);
+  outline-offset: 0;
+}
+.slime-surface :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color']), textarea, select, button[role='combobox']):focus {
+  border-color: var(--sl-focus-line);
+  outline: none;
+  box-shadow: none;
 }
 .sl-appearance {
   display: inline-flex;
@@ -83,6 +89,9 @@
   cursor: pointer;
 }
 .sl-appearance:hover { background: var(--sl-hover); color: var(--sl-fg); }
+@media (forced-colors: active) {
+  .slime-surface { --sl-focus-line: Highlight; }
+}
 @media (prefers-reduced-motion: reduce) {
   .slime-surface *, .slime-surface *::before, .slime-surface *::after {
     animation: none !important;

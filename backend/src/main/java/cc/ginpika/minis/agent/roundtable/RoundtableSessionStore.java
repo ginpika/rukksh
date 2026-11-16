@@ -27,6 +27,9 @@ public class RoundtableSessionStore {
                              Long updatedAt, String projectId) {
     }
 
+    public record ProjectTask(String id, String title, String phase, String coordinatorId,
+                              boolean archived, Long createdAt, Long updatedAt) {}
+
     private static final String COLS = "id, title, model_id, member_ids, created_at, updated_at, project_id";
 
     private final JdbcTemplate jdbc;
@@ -68,6 +71,19 @@ public class RoundtableSessionStore {
     public List<SessionRow> listAll() {
         return jdbc.query("SELECT " + COLS + " FROM hub_session WHERE mode = ? "
                 + "ORDER BY COALESCE(updated_at, created_at) DESC", RoundtableSessionStore::map, MODE);
+    }
+
+    public List<ProjectTask> projectTasks(String projectId, int offset, int limit) {
+        return jdbc.query("""
+                SELECT s.id,s.title,c.phase,c.coordinator_id,a.session_id IS NOT NULL AS archived,s.created_at,s.updated_at
+                FROM hub_session s LEFT JOIN collaboration_plan c ON c.session_id=s.id
+                LEFT JOIN collaboration_task_archive a ON a.session_id=s.id
+                WHERE s.mode=? AND s.project_id=?
+                  AND NOT EXISTS(SELECT 1 FROM collaboration_issue i WHERE i.session_id=s.id)
+                ORDER BY COALESCE(s.updated_at,s.created_at) DESC,s.id LIMIT ? OFFSET ?
+                """, (r, n) -> new ProjectTask(r.getString("id"), r.getString("title"), r.getString("phase"),
+                r.getString("coordinator_id"), r.getBoolean("archived"), RoundtableRows.nullableLong(r, "created_at"),
+                RoundtableRows.nullableLong(r, "updated_at")), MODE, projectId, limit, offset);
     }
 
     /** 有新发言时刷新时间戳，并按需回填标题（首条发言截断做标题） */

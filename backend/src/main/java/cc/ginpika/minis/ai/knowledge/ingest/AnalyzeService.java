@@ -14,6 +14,7 @@ import cc.ginpika.minis.ai.core.tool.graph.UpsertEdgeTool;
 import cc.ginpika.minis.ai.core.tool.graph.UpsertNodeTool;
 import cc.ginpika.minis.ai.core.util.LlmJson;
 import cc.ginpika.minis.ai.llm.EmbeddingClient;
+import cc.ginpika.minis.ai.runtime.ModelLoop;
 import cc.ginpika.minis.stats.TokenUsageService;
 import cc.ginpika.minis.ai.knowledge.store.ChunkStore;
 import cc.ginpika.minis.ai.knowledge.store.DocumentStore;
@@ -145,16 +146,7 @@ public class AnalyzeService {
                 finish = message.path("content").asText(null);
                 break;
             }
-            // assistant 的 tool_calls 消息回填历史
-            ObjectNode assistant = messages.addObject();
-            assistant.put("role", "assistant");
-            assistant.set("tool_calls", toolCalls.deepCopy());
-            JsonNode content = message.path("content");
-            if (content.isTextual()) {
-                assistant.put("content", content.asText());
-            } else {
-                assistant.putNull("content");
-            }
+            messages.add(ModelLoop.assistant(message));
             // 逐个执行工具并把结果回传
             for (JsonNode tc : toolCalls) {
                 String name = tc.path("function").path("name").asText();

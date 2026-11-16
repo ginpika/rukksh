@@ -42,7 +42,7 @@ export default function UserQuestionCard({ question, active, onAnswer }: {
             onFocus={() => setSelected('custom')}
             onChange={event => { setSelected('custom'); setCustom(event.target.value) }}
             placeholder="输入你的想法，也可以补充具体要求"
-            className="block w-full resize-y rounded-lg border border-line bg-bg px-3 py-2 text-[1rem] text-fg placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30" />
+            className="ui-input block w-full resize-y rounded-lg border border-line bg-bg px-3 py-2 text-[1rem] text-fg placeholder:text-muted" />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-[0.875rem] text-muted max-sm:text-[1rem]" role="status">等待你的回答</span>
             <button type="submit" disabled={!answer || submitting}

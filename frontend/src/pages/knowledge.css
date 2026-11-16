@@ -420,17 +420,11 @@ a.kn-row:hover .kn-row__title { color: var(--sl-link); }
   color: var(--k-fg);
   font-size: .9375rem;
   line-height: 1.6;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease;
 }
 
 .kn-input::placeholder { color: var(--k-muted); }
-.kn-input:hover { border-color: var(--k-line-strong); }
-
-.kn-input:focus {
-  border-color: var(--sl-link);
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sl-link) 16%, transparent);
-}
+.kn-input:hover:not(:focus) { border-color: var(--k-line-strong); }
 
 .kn-textarea { flex: 1; min-height: 22rem; resize: vertical; line-height: 1.7; }
 .kn-input--sm { min-height: 2rem; padding: .25rem .5rem; font-size: .8125rem; }

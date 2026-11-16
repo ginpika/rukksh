@@ -67,11 +67,12 @@
 
 ## 3. 同步脚本（打包前写回静态文件）
 
-有三份文件**读不了 JSON**，因为它们的消费者在很早的阶段解析且不支持变量：
+有四份文件**读不了 JSON**，因为它们的消费者在很早的阶段解析且不支持变量：
 
 | 文件 | 消费者 | 原因 |
 |---|---|---|
 | `desktop/tauri.conf.json` | Tauri CLI | 纯静态 JSON，`productName` 无变量能力 |
+| `desktop/Cargo.toml` | Cargo / macOS LaunchServices | `[[bin]].name` 决定编译出的可执行文件名（未打包的 `tauri dev` 运行时依赖它显示应用名）；`displayName` 含空格或非 ASCII 时回退到 `slug` |
 | `backend/pom.xml` | Maven 模型 | `<artifactId>` 在插件运行前就已定型 |
 | `docker-compose.yml` | Docker Compose | 只读环境变量，不读 JSON |
 
@@ -99,7 +100,7 @@ node scripts/brand-sync.mjs
    ```
 3. 重新构建需要出包的端（前端 `npm run build`、后端 `./mvnw package`、桌面 `npm run build`）。
 
-> 说明：前端 / 后端 / 桌面壳的构建期读取是自动的；第 2 步只负责那三份静态配置文件。
+> 说明：前端 / 后端 / 桌面壳的构建期读取是自动的；第 2 步只负责那四份静态配置文件。
 
 ---
 
@@ -113,7 +114,7 @@ node scripts/brand-sync.mjs
 | 桌面壳请求头 | `X-Minis-Token` | 前端与后端约定的鉴权头 |
 | 桌面壳事件名 | `minis://status`、`minis://user`、`minis://session` | 壳与引导页之间的协议 |
 | Java 包名 | `cc.ginpika.minis` | 源码结构，与展示无关 |
-| Cargo / npm 包名 | `minis-desktop` | 内部构建标识 |
+| Cargo `[package]` / npm 包名 | `minis-desktop` | 内部构建标识（可执行文件名由 `[[bin]].name` 控制） |
 | 数据文件名 | `minis.db`、`minis.log` | 落盘文件名 |
 
 如确需一并修改，请单独评估兼容性影响。

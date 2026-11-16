@@ -24,6 +24,11 @@ public class ProjectStore {
                              String status, String note, long createdAt, long updatedAt) {
     }
 
+    public record CatalogEntry(String id, String name, String kind, boolean narrative, String status,
+                               String noteExcerpt, long createdAt, long updatedAt) {}
+
+    public record CatalogPage(List<CatalogEntry> items, long total, int offset, int limit) {}
+
     private static final String COLS = "id, user_id, name, kind, narrative, status, note, "
             + "created_at, updated_at";
 
@@ -47,6 +52,25 @@ public class ProjectStore {
         List<ProjectRow> rows = jdbc.query("SELECT " + COLS + " FROM project WHERE id = ?",
                 (rs, n) -> map(rs), id);
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    public Optional<ProjectRow> findVisible(String id, String userId) {
+        return findById(id).filter(project -> project.userId() == null || project.userId().equals(userId));
+    }
+
+    public CatalogPage catalog(String userId, String query, String status, String kind, int offset, int limit) {
+        String filter = """
+                 FROM project WHERE (user_id IS NULL OR user_id=?)
+                 AND (? IS NULL OR status=?) AND (? IS NULL OR kind=?)
+                 AND instr(lower(name||char(10)||COALESCE(note,'')),lower(?))>0
+                """;
+        Long total = jdbc.queryForObject("SELECT count(*)" + filter, Long.class, userId, status, status, kind, kind, query);
+        List<CatalogEntry> items = jdbc.query("""
+                SELECT id,name,kind,narrative,status,substr(note,1,320),created_at,updated_at
+                """ + filter + " ORDER BY updated_at DESC,id LIMIT ? OFFSET ?", (r, n) -> new CatalogEntry(
+                r.getString(1), r.getString(2), r.getString(3), r.getBoolean(4), r.getString(5),
+                r.getString(6), r.getLong(7), r.getLong(8)), userId, status, status, kind, kind, query, limit, offset);
+        return new CatalogPage(items, total == null ? 0 : total, offset, limit);
     }
 
     /** 是否创作 / 虚构类项目（决定域内记忆能否升画像）；项目不存在返回 false */

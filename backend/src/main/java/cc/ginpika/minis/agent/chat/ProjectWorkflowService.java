@@ -43,6 +43,16 @@ public class ProjectWorkflowService {
 
     @Transactional
     public ProjectRow createProject(String name, String kind, Boolean narrative, String note) {
+        return createProject(name, kind, narrative, note, null);
+    }
+
+    @Transactional
+    public ProjectRow createVisibleProject(String userId, String name, String kind, Boolean narrative, String note) {
+        if (userId == null || userId.isBlank()) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "需要登录");
+        return createProject(name, kind, narrative, note, userId);
+    }
+
+    private ProjectRow createProject(String name, String kind, Boolean narrative, String note, String userId) {
         String title=blank(name), type=blank(kind);
         if (title==null) { throw bad("项目名不能为空"); }
         if (title.length()>120) { throw bad("项目名最多 120 字"); }
@@ -51,6 +61,9 @@ public class ProjectWorkflowService {
         List<ProjectRow> matches=projects.list().stream().filter(p->p.name().equalsIgnoreCase(title)).toList();
         if (!matches.isEmpty()) {
             ProjectRow p=matches.get(0);
+            if (userId != null && p.userId() != null && !userId.equals(p.userId())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "此项目名称不可用，请使用其他名称");
+            }
             if (matches.size()>1 || !"active".equals(p.status()) || p.narrative()!=fiction) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,"已有同名项目，请选择已有项目或使用不同名称");
             }
@@ -60,6 +73,16 @@ public class ProjectWorkflowService {
         projects.insert(id,null,title,type,fiction,"active",note);
         return project(id);
     }
+
+    /** Shared field update for the project directory and agent tools. */
+    @Transactional
+    public ProjectRow updateProject(String id, String name, String kind, Boolean narrative, String status, String note) {
+        requireProject(id);
+        projects.update(id, updateField(name), updateField(kind), narrative, updateField(status), note);
+        return requireProject(id);
+    }
+
+    private static String updateField(String value) { return value == null || value.isBlank() ? null : value.trim(); }
 
     @Transactional
     public ProjectRow organize(String sessionId, String name, String kind, String note) {
@@ -265,6 +288,9 @@ public class ProjectWorkflowService {
         return s;
     }
     private HubRow session(String id) { return sessions.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"会话不存在")); }
+    private ProjectRow requireProject(String id) {
+        return projects.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "项目不存在: " + id));
+    }
     private ProjectRow project(String id) {
         ProjectRow p=projects.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"项目不存在"));
         if (!"active".equals(p.status())) { throw bad("项目已归档"); }

@@ -115,7 +115,7 @@ public class CollaborationService {
 
     @Transactional
     public CollaborationStore.Issue resolve(String id, String text) {
-        var issue = store.issues().stream().filter(i -> i.id().equals(id)).findFirst()
+        var issue = store.issue(id)
                 .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "议题不存在"));
         sessions.requireWritable(issue.sessionId());
         if ("resolved".equals(issue.status())) return issue;
@@ -124,7 +124,7 @@ public class CollaborationService {
                 .anyMatch(p -> work.isWorking(issue.sessionId(), p.id())))
             throw error(HttpStatus.CONFLICT, "议题仍在推进，请等成员结束后提交结论");
         issueActions.resolve(issue, conclusion);
-        return store.issues().stream().filter(i -> i.id().equals(id)).findFirst().orElseThrow();
+        return store.issue(id).orElseThrow();
     }
 
     private ProjectStore.ProjectRow project(String id) {

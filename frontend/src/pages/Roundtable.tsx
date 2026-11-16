@@ -56,7 +56,10 @@ import {
   useRunningSessionIds,
 } from '../components/roundtableLive'
 import Toast from '../components/Toast'
-import { usePageKit } from '../kit'
+import SlimePage from '../components/SlimePage'
+import { PortalAppearanceContext } from '../components/portalAppearance'
+import { PageKitProvider, usePageKit } from '../kit'
+import { flatKit } from '../kit/flat'
 import FloatWindow from '../components/FloatWindow'
 import ProjectDialog from '../components/ProjectDialog'
 import ProjectGraph from './collaboration/ProjectGraph'
@@ -221,7 +224,7 @@ function detectMention(value: string, caret: number): { start: number; query: st
   return { start: at, query }
 }
 
-/** 圆桌页（路由 /roundtable）：左侧选会话，右侧是这张圆桌。 */
+/** 协作目录、项目与会话共用同一套会话数据。 */
 export default function Roundtable({ initialView = 'discussion' }: { initialView?: CollaborationView }) {
   const [peers, setPeers] = useState<MaPeer[]>([])
   const [modelOptions, setModelOptions] = useState<Option[]>([])
@@ -262,7 +265,8 @@ export default function Roundtable({ initialView = 'discussion' }: { initialView
   }, [peers])
 
   return (
-    <div className="h-full flex min-h-0 flex-col">
+    <PageKitProvider value={flatKit}>
+      <PortalAppearanceContext value="slime-surface work-surface collab-portal">
         <PageBoundary>
           <RoundtableBoard
             initialView={initialView}
@@ -278,7 +282,8 @@ export default function Roundtable({ initialView = 'discussion' }: { initialView
           kind={toast?.kind === 'err' ? 'error' : 'success'}
           onClose={() => setToast(null)}
         />
-    </div>
+      </PortalAppearanceContext>
+    </PageKitProvider>
   )
 }
 
@@ -912,18 +917,70 @@ function RoundtableBoard({
     || workspace.issues.some(i => i.sessionId === location.taskId)
     || (location.projectId && mainSession.projectId !== location.projectId)
     || (!!location.issueId && !currentIssue))
+  let title = '协作'
+  let backHref = '#/dashboard'
+  let backLabel = '返回 Dashboard'
+  if (activeProjectId) {
+    title = project?.name || (sessionsLoading ? '项目协作' : '项目不存在')
+    backHref = '#/collaboration'
+    backLabel = '返回协作'
+  }
+  if (location.taskId) {
+    title = invalidLocation ? '协作会话' : mainSession?.title || '协作会话'
+    backHref = `#${collaborationHref({ projectId: activeProjectId, taskId: null, issueId: null })}`
+    backLabel = activeProjectId ? '返回项目' : '返回协作'
+    if (location.issueId && !invalidLocation) {
+      title = currentIssue?.title || '协作议题'
+      backHref = `#${collaborationHref({ projectId: activeProjectId, taskId: location.taskId, issueId: null })}`
+      backLabel = '返回主会话'
+    }
+  }
+  const boundWorkspace = workspace.workspaceBindings?.find(b => b.projectId === mainSession?.projectId)
+  const workspaceLabel = boundWorkspace?.enabled ? '工作目录' : '设置工作目录'
   return (
-    <>
-    <div className="collab-workspace collab-v2">
-      {invalidLocation ? <div className="collab-page-empty"><h1>这个会话或议题不属于当前位置</h1><button className="ui-btn ui-btn--outline" onClick={() => openProject(activeProjectId)}>返回项目</button></div> : !location.taskId ? <ProjectPages key={activeProjectId} projectId={activeProjectId} projects={projects} sessions={rootSessions} peers={peers} configuredMembers={workspace.projectMembers} workspaceBindings={workspace.workspaceBindings} archivedTasks={workspace.archivedTasks} plans={workspace.plans} runningSessions={runningSessions} loading={sessionsLoading} error={sessionsError} onProject={openProject} onTask={s => openTask(s.id, s.projectId || '')} onNewTask={() => setCreateDialog('task')} onReload={reloadSessions} /> : <>
-        <header className="collab-session-header"><nav aria-label="协作位置"><button onClick={() => openProject('')}>协作</button><AppIcon name="chevron-right" /><button onClick={() => openProject(activeProjectId)}>{project?.name || '未归档记录'}</button><AppIcon name="chevron-right" /><span>{mainSession?.title || '协作会话'}</span></nav><div className="collab-session-title"><div className="collab-session-heading"><h1>{mainSession?.title || '协作会话'}</h1><span className="collab-session-status" role="status">{status}</span></div><div className="collab-session-actions">{mainSession?.projectId && <button className="ui-btn ui-btn--quiet collab-project-docs-link" aria-label="项目资料" title="查看项目资料与进度" onClick={() => { window.location.hash = collaborationHref({ projectId: activeProjectId, taskId: null, issueId: null }) + '&section=knowledge' }}><AppIcon name="doc" /><span>项目资料</span></button>}{mainSession?.projectId && <button className="ui-btn ui-btn--outline collab-workspace-link" aria-label={workspace.workspaceBindings?.some(b => b.projectId === mainSession.projectId && b.enabled) ? '工作目录' : '设置工作目录'} title="查看或设置项目工作目录" disabled={busy || !!workflow.data?.agents.some(a => a.working)} onClick={() => setWorkspaceDialog(true)}><AppIcon name="folder" /><span>{workspace.workspaceBindings?.some(b => b.projectId === mainSession.projectId && b.enabled) ? '工作目录' : '设置工作目录'}</span></button>}<button className="ui-btn ui-btn--outline" onClick={() => setCreateDialog('issue')} disabled={archived || sessionsLoading || !mainSession || !!currentIssue}><AppIcon name="branch" />发起议题</button><button className="ui-btn ui-btn--quiet collab-mobile-todo" aria-expanded={mobileTodos} onClick={() => setMobileTodos(v => !v)}><AppIcon name="todo" />工作 {workflow.data?.todos.filter(t => ['pending', 'doing', 'blocked', 'reviewing', 'checking'].includes(t.status)).length || 0}</button><button className="ui-btn ui-btn--quiet collab-session-settings" aria-label="会话设置与成员" title="会话设置与成员" onClick={() => setProjectSettings(true)}><AppIcon name="sliders" /></button></div></div></header>
+    <SlimePage title={title} backHref={backHref} backLabel={backLabel} className="work-surface collab-surface">
+    <div className="collab-workspace collab-v2" data-page="collaboration">
+      {invalidLocation ? (
+        <div className="collab-page-empty"><h2>这个会话或议题不属于当前位置</h2></div>
+      ) : !location.taskId ? (
+        <ProjectPages
+          key={activeProjectId}
+          projectId={activeProjectId}
+          projects={projects}
+          sessions={rootSessions}
+          peers={peers}
+          configuredMembers={workspace.projectMembers}
+          workspaceBindings={workspace.workspaceBindings}
+          archivedTasks={workspace.archivedTasks}
+          plans={workspace.plans}
+          runningSessions={runningSessions}
+          loading={sessionsLoading}
+          error={sessionsError}
+          onProject={openProject}
+          onTask={session => openTask(session.id, session.projectId || '')}
+          onNewTask={() => setCreateDialog('task')}
+          onReload={reloadSessions}
+        />
+      ) : <>
+        <div className="collab-session-toolbar">
+          <span className="collab-session-status" role="status">{status}</span>
+          <div className="collab-session-actions" role="group" aria-label="会话操作">
+            {mainSession?.projectId && <>
+              <a className="ui-btn ui-btn--quiet collab-project-docs-link" aria-label="项目资料" title="查看项目资料与进度" href={`#${collaborationHref({ projectId: activeProjectId, taskId: null, issueId: null })}&section=knowledge`}><AppIcon name="doc" /><span>项目资料</span></a>
+              <button type="button" className="ui-btn ui-btn--outline collab-workspace-link" aria-label={workspaceLabel} title="查看或设置项目工作目录" disabled={busy || !!workflow.data?.agents.some(a => a.working)} onClick={() => setWorkspaceDialog(true)}><AppIcon name="folder" /><span>{workspaceLabel}</span></button>
+            </>}
+            <button type="button" className="ui-btn ui-btn--outline" onClick={() => setCreateDialog('issue')} disabled={archived || sessionsLoading || !mainSession || !!currentIssue}><AppIcon name="branch" />发起议题</button>
+            <button type="button" className="ui-btn ui-btn--quiet collab-mobile-todo" aria-expanded={mobileTodos} onClick={() => setMobileTodos(v => !v)}><AppIcon name="todo" />工作 {workflow.data?.todos.filter(t => ['pending', 'doing', 'blocked', 'reviewing', 'checking'].includes(t.status)).length || 0}</button>
+            <button type="button" className="ui-btn ui-btn--quiet collab-session-settings" aria-label="会话设置与成员" title="会话设置与成员" onClick={() => setProjectSettings(true)}><AppIcon name="sliders" /></button>
+          </div>
+        </div>
         {sessionsError && <div className="collab-error" role="alert"><span>{sessionsError}</span><button className="ui-btn ui-btn--outline" onClick={() => void reloadSessions()}>重试</button></div>}
         {archived && mainSession && <div className="collab-archived-notice"><p>会话已归档，消息、工作条目和议题仍可查阅。</p><TaskActions id={mainSession.id} title={mainSession.title || '未命名会话'} archived busy={false} onChanged={lifecycleChanged} /></div>}
         {workspace.plans?.filter(p => p.sessionId === location.taskId).map(plan => <PlanStatus key={plan.sessionId} plan={plan} peers={peers} />)}
         <div className={'collab-session-grid' + (mobileTodos ? ' show-mobile-todos' : '')}>
           <div className="collab-main" inert={mobileTodos}>
             <div className="collab-viewbar"><nav role="tablist" aria-label="任务视图">{([['discussion', '消息'], ['graph', '协作图']] as const).map(([value, label]) => <button type="button" role="tab" id={'collab-tab-' + value} aria-controls={'collab-panel-' + value} aria-selected={view === value} key={value} onClick={() => setView(value)}>{label}</button>)}</nav>{view === 'discussion' && <div className="collab-reading-tools"><button className="ui-btn ui-btn--quiet" aria-pressed={reading} onClick={() => setReading(v => !v)}>{reading ? '完整记录' : '连续阅读'}</button></div>}</div>
-            {location.issueId && <div className="collab-issue-header"><button className="ui-btn ui-btn--quiet" onClick={() => location.taskId && openTask(location.taskId)}><AppIcon name="arrow-left" />返回主会话</button><div><span className="collab-secondary">议题 · {currentIssue?.status === 'resolved' ? '已形成结论' : '独立讨论'}</span><h2>{currentIssue?.title || '正在载入议题…'}</h2></div>{!archived && currentIssue?.status === 'open' && <button className="ui-btn ui-btn--outline" disabled={busy} onClick={() => setConclusionOpen(true)}>提交结论</button>}</div>}
+            {location.issueId && <div className="collab-issue-context"><span className="collab-secondary">{mainSession?.title || '协作会话'} · {currentIssue?.status === 'resolved' ? '议题已形成结论' : '议题讨论'}</span>{!archived && currentIssue?.status === 'open' && <button type="button" className="ui-btn ui-btn--outline" disabled={busy} onClick={() => setConclusionOpen(true)}>提交结论</button>}</div>}
             {view === 'graph' && <GraphActivity data={workflow.data} issues={taskIssues} onIssue={issue => { setView('discussion'); openIssue(issue) }} onEvent={event => { setSelectedEvent(event); if (event.taskId) setTaskId(event.taskId) }} />}
             {view === 'graph' && !workflow.data && <div className="collab-loading">{workflow.error || '正在载入协作关系…'}</div>}
             {workflow.data && <div id="collab-panel-graph" role="tabpanel" aria-labelledby="collab-tab-graph" className="collab-content collab-content--graph" style={{ display: view === 'graph' ? 'flex' : 'none' }}><ProjectGraph key={location.taskId} data={workflow.data} peers={peers} selected={selection} event={selectedEvent} active={view === 'graph'} stale={!!workflow.error} onSelect={selectWork} onDiscuss={() => discuss()} /></div>}
@@ -1170,7 +1227,7 @@ function RoundtableBoard({
       {detail && workflow.data && <FloatWindow title={detail.kind === 'todo' ? '工作详情与执行记录' : '成员在当前项目中的活动'} onClose={() => { setDetail(null); setTaskMenuOpen(false) }} width={detail.kind === 'todo' ? 1120 : 600} expandable={detail.kind === 'todo'} contentClassName={detail.kind === 'todo' ? 'work-review-window' : ''}><div className="collab-detail"><Detail key={`${sessionId}:${detail.kind}:${detail.id}`} sel={detail} data={workflow.data} onSelect={selectWork} agentOf={id => workflow.data?.agents.find(a => a.id === id)} todoOf={id => workflow.data?.todos.find(t => t.id === id)} />{!archived && detail.kind === 'todo' && workflow.data.todos.find(t => t.id === detail.id) && <div className="collab-detail-actions"><button type="button" className={btnOutline()} onClick={() => { const t = workflow.data?.todos.find(t => t.id === detail.id); if (t) discuss(t); setDetail(null) }}><AppIcon name="chat" />讨论这项工作</button><div className="relative"><button type="button" className={btnOutline()} onClick={() => setTaskMenuOpen(v => !v)} aria-expanded={taskMenuOpen}><AppIcon name="more" />工作操作</button>{taskMenuOpen && <TodoMenu t={workflow.data.todos.find(t => t.id === detail.id)!} onClose={() => { setTaskMenuOpen(false); setWorkflowRevision(v => v + 1) }} />}</div></div>}</div></FloatWindow>}
 
       {/* 新建会话的选人弹窗 */}
-      {workspaceDialog && mainSession?.projectId && <ProjectWorkspaceDialog projectId={mainSession.projectId} projectName={project?.name || '当前项目'} binding={workspace.workspaceBindings?.find(b => b.projectId === mainSession.projectId)} onSaved={reloadSessions} onClose={() => setWorkspaceDialog(false)} />}
+      {workspaceDialog && mainSession?.projectId && <ProjectWorkspaceDialog projectId={mainSession.projectId} projectName={project?.name || '当前项目'} binding={boundWorkspace} onSaved={reloadSessions} onClose={() => setWorkspaceDialog(false)} />}
       {createDialog === 'task' && <CollaborationDialog chooseCoordinator title="新建协作会话" label="这次希望推进什么？" peers={peers} initialMembers={projectMemberIds(activeProjectId, workspace.projectMembers, rootSessions, peers)} submitLabel="创建会话" onClose={() => setCreateDialog(null)} onSubmit={async (name, _note, ids, coordinator) => { const result = await createCollaborationTask(activeProjectId, name, ids, coordinator); await reloadSessions(); openTask(result.sessionId) }} />}
       {createDialog === 'issue' && mainSession && <CollaborationDialog title="发起议题" label="需要一起解决什么问题？" peers={peers.filter(p => mainSession.memberIds.includes(p.id))} initialMembers={mainSession.memberIds} submitLabel="创建并讨论" onClose={() => setCreateDialog(null)} onSubmit={async (name, _note, ids) => { const issue = await createCollaborationIssue(mainSession.id, name, ids); await reloadSessions(); openIssue(issue); startRoundtable({ sessionId: issue.sessionId, input: name, modelId: modelId || undefined, speakerStrategy }) }} />}
       {conclusionOpen && currentIssue && <ConclusionDialog onClose={() => setConclusionOpen(false)} onSubmit={async text => { await concludeCollaborationIssue(currentIssue.id, text); await reloadSessions(); openTask(currentIssue.parentSessionId) }} />}
@@ -1204,7 +1261,7 @@ function RoundtableBoard({
           </Card>
         </div>
       )}
-    </>
+    </SlimePage>
   )
 }
 

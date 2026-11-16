@@ -65,7 +65,7 @@ body[data-df] .astro-shell { height:100%; }
 .astro-tile { text-align:left; }.astro-tile--dashed { background:transparent; border:1px dashed var(--c-line-strong); box-shadow:none; }.astro-tile--dashed > .ui-card__in { background:transparent; min-height:108px; align-items:center; justify-content:center; }
 .astro-toolbar { display:flex; flex-shrink:0; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; font-size:14px; }.astro-toolbar > div:first-child { min-width:0; }.astro-toolbar > div:last-child { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 [data-theme='astrolabe'] .ui-label { font-size:12px; }
-[data-theme='astrolabe'] :is(button,a,input,textarea,select):focus-visible { outline:2px solid var(--c-accent); outline-offset:3px; }
+[data-theme='astrolabe'] :is(button,a,input,textarea,select):focus-visible { outline:2px solid var(--c-accent); outline-offset:0; }
 [data-theme='astrolabe'] :is(input,textarea,select)::placeholder { color:var(--c-faint); }
 /* Home has its own behavior. Theme-only composition retains its search/chat controls. */
 .astro-home { position:relative; isolation:isolate; }

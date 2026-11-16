@@ -9,6 +9,7 @@ import cc.ginpika.minis.agent.member.AgentDirectory;
 import cc.ginpika.minis.agent.runtime.AgentRuntime;
 import cc.ginpika.minis.agent.runtime.ToolExecutionRecorder;
 import cc.ginpika.minis.ai.core.AgentScope;
+import cc.ginpika.minis.ai.core.UserScope;
 import cc.ginpika.minis.ai.core.MemoryIdentity;
 import cc.ginpika.minis.ai.core.MemoryScopeCtx;
 import cc.ginpika.minis.ai.memory.MemoryStage;
@@ -242,7 +243,7 @@ public class ChatTurnRunner implements ChatExecution {
                             + "LLM_BASE_URL / LLM_API_KEY / LLM_CHAT_MODEL");
         }
         String effort = reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.strip();
-        if (effort != null && !ModelReasoning.efforts(target.model()).contains(effort)) {
+        if (effort != null && !ModelReasoning.efforts(target.model(), target.apiFormat()).contains(effort)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该模型不支持所选的思考强度");
         }
         /* 在途锁（STEP 4）：同一会话同一时刻只允许一次生成。重复触发（双击发送 / 两个标签页同时发）
@@ -533,6 +534,16 @@ public class ChatTurnRunner implements ChatExecution {
                             return toolExecs.record(row.id(), Long.toString(taskId), subagentBatch[0], call,
                                     () -> contextRun.runSubagent(call,
                                             () -> toolDispatcher.runTool(call, subagentBatch[0], row.id(), true, actorId)));
+                        }
+                        if (exec == ChatTurnRunner.this && ChatToolDispatcher.handlesWorkTool(name)) {
+                            return toolExecs.record(row.id(), null, subagentBatch[0], call, () -> {
+                                if (actorId == null || !actorId.equals(UserScope.get())) {
+                                    return "项目与个人待办工具需要本轮发起人的认证身份。";
+                                }
+                                return toolDispatcher.runWorkTool(call,
+                                        basis -> (stopFlag == null || !stopFlag.get())
+                                                && (steering == null ? input.contains(basis) : steering.matchesAppliedUserInput(basis)));
+                            });
                         }
                         return toolExecs.record(row.id(), null, subagentBatch[0], call,
                                 () -> exec.runTool(call, subagentBatch[0], row.id()));
@@ -925,5 +936,10 @@ public class ChatTurnRunner implements ChatExecution {
     @Override
     public String runTool(JsonNode call, String batchRunId, String hubId) {
         return toolDispatcher.runTool(call, batchRunId, hubId);
+    }
+
+    /** The single-member conversation supplies the original user text after checking its tool allowlist. */
+    public String runDirectWorkTool(JsonNode call, String userInput) {
+        return toolDispatcher.runWorkTool(call, userInput::contains);
     }
 }

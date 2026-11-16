@@ -1205,14 +1205,17 @@ export function articleDetail(url: string): Promise<ArticleDetail> {
 
 /* ---------- 设置页（多模型 / 多人格 / 默认项 / Embedding） ---------- */
 
+export type ModelApiFormat = 'openai-chat-completions' | 'anthropic-messages'
+
 /** 模型项：builtin=true 为 .env 内置项（id="env"），不可编辑/删除；
- *  contextWindow=上下文窗口（token 数），留空保存时后端会尝试从模型 API 获取 */
+ *  contextWindow=上下文窗口（token 数），OpenAI 格式留空时会尝试从模型 API 获取 */
 export type ModelView = {
   id: string
   name: string
   baseUrl: string
   apiKey: string
   model: string
+  apiFormat?: ModelApiFormat
   contextWindow: number | null
   builtin: boolean
   maxOutputTokens?: number | null
@@ -1225,6 +1228,7 @@ export type ModelRequest = {
   baseUrl: string
   apiKey: string
   model: string
+  apiFormat?: ModelApiFormat
   contextWindow: number | null
   maxOutputTokens?: number | null
 }
@@ -1345,6 +1349,7 @@ export function fetchModelContextWindow(req: {
   baseUrl: string
   apiKey: string
   model: string
+  apiFormat?: ModelApiFormat
 }): Promise<ContextWindowView> {
   return requestJson<ContextWindowView>('/api/settings/models/context-window', {
     method: 'POST',
@@ -1360,7 +1365,7 @@ export type ChatTestResult = {
   error: string | null
 }
 
-/** 基于一条基准对话（Chat 同款 /chat/completions）测试模型接口能否正常返回 */
+/** 使用模型配置的聊天接口发送一条基准对话 */
 export function testModelChat(id: string): Promise<ChatTestResult> {
   return requestJson<ChatTestResult>(
     `/api/settings/models/${encodeURIComponent(id)}/test`,
@@ -1503,11 +1508,11 @@ export function resetKnowledgeBase(deleteProjectKnowledge = false): Promise<Rese
 
 /* ---------- 命令行终端（让模型直接控制目标环境） ---------- */
 
-/** 一个终端目标：本机 docker 的一个容器，或一台远程服务器（SSH） */
+/** Agent 可访问的本机、Docker 或 SSH 环境。 */
 export type TerminalTarget = {
   id: string
   name: string
-  kind: 'docker' | 'ssh'
+  kind: 'docker' | 'ssh' | 'local'
   enabled: boolean
   workdir: string | null
   timeoutMs: number | null
@@ -1516,6 +1521,8 @@ export type TerminalTarget = {
   allowPatterns: string[]
   /** 命令黑名单（正则，命中即拒，先于白名单判定） */
   denyPatterns: string[]
+  /** 本机环境允许写入的绝对目录。空数组允许只读访问。 */
+  writePaths?: string[]
   /* docker */
   dockerHost: string | null
   hostWorkdir: string | null
@@ -1539,6 +1546,9 @@ export type TerminalTargetRequest = Omit<TerminalTarget, 'id'>
 /** 工作空间页整页视图：全部目标（没有全局总开关，逐目标开关即唯一闸门） */
 export type TerminalView = {
   targets: TerminalTarget[]
+  localAvailable?: boolean
+  localUnavailableReason?: string | null
+  localManageable?: boolean
 }
 
 export type TerminalProbeResult = {
@@ -3212,8 +3222,8 @@ export type ProjectRequest = {
   note?: string | null
 }
 
-export function listProjects(): Promise<Project[]> {
-  return requestJson<Project[]>('/api/projects')
+export function listProjects(signal?: AbortSignal): Promise<Project[]> {
+  return requestJson<Project[]>('/api/projects', { signal })
 }
 
 export function createProject(req: ProjectRequest): Promise<Project> {

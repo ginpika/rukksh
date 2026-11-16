@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 /** Personal state is authoritative here; memory and Agent runtimes cannot infer effort. */
 @Service("personalTodoService")
 public class TodoService {
+    private static final Set<String> STATES = Set.of("idea", "ready", "doing", "done", "dropped");
     private final TodoStore store;
     private final ProjectStore projects;
     private final Clock clock;
@@ -46,6 +48,22 @@ public class TodoService {
     @Transactional(readOnly=true)
     public Detail detail(String owner, String id) {
         return new Detail(item(owner,id),store.focusFor(owner,id),store.events(owner,id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Item> list(String owner, String project, String state, String query, int limit, int offset) {
+        if (state != null && !STATES.contains(state)) throw bad("无效的待办状态");
+        return store.list(owner, project, state, blank(query), clock.millis(), limit, offset);
+    }
+
+    @Transactional(readOnly = true)
+    public Focus focusDetail(String owner, String id) {
+        return focus(owner, id);
+    }
+
+    @Transactional(readOnly = true)
+    public DayNote dayNote(String owner, String day) {
+        return store.note(owner, date(day).toString());
     }
 
     @Transactional(readOnly=true)
@@ -85,7 +103,25 @@ public class TodoService {
 
     @Transactional
     public Item replace(String owner, String id, ItemRequest input) {
-        store.lock(owner); Item t=item(owner,id); ItemRequest req=validate(input); version(req.version(),t.version());
+        store.lock(owner);
+        return replaceLocked(owner, item(owner, id), input);
+    }
+
+    @Transactional
+    public Item patch(String owner, String id, ItemPatch patch) {
+        store.lock(owner);
+        Item current = item(owner, id);
+        return replaceLocked(owner, current, new ItemRequest(
+                patch.title() == null ? current.title() : patch.title(),
+                patch.note() == null ? current.note() : patch.note(),
+                patch.changeProject() ? patch.projectId() : current.projectId(),
+                patch.changePlan() ? patch.plannedOn() : current.plannedOn(),
+                patch.changeDue() ? patch.dueAt() : current.dueAt(), patch.version()));
+    }
+
+    private Item replaceLocked(String owner, Item t, ItemRequest input) {
+        String id = t.id();
+        ItemRequest req=validate(input); version(req.version(),t.version());
         String name=project(owner,req.projectId(),t);
         String state=t.state();
         if("idea".equals(state)&&req.plannedOn()!=null) state="ready";
@@ -164,7 +200,25 @@ public class TodoService {
 
     @Transactional
     public Focus editFocus(String owner, String id, FocusRequest input) {
-        store.lock(owner); Focus f=focus(owner,id); FocusRequest req=validateFocus(input); version(req.version(),f.version());
+        store.lock(owner);
+        return editFocusLocked(owner, focus(owner, id), input);
+    }
+
+    @Transactional
+    public Focus patchFocus(String owner, String id, FocusPatch patch) {
+        store.lock(owner);
+        Focus current = focus(owner, id);
+        version(patch.version(), current.version());
+        if (current.endedAt() == null) throw bad("请先暂停，再修正这段投入");
+        return editFocusLocked(owner, current, new FocusRequest(current.todoId(),
+                patch.startedAt() == null ? current.startedAt() : patch.startedAt(),
+                patch.endedAt() == null ? current.endedAt() : patch.endedAt(),
+                patch.note() == null ? current.note() : patch.note(), patch.version()));
+    }
+
+    private Focus editFocusLocked(String owner, Focus f, FocusRequest input) {
+        String id = f.id();
+        FocusRequest req=validateFocus(input); version(req.version(),f.version());
         if(f.endedAt()==null) throw bad("请先暂停，再修正这段投入");
         if(!f.todoId().equals(req.todoId())) throw bad("不能将已有投入移动到其他事项");
         if(store.overlaps(owner,id,req.startedAt(),req.endedAt())) throw conflict("与已有投入记录重叠，请核对时段");

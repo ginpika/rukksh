@@ -66,10 +66,14 @@ public class ProjectKnowledgeStore {
     }
 
     public List<Document> history(String project, String key) {
+        return history(project, key, 0, -1);
+    }
+
+    public List<Document> history(String project, String key, int offset, int limit) {
         read(project,key,null);
         // Metadata only; read a selected revision explicitly instead of transferring every body.
-        return jdbc.query("SELECT doc_key,kind,title,'' AS content,version,retired,source_session_id,source_title,author,updated_at FROM project_document WHERE project_id=? AND doc_key=? ORDER BY version DESC",
-                (r,n) -> document(r),project,key);
+        return jdbc.query("SELECT doc_key,kind,title,'' AS content,version,retired,source_session_id,source_title,author,updated_at FROM project_document WHERE project_id=? AND doc_key=? ORDER BY version DESC LIMIT ? OFFSET ?",
+                (r,n) -> document(r),project,key,limit,offset);
     }
 
     @Transactional

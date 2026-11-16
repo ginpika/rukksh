@@ -41,7 +41,7 @@ final class ChatSteering implements ModelLoop.Steering {
             不要声称已撤销已执行的操作，也不要自行执行工具或替代主任务给出最终结论。
             """;
 
-    private record Interjection(long messageId, String role, String content) {}
+    private record Interjection(long messageId, String role, String content, String userInput) {}
     record InterimRequest(ObjectNode body, int initialUserIndex, Map<JsonNode, List<String>> references,
                           MemorySnapshot memorySnapshot) {}
 
@@ -51,6 +51,7 @@ final class ChatSteering implements ModelLoop.Steering {
     private final AtomicBoolean stopped;
     private final BiFunction<String, String, Long> persist;
     private final List<Interjection> pending = new ArrayList<>();
+    private final List<String> appliedUserInputs = new ArrayList<>();
     private final Map<JsonNode, List<String>> references = new IdentityHashMap<>();
 
     private boolean accepting = true;
@@ -111,7 +112,7 @@ final class ChatSteering implements ModelLoop.Steering {
         }
         long messageId = persist.apply("user", input);
         inputVersion++;
-        pending.add(new Interjection(messageId, "user", "【本轮用户消息 " + (inputVersion + 1) + " · 补充】\n" + input));
+        pending.add(new Interjection(messageId, "user", "【本轮用户消息 " + (inputVersion + 1) + " · 补充】\n" + input, input));
         sink.steer(messageId, input);
         if (request != null) {
             request.cancel();
@@ -134,8 +135,16 @@ final class ChatSteering implements ModelLoop.Steering {
         }
         lastUserMessage = appendPending(messages, lastUserMessage, references);
         int applied = pending.size();
+        for (Interjection message : pending) {
+            if (message.userInput() != null) appliedUserInputs.add(message.userInput());
+        }
         pending.clear();
         return applied;
+    }
+
+    synchronized boolean matchesAppliedUserInput(String basis) {
+        return !stopped.get() && pending.isEmpty()
+                && (initialInput.contains(basis) || appliedUserInputs.stream().anyMatch(text -> text.contains(basis)));
     }
 
     private void installSupplementGuidance(ArrayNode messages) {
@@ -342,7 +351,7 @@ final class ChatSteering implements ModelLoop.Steering {
                     return;
                 }
                 long messageId = persist.apply("assistant", content);
-                pending.add(new Interjection(messageId, "assistant", content));
+                pending.add(new Interjection(messageId, "assistant", content, null));
                 sink.interim(messageId, content);
             }
         } catch (RuntimeException error) {

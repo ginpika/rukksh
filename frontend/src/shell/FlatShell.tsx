@@ -46,7 +46,7 @@ export function FlatShell({
 }: ShellProps & { variant: FlatVariant; hideChrome: boolean }) {
   const active = activePath || activePathOf(route)
   const pageNav = pageNavOf(route)
-  const mobileTopNavigation = route === '/coding' || active === '/economy'
+  const mobileTopNavigation = active === '/economy'
 
   /* --------------------------------------- Tailwind Mono · 默认顶部横排 */
   if (variant === 'minimal') {

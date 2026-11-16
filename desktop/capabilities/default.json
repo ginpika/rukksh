@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口的能力白名单。窗口是无边框的（见 src/main.rs），标题栏由页面自绘，因此除 core:default 外还要放开标题栏用到的那几条窗口命令；remote 列出主窗口可能落在的 HTTP 源——本机后端（127.0.0.1 / localhost 任意端口）与远程部署（https），否则跳到后端站点后没有 IPC，标题栏会变成死钮。登录窗口 / 探测窗口（label 不在这里）不授予壳自己的命令：hostid 站点拿不到壳的 IPC——登录窗仅另有 login.json 里那几条窗口命令（它也要自绘标题栏）。",
+  "description": "主窗口的能力白名单。本机与远程实例共用主窗口：macOS 使用原生窗口装饰与叠加标题栏并同步主题色，非 macOS 平台使用自绘标题栏，因此对它们开放窗口控制命令。HostID 登录窗口使用系统标题栏，无需 IPC 权限。",
   "windows": ["main"],
   "remote": {
     "urls": ["http://127.0.0.1:*", "http://localhost:*", "https://*"]
@@ -11,6 +11,7 @@
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
+    "core:window:allow-set-theme",
     "core:window:allow-start-dragging",
     "core:window:allow-start-resize-dragging"
   ]

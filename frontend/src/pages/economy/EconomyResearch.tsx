@@ -106,11 +106,14 @@ export default function EconomyResearch() {
   }
   const missing = !symbol.trim() || !agentId || !date ? '先在观测设置中填写标的、日期并选择分析 Agent。' : !source ? '先打开图表或开始观察窗口，再保存当前周期的截图。' : null
 
-  return <section className="eco-page eco-research scrollbar-slim" aria-labelledby="eco-research-title">
-    <header className="eco-header">
-      <div><a className="eco-back" href="#/economy"><AppIcon name="arrow-left"/>经济</a><h1 id="eco-research-title">隔夜策略工作台</h1><p>尾盘是否买入 · 下一交易日开盘后立即卖出</p></div>
-      <div className="eco-inline-actions"><a className="eco-button" href="#/economy/database"><AppIcon name="archive"/>观测数据库</a><button disabled={!!busy} onClick={reset}><AppIcon name="plus"/>新一轮观测</button></div>
-    </header>
+  return <div className="eco-page eco-research" data-page="economy-research">
+    <div className="eco-page-tools">
+      <p>评估尾盘买入与次日开盘卖出的条件</p>
+      <div className="eco-inline-actions">
+        <a className="eco-button" href="#/economy/database"><AppIcon name="archive"/>观测数据库</a>
+        <button type="button" disabled={!!busy} onClick={reset}><AppIcon name="plus"/>新一轮观测</button>
+      </div>
+    </div>
     {loadError && <p role="alert" className="eco-error">加载失败：{loadError}<button onClick={() => window.location.reload()}>重新加载</button></p>}
     <div className="eco-layout">
       <section className="eco-chart-pane scrollbar-slim" aria-label="行情观察">
@@ -174,5 +177,5 @@ export default function EconomyResearch() {
         <details className="eco-strategy"><summary>本策略如何评估</summary><p>周线环境 25 分 + 日线结构 30 分 + 尾盘分时 30 分 + 隔夜执行风险 15 分。退出固定为下一交易日开盘后立即卖出。</p><ol>{STAGES.map((label, i) => <li key={label}>{i * 20}–{i === 4 ? 100 : i * 20 + 19}：{label}</li>)}</ol><p>基于当前信息立即评分，并明确是否进场、是否尾盘买入。未来走势未知计入风险；截图证据存在缺口时仅对可核实部分评分，并决定不买入。评分不是获利概率。</p></details>
       </aside>
     </div>
-  </section>
+  </div>
 }

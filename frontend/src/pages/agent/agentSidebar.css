@@ -24,10 +24,13 @@
 .sl-agents__round { width: 36px; height: 36px; border: 1px solid var(--sl-line); border-radius: 50%; background: var(--sl-panel); }
 .sl-agents__round:hover, .sl-agents__round[aria-expanded='true'] { color: var(--sl-fg); background: var(--sl-hover); border-color: var(--sl-line-strong); }
 .sl-agents__search { display: flex; flex: none; align-items: center; gap: 7px; min-height: 36px; margin: 0 16px 8px; padding: 4px 7px 4px 10px; border: 1px solid var(--sl-line-strong); border-radius: 8px; background: var(--sl-panel); color: var(--sl-muted); }
+.sl-agents__search:focus-within { border-color: var(--sl-focus-line); }
 .sl-agents__search > svg { flex: none; }
 .sl-agents__search input { width: 100%; min-width: 0; padding: 2px 0; border: 0; outline: none; background: transparent; color: var(--sl-fg); font-size: 13px; }
-.sl-agents__search button { display: flex; flex: none; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--sl-muted); }
+.slime-surface .sl-agents__search input:focus { outline: none; box-shadow: none; }
+.sl-agents__search button { display: flex; flex: none; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--sl-muted); }
 .sl-agents__search button:hover { background: var(--sl-hover); color: var(--sl-fg); }
+.slime-surface .sl-agents__search button:focus-visible { border-color: var(--sl-focus-line); outline: none; box-shadow: none; color: var(--sl-fg); }
 
 /* Main card: y=70, 96x92, 56px avatar. The list starts at y=180. */
 .sl-agents__primary-wrap { display: flex; flex: none; justify-content: center; padding: 10px 16px 18px; }

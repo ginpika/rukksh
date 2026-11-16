@@ -9,7 +9,7 @@ import SnapshotReader from './SnapshotReader'
 import { Select } from './Select'
 import { bindBrowserWheel, type BrowserWheel } from './browserWheel'
 
-export const WEB_FIELD = 'w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm text-fg outline-none placeholder:text-hint focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-50'
+export const WEB_FIELD = 'ui-input w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-sm text-fg placeholder:text-hint disabled:opacity-50'
 const WEB_BUTTON_BASE = 'inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-50'
 export const WEB_BUTTON = `${WEB_BUTTON_BASE} border-line bg-bg text-fg hover:border-accent hover:bg-accent/5`
 export const WEB_PRIMARY = `${WEB_BUTTON_BASE} border-accent bg-accent text-accent-fg hover:bg-accent-hover`

@@ -28,7 +28,7 @@ public class ListTerminalsTool implements AiTool {
 
     @Override
     public String description() {
-        return "列出当前可用的工作空间（docker 容器 / SSH 服务器），返回每个工作空间的名字、类型与所在位置。"
+        return "列出当前可用的工作空间（后端本机、Docker 容器或 SSH 服务器），返回名字、类型、工作目录与本机可写目录。"
                 + "在调用 " + RunCommandTool.NAME + " 之前先用它确认名字；"
                 + "若返回为空，说明用户还没在工作空间页配置或启用，此时不要假设环境存在。";
     }

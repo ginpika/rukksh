@@ -43,9 +43,9 @@ export const KNOWLEDGE_NAV: (NavItem & { description: string })[] = [
 
 export const NAV: NavItem[] = [
   { path: '/', label: '首页', en: 'HOME', icon: 'home', group: '概览' },
-  { path: '/todos', label: '项目 & 待办', en: 'PROJECTS & TODOS', icon: 'todo', group: '工作' },
+  { path: '/todos', label: '项目与待办', en: 'PROJECTS & TODOS', icon: 'todo', group: '工作' },
   { path: '/collaboration', label: '协作', en: 'COLLABORATION', icon: 'flow', group: '工作' },
-  { path: '/coding', label: '编程', en: 'CODING', icon: 'code', group: '工作' },
+  { path: '/coding', label: 'AI IDE', en: 'AI IDE', icon: 'code', group: '工作' },
   { path: '/economy', label: '经济', en: 'ECONOMY', icon: 'economy', group: '工作' },
   { path: '/knowledge', label: '知识', en: 'KNOWLEDGE', icon: 'graph', group: '内容' },
   { path: '/multi-agent', label: '智能体', en: 'AGENTS', icon: 'agent', group: '智能' },
@@ -67,6 +67,7 @@ export const NAV_GROUPS = ['概览', '工作', '内容', '智能', '管理'] as 
 function pagePathOf(route: string): string {
   if(route==='/economy/market'||route==='/economy/stock')return '/economy/research'
   if (route === '/roundtable' || route === '/workflow') return '/collaboration'
+  if (route === '/todos/projects' || route === '/todos/tasks') return '/todos'
   if (/^\/snapshots\/[^/]+$/.test(route)) return '/snapshots'
   if (/^\/article\/.+$/.test(route)) return '/articles'
   if (/^\/multi-agent\/.+$/.test(route)) return '/multi-agent'
@@ -107,6 +108,8 @@ export function breadcrumbsOf(route: string): BreadcrumbItem[] {
     if (route !== page.path && route !== '/roundtable' && route !== '/workflow' && route !== '/economy/market' && route !== '/economy/stock') {
       const label = page.path === '/articles' ? '文档详情'
         : page.path === '/snapshots' ? '快照详情'
+        : route === '/todos/projects' ? '项目'
+        : route === '/todos/tasks' ? '待办'
         : route === '/multi-agent/new' ? '新建智能体' : '智能体详情'
       crumbs.push({ path: route, label })
     }

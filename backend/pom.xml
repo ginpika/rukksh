@@ -11,9 +11,9 @@
 	</parent>
 
 	<groupId>cc.ginpika</groupId>
-	<artifactId>slime-backend</artifactId>
+	<artifactId>rukksh-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>slime-backend</name>
+	<name>rukksh-backend</name>
 	<description>个人站点中枢（hub-core + BFF）</description>
 
 	<properties>

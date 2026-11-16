@@ -462,7 +462,7 @@ button,
     background: var(--c-line-strong);
   }
   .ui-control:focus-within {
-    background: var(--c-accent);
+    background: var(--sl-focus-line, var(--c-muted));
   }
   .ui-control > input,
   .ui-control > textarea,

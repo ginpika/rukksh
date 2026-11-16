@@ -32,6 +32,11 @@ export function scopeKind(item: MemoryItem, shares: MemoryShare[]) {
   return 'private'
 }
 export const scopeNames: Record<string, string> = { global: '全局用户规则', knowledge: '公共知识', project: '项目共享', private: 'Agent 独享（默认）', bound: '会话 / 任务绑定', published: '显式授权共享', unpublished: 'L4 暂无发布授权' }
+/** 7 天内到期（有效期或软保留期）的条目，星云与提示带共用同一判定。 */
+export function expiring(item: MemoryItem, now = Date.now()) {
+  const stop = Math.min(item.expiresSoft ?? Infinity, item.validUntil ?? Infinity)
+  return stop !== Infinity && stop <= now + 7 * 86_400_000
+}
 type Temporal = { kind: string; start: number | null; end: number | null; precision: string; partOfDay: string; zone: string | null; anchorAt: number | null; attribution: string }
 export function temporal(item: MemoryItem): Temporal | null {
   try { return item.temporalJson ? JSON.parse(item.temporalJson) as Temporal : null } catch { return null }

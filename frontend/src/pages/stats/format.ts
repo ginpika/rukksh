@@ -24,11 +24,17 @@ export const money = (costs: StatsMoney[]) => costs.length
   ? costs.map(c => c.currency + ' ' + amount(c.amount)).join(' · ') : '未计价'
 export const qualityLabel = (quality: string) => ({ reported: '实测', estimated: '估算', partial: '不完整 / 未知' }[quality] ?? '未知')
 export const statusLabel = (status: string) => ({ success: '成功', interrupted: '中断 / 取消', failed: '失败' }[status] ?? '未知')
+const dateFormatters = new Map<string, Intl.DateTimeFormat>()
 export function dateTime(time: number, timeZone: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  }).format(time)
+  let formatter = dateFormatters.get(timeZone)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('zh-CN', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    })
+    dateFormatters.set(timeZone, formatter)
+  }
+  return formatter.format(time)
 }
 export function validateRange(from: string, to: string, today?: string): string | null {
   if (!from || !to) return '请同时填写开始日期和结束日期'

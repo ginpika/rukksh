@@ -18,6 +18,10 @@ public final class ModelReasoning {
     private static final Set<String> DEEPSEEK_MODELS = Set.of(
             "deepseek-flash", "deepseek-v4-flash", "deepseek-v4-pro");
 
+    public static List<String> efforts(String model, ModelApiFormat apiFormat) {
+        return apiFormat == ModelApiFormat.OPENAI_CHAT_COMPLETIONS ? efforts(model) : List.of();
+    }
+
     public static List<String> efforts(String model) {
         if (model == null) return List.of();
         String name = model.strip().toLowerCase(Locale.ROOT);

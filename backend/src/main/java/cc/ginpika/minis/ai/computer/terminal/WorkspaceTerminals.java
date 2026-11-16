@@ -1,5 +1,6 @@
 package cc.ginpika.minis.ai.computer.terminal;
 
+import cc.ginpika.minis.ai.computer.terminal.exec.LocalExecTarget;
 import cc.ginpika.minis.ai.computer.terminal.store.TerminalStore;
 import java.io.IOException;
 import java.util.List;
@@ -27,7 +28,9 @@ public class WorkspaceTerminals extends InteractiveTerminals {
         if(!enabled){return target;}
         if(target==null){throw new ResponseStatusException(HttpStatus.NOT_FOUND,"工作空间已删除");}
         if(!target.enabled()){throw new ResponseStatusException(HttpStatus.CONFLICT,"工作空间未启用，请先启用后打开 Shell");}
-        if(!targets.containsKey(target.kind())){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"工作空间类型不支持交互终端");}
+        if(LocalExecTarget.KIND.equals(target.kind()) || !targets.containsKey(target.kind())){
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"工作空间类型不支持交互终端");
+        }
         return target;
     }
 

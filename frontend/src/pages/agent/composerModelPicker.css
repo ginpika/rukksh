@@ -62,8 +62,10 @@
 .sl-model__back { display: flex; align-items: center; justify-content: center; width: 25px; height: 25px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--sl-model-muted); cursor: pointer; }
 .sl-model__back:hover { background: var(--sl-model-trigger); color: var(--sl-model-fg); }
 .sl-model__search { display: flex; flex: none; align-items: center; gap: 7px; min-height: 34px; margin: 4px 3px 5px; padding: 6px 8px; border: 1px solid var(--sl-model-line); border-radius: 7px; color: var(--sl-model-muted); }
+.sl-model__search:focus-within { border-color: var(--sl-focus-line, var(--sl-model-muted)); }
 .sl-model__search > svg { flex: none; }
 .sl-model__search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--sl-model-fg); font-size: 12px; line-height: 20px; }
+.sl-model .sl-model__search input:focus { outline: none; box-shadow: none; }
 .sl-model__search input::placeholder { color: var(--sl-model-muted); }
 .sl-model__list { flex: 1 1 auto; min-height: 42px; max-height: 245px; overflow-y: auto; overscroll-behavior-y: contain; }
 .sl-model__option { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 42px; padding: 7px 9px; border: 0; border-radius: 7px; background: transparent; color: var(--sl-model-fg); font-size: 12px; line-height: 18px; text-align: left; cursor: pointer; }

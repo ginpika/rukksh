@@ -3,12 +3,12 @@
   width: 100%;
   max-width: 49rem;
   margin: auto;
-  padding: 1.5rem clamp(1rem, 4vw, 1.5rem) clamp(2rem, 10vh, 6rem);
+  padding: clamp(1rem, 4vh, 1.5rem) clamp(1rem, 4vw, 1.5rem);
 }
 
 .dash-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6rem), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: .75rem;
   margin: 0;
   padding: 0;
@@ -54,6 +54,18 @@
 }
 
 .dash-tool:active .dash-tool__icon { background: var(--sl-active); }
+
+@media (max-width: 22rem) {
+  .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 30rem) {
+  .dash-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (min-width: 42rem) {
+  .dash-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
 
 @media (max-width: 42rem) {
   .dash-tool { font-size: 1rem; }

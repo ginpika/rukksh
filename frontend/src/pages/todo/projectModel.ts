@@ -1,6 +1,3 @@
-import type { Project } from '../../api/client'
-import type { TodoProjectSummary } from '../../api/todo'
-
 export const PROJECT_KINDS = [
   { value: 'other', label: '通用项目' }, { value: 'software', label: '软件开发' },
   { value: 'research', label: '研究 / 学习' }, { value: 'novel', label: '小说' },
@@ -13,5 +10,4 @@ export const PROJECT_STATUSES = [
 ]
 export const projectKind = (kind: string) => PROJECT_KINDS.find(option => option.value === kind)?.label ?? kind
 export const projectStatus = (status: string) => PROJECT_STATUSES.find(option => option.value === status)?.label ?? status
-export type ProjectOverview = TodoProjectSummary & { info: Project | null }
 export type PersonalProjectInput = { name: string; note: string; kind: string; status?: string }

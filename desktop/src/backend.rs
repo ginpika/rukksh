@@ -18,6 +18,12 @@ const READY_MARKER: &str = "MINIS_READY port=";
 /// 运行时里那个可执行 jar 的文件名（assemble 脚本按它落盘；名称随 branding.json 的 slug 变）
 const JAR_NAME: &str = concat!(env!("BRAND_SLUG"), "-backend.jar");
 
+pub(super) struct Instance {
+    child: CommandChild,
+    token: String,
+    port: Option<u16>,
+}
+
 /// Windows 路径前缀常量（verbatim / UNC verbatim）
 const VERBATIM_UNC: &str = r"\\?\UNC\";
 const VERBATIM: &str = r"\\?\";
@@ -54,15 +60,25 @@ fn runtime_dir(app: &AppHandle) -> Result<PathBuf, String> {
     if let Ok(dir) = app.path().resolve("runtime", BaseDirectory::Resource) {
         candidates.push(plain_path(dir));
     }
-    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf)) {
+    if let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
         candidates.push(plain_path(exe_dir).join("runtime"));
     }
     candidates.push(plain_path(PathBuf::from(env!("CARGO_MANIFEST_DIR"))).join("runtime"));
 
     for dir in &candidates {
         if java_launcher(dir).exists() && dir.join(JAR_NAME).exists() {
-            eprintln!("[minis-desktop] 使用运行时目录 {}", dir.display());
-            return Ok(dir.clone());
+            let absolute = if dir.is_absolute() {
+                dir.clone()
+            } else {
+                std::env::current_dir()
+                    .map_err(|e| format!("无法定位桌面启动目录：{e}"))?
+                    .join(dir)
+            };
+            eprintln!("[minis-desktop] 使用运行时目录 {}", absolute.display());
+            return Ok(absolute);
         }
     }
     let assemble_command = if cfg!(windows) {
@@ -106,7 +122,12 @@ pub fn log_probe(app: &AppHandle) {
 }
 
 /// 拉起本机后端。失败（运行时未组装等）只报状态，不 panic —— 引导页会把原因显示出来。
-pub fn start(app: &AppHandle, token: &str) -> Result<(), String> {
+pub fn start(app: &AppHandle) -> Result<(), String> {
+    let shell = app.state::<Shell>();
+    let mut instance = shell.local_backend.lock().unwrap();
+    if instance.is_some() {
+        return Ok(());
+    }
     let runtime = runtime_dir(app)?;
     let java = java_launcher(&runtime);
     let jar = runtime.join(JAR_NAME);
@@ -137,9 +158,12 @@ pub fn start(app: &AppHandle, token: &str) -> Result<(), String> {
         (cfg.local_user_name, cfg.local_user_avatar)
     };
 
+    let token = uuid::Uuid::new_v4().simple().to_string();
     let (mut rx, child) = app
         .shell()
         .command(java.to_string_lossy().to_string())
+        // Spring 从当前目录加载应用配置，本机后端使用受保护的应用数据目录。
+        .current_dir(&data)
         .args([
             "-jar".to_string(),
             jar.to_string_lossy().to_string(),
@@ -147,6 +171,7 @@ pub fn start(app: &AppHandle, token: &str) -> Result<(), String> {
             "--server.port=0".to_string(),
         ])
         .env("MINIS_DESKTOP", "1")
+        .env("MINIS_DESKTOP_RUNTIME", &runtime)
         .env(
             "MINIS_COMPUTER_WINDOW_HELPER",
             std::env::current_exe()
@@ -154,7 +179,7 @@ pub fn start(app: &AppHandle, token: &str) -> Result<(), String> {
                 .to_string_lossy()
                 .to_string(),
         )
-        .env("MINIS_LOCAL_TOKEN", token)
+        .env("MINIS_LOCAL_TOKEN", &token)
         .env("MINIS_LOCAL_USER_NAME", user_name)
         .env("MINIS_LOCAL_USER_AVATAR", user_avatar)
         .env(
@@ -167,12 +192,21 @@ pub fn start(app: &AppHandle, token: &str) -> Result<(), String> {
         )
         .env(
             "MINIS_LOG_FILE",
-            data.join("logs").join("minis.log").to_string_lossy().to_string(),
+            data.join("logs")
+                .join("minis.log")
+                .to_string_lossy()
+                .to_string(),
         )
         .spawn()
         .map_err(|e| format!("启动本地服务器失败：{e}"))?;
 
-    remember_child(app, child);
+    let pid = child.pid();
+    *instance = Some(Instance {
+        child,
+        token,
+        port: None,
+    });
+    drop(instance);
 
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -184,10 +218,25 @@ pub fn start(app: &AppHandle, token: &str) -> Result<(), String> {
                     // 只挑 READY 行等于把最关键的诊断信息丢掉
                     print!("[minis-backend] {line}");
                     if let Some(port) = parse_ready(&line) {
-                        if let Some(shell) = handle.try_state::<Shell>() {
-                            *shell.port.lock().unwrap() = Some(port);
+                        {
+                            let shell = handle.state::<Shell>();
+                            let mut instance = shell.local_backend.lock().unwrap();
+                            let Some(current) = instance
+                                .as_mut()
+                                .filter(|current| current.child.pid() == pid)
+                            else {
+                                break;
+                            };
+                            if current.port.is_some() {
+                                continue;
+                            }
+                            current.port = Some(port);
                         }
-                        emit_status(&handle, "ready", &format!("本地服务器已就绪（端口 {port}）"));
+                        emit_status(
+                            &handle,
+                            "ready",
+                            &format!("本地服务器已就绪（端口 {port}）"),
+                        );
                         enter_instance(&handle, &format!("http://127.0.0.1:{port}/"), "local");
                     }
                 }
@@ -195,10 +244,23 @@ pub fn start(app: &AppHandle, token: &str) -> Result<(), String> {
                     eprint!("[minis-backend] {}", String::from_utf8_lossy(&bytes));
                 }
                 CommandEvent::Terminated(payload) => {
+                    let shell = handle.state::<Shell>();
+                    let mut instance = shell.local_backend.lock().unwrap();
+                    if instance
+                        .as_ref()
+                        .is_none_or(|current| current.child.pid() != pid)
+                    {
+                        break;
+                    }
+                    *instance = None;
+                    drop(instance);
                     emit_status(
                         &handle,
                         "error",
-                        &format!("本地服务器已退出（code={:?}），请重开应用重试", payload.code),
+                        &format!(
+                            "本地服务器已退出（code={:?}），请重开应用重试",
+                            payload.code
+                        ),
                     );
                     break;
                 }
@@ -217,24 +279,28 @@ fn parse_ready(line: &str) -> Option<u16> {
         .split(|c: char| !c.is_ascii_digit())
         .next()
         .and_then(|s| s.parse::<u16>().ok())
-}
-
-fn remember_child(app: &AppHandle, child: CommandChild) {
-    let shell = app.state::<Shell>();
-    *shell.child.lock().unwrap() = Some(child);
+        .filter(|port| *port != 0)
 }
 
 /// 本次会话已就绪的端口（引导页再点一次「本机」时据此直接跳转，不重复拉起）
 pub fn known_port(app: &AppHandle) -> Option<u16> {
     app.try_state::<Shell>()
-        .and_then(|shell| *shell.port.lock().unwrap())
+        .and_then(|shell| shell.local_backend.lock().unwrap().as_ref()?.port)
+}
+
+pub fn token_for_port(app: &AppHandle, port: Option<u16>) -> Option<String> {
+    let port = port?;
+    let shell = app.state::<Shell>();
+    let instance = shell.local_backend.lock().unwrap();
+    let current = instance.as_ref()?;
+    (current.port == Some(port)).then(|| current.token.clone())
 }
 
 /// 退出前收尾：先请后端正常退出（关掉它自己），拿不到就强杀
 pub fn stop(app: &AppHandle) {
     let shell = app.state::<Shell>();
-    let child = shell.child.lock().unwrap().take();
-    if let Some(child) = child {
-        let _ = child.kill();
+    let instance = shell.local_backend.lock().unwrap().take();
+    if let Some(instance) = instance {
+        let _ = instance.child.kill();
     }
 }

@@ -1,6 +1,9 @@
 import { ECONOMY_NAV, KNOWLEDGE_NAV, NAV } from './nav'
 
-const hiddenRoutes = new Set(['/search', '/subconscious', '/roundtable', '/workflow', '/dashboard', '/agent-conversation', '/debug'])
+const hiddenRoutes = new Set([
+  '/search', '/subconscious', '/roundtable', '/workflow', '/dashboard', '/agent-conversation', '/debug', '/memory/ops',
+  '/todos/projects', '/todos/tasks',
+])
 
 export function agentConversationHref(sessionId: string, messageId: number, origin = window.location.hash): string {
   const params = new URLSearchParams({ session: sessionId, message: String(messageId), from: origin })

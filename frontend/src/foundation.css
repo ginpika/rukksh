@@ -23,12 +23,6 @@
 .load-state__skeleton > i { height:64px; border:1px solid var(--c-line); background:var(--c-surface-container-low); border-radius:var(--ui-r-md); }
 .load-state__skeleton > i:last-child { width:70%; }
 .page-actions { display:flex; flex-shrink:0; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:12px; min-width:0; }
-.settings-layout { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:20px; max-width:1016px; width:100%; }
-.settings-directory-slot { display:none; min-width:0; }
-.settings-mobile-directory { display:block; }
-.settings-mobile-directory > summary { cursor:pointer; padding:12px 14px; border:1px solid var(--c-line); border-radius:var(--ui-r-md); font-size:14px; }
-.settings-mobile-directory nav { display:flex; flex-wrap:wrap; gap:8px; padding:12px 0; }
-.settings-mobile-directory a { padding:7px 12px; border:1px solid var(--c-line); border-radius:var(--ui-r-sm); font-size:14px; }
 .extract-columns { display:grid; grid-template-columns:minmax(0,1fr); align-items:stretch; gap:20px; }
 .extract-columns > * { min-width:0; }
 .side-drawer-layer { position:fixed; inset:0; z-index:120; }
@@ -42,7 +36,14 @@
 .roundtable-mobile-bar { display:flex; flex-shrink:0; align-items:center; gap:12px; padding:10px 12px; border-bottom:1px solid var(--c-line); }
 .roundtable-mobile-bar > span { font-size:13px; color:var(--c-muted); }
 [data-theme] .ui-control > :is(input,textarea,select):focus-visible { outline:none; box-shadow:none; }
-@media (min-width:1100px) { .settings-layout { grid-template-columns:minmax(0,1fr) clamp(7.5rem,18vw,14rem); gap:24px; }.settings-directory-slot { display:block; }.settings-mobile-directory { display:none; } }
+.ui-input:enabled:focus {
+  border-color: var(--sl-focus-line, var(--c-muted));
+  outline: none;
+  box-shadow: none;
+}
+@media (forced-colors:active) {
+  .ui-input:enabled:focus { border-color: Highlight; }
+}
 @media (min-width:1200px) { .extract-columns { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } }
 @media (max-width:600px) { .page-actions > span { display:flex; flex-wrap:wrap; gap:10px; }.draft-notice { font-size:13px; } }
 @media (hover:none) { .roundtable-session-delete { opacity:1; } }

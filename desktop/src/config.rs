@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
+
+static CONFIG_LOCK: Mutex<()> = Mutex::new(());
 
 /// 后端来源：本机（壳拉起 sidecar）/ 远程（连服务端部署）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,7 +20,7 @@ impl Default for Mode {
 }
 
 /// 壳的持久化配置（{AppConfigDir}/config.json）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
     /// 上次使用的模式（引导页据此默认高亮，不自动连）
     #[serde(default)]
@@ -34,13 +37,16 @@ pub struct Config {
     /// 当前用户在菜单里选中的身份："local" | "sso"
     #[serde(default = "default_current_user", rename = "currentUser")]
     pub current_user: String,
-    /// hostid 服务端地址（登录时记下；启动时据此校验会话、失效时可一键重登）
+    /// 最近一次通过校验的 HostID 服务地址
     #[serde(default, rename = "hostidBaseUrl")]
     pub hostid_base_url: String,
-    /// 邮件服务地址（hostid 自带邮件，但特殊场景下它的前端与后端不同域，这里填真实地址；
-    /// 空 = 退回用 hostid 地址，见 desktop_hostid_base）
-    #[serde(default, rename = "mailUrl")]
-    pub mail_url: String,
+    /// 远程实例公布的 SSO Cookie 名称。旧配置为空时使用 HostID 默认值。
+    #[serde(
+        default,
+        rename = "hostidCookieName",
+        skip_serializing_if = "String::is_empty"
+    )]
+    pub hostid_cookie_name: String,
     /// hostid SSO 用户（登录成功后由登录窗口回传写入；name 空 = 未登录）
     #[serde(default, rename = "ssoUserName")]
     pub sso_user_name: String,
@@ -66,7 +72,7 @@ impl Default for Config {
             local_user_avatar: String::new(),
             current_user: default_current_user(),
             hostid_base_url: String::new(),
-            mail_url: String::new(),
+            hostid_cookie_name: String::new(),
             sso_user_name: String::new(),
             sso_user_avatar: String::new(),
             sso_user_email: String::new(),
@@ -81,6 +87,25 @@ fn path(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// 读取配置；文件缺失或损坏时回落到默认（本机模式）
 pub fn load(app: &AppHandle) -> Config {
+    let _lock = CONFIG_LOCK.lock().unwrap();
+    read(app)
+}
+
+pub fn update(
+    app: &AppHandle,
+    change: impl FnOnce(&mut Config) -> Result<(), String>,
+) -> Result<(), String> {
+    let _lock = CONFIG_LOCK.lock().unwrap();
+    let previous = read(app);
+    let mut cfg = previous.clone();
+    change(&mut cfg)?;
+    if cfg != previous {
+        save(app, &cfg)?;
+    }
+    Ok(())
+}
+
+fn read(app: &AppHandle) -> Config {
     let Ok(p) = path(app) else {
         return Config::default();
     };
@@ -91,7 +116,7 @@ pub fn load(app: &AppHandle) -> Config {
 }
 
 /// 写回配置（目录不存在时创建）
-pub fn save(app: &AppHandle, cfg: &Config) -> Result<(), String> {
+fn save(app: &AppHandle, cfg: &Config) -> Result<(), String> {
     let p = path(app)?;
     if let Some(parent) = p.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;

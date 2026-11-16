@@ -38,6 +38,10 @@ public class CollaborationStore {
                 .stream().findFirst();
     }
 
+    public java.util.Optional<Issue> issue(String id) {
+        return jdbc.query("SELECT * FROM collaboration_issue WHERE id=?", CollaborationStore::mapIssue, id).stream().findFirst();
+    }
+
     private static Issue mapIssue(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
         return new Issue(rs.getString("id"), rs.getString("parent_session_id"), rs.getString("session_id"),
                 rs.getString("title"), rs.getString("status"), rs.getString("conclusion"),
@@ -56,6 +60,15 @@ public class CollaborationStore {
                     .add(rs.getString("agent_id"));
         });
         return result;
+    }
+
+    public List<String> projectMembers(String projectId) {
+        return jdbc.queryForList("SELECT agent_id FROM collaboration_project_member WHERE project_id=? ORDER BY position", String.class, projectId);
+    }
+
+    public List<Issue> issuesForTask(String sessionId, int offset, int limit) {
+        return jdbc.query("SELECT * FROM collaboration_issue WHERE parent_session_id=? ORDER BY created_at,id LIMIT ? OFFSET ?",
+                CollaborationStore::mapIssue, sessionId, limit, offset);
     }
 
     public void members(String projectId, List<String> ids) {

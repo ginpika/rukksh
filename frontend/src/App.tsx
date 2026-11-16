@@ -19,12 +19,15 @@ import Analyze from './pages/Analyze'
 import MultiAgent from './pages/MultiAgent'
 import SystemPanel from './pages/SystemPanel'
 import MemoryPanel from './pages/MemoryPanel'
+import MemoryPage from './pages/MemoryPage'
 import AgentDetail from './pages/agent/AgentDetail'
 import Roundtable from './pages/Roundtable'
 import Workspace from './pages/Workspace'
 import Coding from './pages/Coding'
 import Settings from './pages/Settings'
 import Stats from './pages/Stats'
+import WorkHome from './pages/WorkHome'
+import Projects from './pages/Projects'
 import Todos from './pages/Todos'
 import { ThemePanel } from './theme/registry'
 import { useThemeState } from './theme/store'
@@ -37,6 +40,7 @@ import { isKnownRoute, routeFromHash } from './shell/routes'
 import { btnOutline } from './components/ui'
 import ChatNotifier from './components/ChatNotifier'
 import SlimePage from './components/SlimePage'
+import { PortalAppearanceContext } from './components/portalAppearance'
 
 function useHashRoute(): string {
   const [route, setRoute] = useState(() => routeFromHash(window.location.hash))
@@ -212,9 +216,6 @@ function UserMenu({
   )
 }
 
-/** 页面自管滚动、外壳不再套容器的路由 */
-const FULL_BLEED = ['/collaboration', '/roundtable', '/workflow', '/coding', '/economy/research', '/economy/database']
-
 function App() {
   const route = useHashRoute()
   /* /article/{url}：文档详情路由，url 为 slug（可含 URL 编码） */
@@ -264,44 +265,15 @@ function App() {
   /* 每页包一层 data-page（语义锚点），内容由 PageSlot 决定：原生页面或注册表中的渲染版本 */
   const page = (
     <>
-      {route === '/economy' && <div data-page="economy"><Economy /></div>}
-      {route === '/economy/research' && <EconomyResearch />}
-      {route === '/economy/database' && <EconomyDatabase />}
       {route === '/search' && (
         <div data-page="search" className="h-full">
           <PageSlot route="search" props={{}} fallback={<Search />} />
         </div>
       )}
-      {route === '/debug' && (
-        <div data-page="debug">
-          <ContextDebug />
-        </div>
-      )}
-      {route === '/memory' && (
-        <div data-page="memory">
-          <PageSlot route="memory" props={{}} fallback={<MemoryPanel />} />
-        </div>
-      )}
-      {['/collaboration', '/roundtable', '/workflow'].includes(route) && (
-        <div data-page="collaboration" className="h-full">
-          <PageSlot route="collaboration" props={{}} fallback={<Roundtable initialView={route === '/workflow' ? 'graph' : 'discussion'} />} />
-        </div>
-      )}
-      {route === '/settings' && (
-        <div data-page="settings">
-          <PageSlot route="settings" props={{}} fallback={<Settings />} />
-        </div>
-      )}
-      {route === '/workspace' && (
-        <div data-page="workspace" className="h-full">
-          <PageSlot route="workspace" props={{}} fallback={<Workspace />} />
-        </div>
-      )}
-      {route === '/coding' && <div data-page="coding" className="h-full min-h-0"><Coding /></div>}
-      {route === '/todos' && <div data-page="todos"><PageSlot route="todos" props={{}} fallback={<Todos />} /></div>}
-      {route === '/stats' && (
-        <div data-page="stats">
-          <PageSlot route="stats" props={{}} fallback={<Stats />} />
+      {/* 运行时观测台保留原视图，只从记忆页右上角进入。 */}
+      {route === '/memory/ops' && (
+        <div data-page="memory-ops">
+          <MemoryPanel />
         </div>
       )}
       {!isKnownRoute(route) && <p className="pt-24 text-base text-faint">404 —— 没有这个页面。</p>}
@@ -360,6 +332,71 @@ function App() {
       break
     case '/dashboard':
       standalone = <Dashboard />
+      break
+    case '/coding':
+      standalone = <Coding />
+      break
+    case '/collaboration':
+    case '/roundtable':
+    case '/workflow':
+      standalone = <PageSlot route="collaboration" props={{}} fallback={<Roundtable initialView={route === '/workflow' ? 'graph' : 'discussion'} />} />
+      break
+    case '/economy':
+      standalone = (
+        <SlimePage title="经济" backHref="#/dashboard" backLabel="返回 Dashboard">
+          <Economy />
+        </SlimePage>
+      )
+      break
+    case '/economy/research':
+    case '/economy/database': {
+      const research = route === '/economy/research'
+      standalone = (
+        <SlimePage key={route} title={research ? '隔夜策略工作台' : '观测数据库'} backHref="#/economy" backLabel="返回经济">
+          <PortalAppearanceContext value="slime-surface">
+            {research ? <EconomyResearch /> : <EconomyDatabase />}
+          </PortalAppearanceContext>
+        </SlimePage>
+      )
+      break
+    }
+    case '/todos':
+      standalone = (
+        <SlimePage key={route} title="项目与待办" backHref="#/dashboard" backLabel="返回 Dashboard" className="work-surface">
+          <WorkHome />
+        </SlimePage>
+      )
+      break
+    case '/todos/projects':
+      standalone = (
+        <SlimePage key={route} title="项目" backHref="#/todos" backLabel="返回项目与待办" className="work-surface">
+          <div data-page="projects"><Projects /></div>
+        </SlimePage>
+      )
+      break
+    case '/todos/tasks':
+      standalone = (
+        <SlimePage key={route} title="待办" backHref="#/todos" backLabel="返回项目与待办" className="work-surface">
+          <div data-page="todos"><PageSlot route="todos" props={{}} fallback={<Todos />} /></div>
+        </SlimePage>
+      )
+      break
+    case '/workspace':
+      standalone = (
+        <SlimePage title="工作空间" backHref="#/dashboard" backLabel="返回 Dashboard">
+          <div data-page="workspace">
+            <PageSlot route="workspace" props={{}} fallback={<Workspace />} />
+          </div>
+        </SlimePage>
+      )
+      break
+    /* 记忆与 Dashboard / 知识库同一套独立窗口：极简页头 + 返回 Dashboard */
+    case '/memory':
+      standalone = (
+        <SlimePage key={route} title="记忆" backHref="#/dashboard" backLabel="返回 Dashboard">
+          <div data-page="memory"><PageSlot route="memory" props={{}} fallback={<MemoryPage />} /></div>
+        </SlimePage>
+      )
       break
     case '/knowledge':
       /* 与首页 / Dashboard 一致：不套外壳顶栏与页脚，只保留极简页头 */
@@ -427,6 +464,33 @@ function App() {
         </SlimePage>
       )
       break
+    case '/stats':
+      standalone = (
+        <SlimePage key={route} title="用量与统计" backHref="#/dashboard" backLabel="返回 Dashboard">
+          <div data-page="stats">
+            <PageSlot route="stats" props={{}} fallback={<Stats />} />
+          </div>
+        </SlimePage>
+      )
+      break
+    case '/settings':
+      standalone = (
+        <SlimePage key={route} title="系统设置" backHref="#/dashboard" backLabel="返回 Dashboard">
+          <div data-page="settings">
+            <PageSlot route="settings" props={{}} fallback={<Settings />} />
+          </div>
+        </SlimePage>
+      )
+      break
+    case '/debug':
+      standalone = (
+        <SlimePage key={route} title="调试" backHref="#/dashboard" backLabel="返回 Dashboard">
+          <div data-page="debug">
+            <ContextDebug />
+          </div>
+        </SlimePage>
+      )
+      break
   }
 
   /* 文档详情与快照详情跟随所属列表页：独立页面、极简页头 */
@@ -468,13 +532,7 @@ function App() {
     return (
       <>
         {desktop ? (
-          <DesktopFrame
-            hideRail
-            activePath={route}
-            toolsSlot={null}
-            homeSlot={homeButton}
-            userSlot={renderUser({ placement: 'down', withName: true }, 'chip')}
-          >
+          <DesktopFrame hideRail activePath={route}>
             {standalone}
           </DesktopFrame>
         ) : (
@@ -489,7 +547,7 @@ function App() {
     <AppShell
       route={route}
       activePath={activePathOf(route)}
-      fullBleed={FULL_BLEED.includes(route)}
+      fullBleed={false}
       hideChrome={hideChrome}
       tools={hideChrome ? null : themePanel}
       userSlot={desktop ? () => null : (slot) => renderUser(slot)}

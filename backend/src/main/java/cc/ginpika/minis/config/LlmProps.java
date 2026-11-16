@@ -2,7 +2,7 @@ package cc.ginpika.minis.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** OpenAI 兼容 LLM（prefix: minis.llm）。聊天与 Embedding 共用 base-url/api-key。 */
+/** 内置 LLM 配置（prefix: minis.llm）。聊天与 Embedding 共用 base-url/api-key。 */
 @ConfigurationProperties(prefix = "minis.llm")
 public class LlmProps {
 
@@ -13,8 +13,10 @@ public class LlmProps {
 
     private String apiKey = "";
 
-    /** 聊天模型（OpenAI Compatible /chat/completions 的 model） */
+    /** 聊天请求中的模型 ID。 */
     private String chatModel = "";
+
+    private String apiFormat = ModelApiFormat.OPENAI_CHAT_COMPLETIONS.wireValue();
 
     /** 聊天默认 system prompt（空则不发送 system 消息） */
     private String systemPrompt = "";
@@ -59,6 +61,14 @@ public class LlmProps {
 
     public void setChatModel(String chatModel) {
         this.chatModel = chatModel;
+    }
+
+    public String getApiFormat() {
+        return apiFormat;
+    }
+
+    public void setApiFormat(String apiFormat) {
+        this.apiFormat = ModelApiFormat.fromWireValue(apiFormat).wireValue();
     }
 
     public String getSystemPrompt() {

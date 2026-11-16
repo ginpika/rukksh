@@ -48,14 +48,22 @@
 .collab-plan-body { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px 32px; padding:24px; max-height:36vh; overflow:auto; font-size:1rem; line-height:1.625; }
 .collab-plan p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .collab-plan strong { display:block; font-size:var(--collab-body); color:var(--c-fg-2); font-weight:500; margin-bottom:8px; }
-.collab-workspace-status { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 24px; border-bottom:1px solid var(--c-line); font-size:var(--collab-body); line-height:1.6; flex-shrink:0; }
-.collab-project-page .collab-workspace-status { padding:16px 0; border-top:1px solid var(--c-line); border-bottom:0; }
-.collab-project-page .collab-workspace-status > div { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 16px; }
-.collab-project-page .collab-workspace-status p { margin:0; }
-.collab-workspace-status > div { min-width:0; }
-.collab-workspace-status strong { display:flex; gap:8px; align-items:center; font-weight:500; }
-.collab-workspace-status p { color:var(--c-fg-2); overflow-wrap:anywhere; margin:4px 0 0; }
-.collab-workspace-status button { flex-shrink:0; }
+.collab-workspace-status {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:.5rem .75rem;
+  padding:.75rem 1rem;
+  margin-bottom:.75rem;
+  border:1px solid var(--sl-line);
+  border-radius:var(--collab-radius);
+  background:var(--sl-panel);
+}
+.collab-workspace-location { flex:1 1 12rem; min-width:0; }
+.collab-workspace-location strong { font-weight:600; }
+.collab-workspace-location p { color:var(--sl-muted); font-size:.8125rem; overflow-wrap:anywhere; }
+.collab-workspace-location p[role='alert'] { color:var(--sl-danger); }
+.collab-workspace-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.25rem; }
 .collab-workspace-picker { max-height:240px; overflow:auto; border:1px solid var(--c-line); border-radius:8px; padding:8px; }
 .collab-workspace-directory { display:flex; gap:8px; align-items:center; width:100%; text-align:left; padding:12px 8px; font-size:var(--collab-body); border-radius:4px; }
 .collab-workspace-directory:hover { background:color-mix(in srgb,var(--c-fg) 4%,transparent); }
@@ -69,7 +77,6 @@
   .collab-plan summary { padding:8px 16px; gap:6px 10px; font-size:.875rem; }
   .collab-plan-caption { font-size:.875rem; }.collab-plan-phase { font-size:.8125rem; }
   .collab-plan-body { grid-template-columns:1fr; gap:20px; padding:20px 16px; max-height:32vh; }
-  .collab-workspace-status { flex-wrap:wrap; padding:16px; }
   .collab-settings { padding:20px; }.collab-compose-scope { padding-bottom:6px; }
   .wf-embedded .wf-toolbar { padding:8px 12px; }.wf-embedded .wf-tabs { flex-wrap:wrap; }
 }

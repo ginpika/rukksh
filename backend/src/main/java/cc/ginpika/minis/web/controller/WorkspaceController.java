@@ -4,14 +4,17 @@ import cc.ginpika.minis.agent.workspace.WorkspaceDtos;
 import cc.ginpika.minis.agent.workspace.WorkspaceService;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 工作空间的文件面（工作空间页）：列目录、文本预览、下载。
@@ -57,5 +60,11 @@ public class WorkspaceController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(download.bytes().length)
                 .body(download.bytes());
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> error(ResponseStatusException error) {
+        return ResponseEntity.status(error.getStatusCode())
+                .body(Map.of("message", error.getReason() == null ? "请求失败" : error.getReason()));
     }
 }

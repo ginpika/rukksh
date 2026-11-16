@@ -1,5 +1,12 @@
 # minis 后端镜像（仅 Spring Boot jar；前端由独立 nginx 容器托管）
 # 构建上下文：仓库根目录（docker compose 已配置）——branding.json 在根目录，需随上下文进镜像
+FROM eclipse-temurin:21-jre-noble AS sandbox-build
+WORKDIR /build
+COPY backend/native/local-sandbox.c ./local-sandbox.c
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev linux-libc-dev libseccomp-dev \
+    && cc -O2 -Wall -Wextra /build/local-sandbox.c -o /build/minis-local-sandbox -lseccomp \
+    && rm -rf /var/lib/apt/lists/*
+
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
 # branding.json 放在 /build，pom 的 resources 会以 ${project.basedir}/.. 引用到它
@@ -14,7 +21,7 @@ RUN mvn -B -q dependency:copy-dependencies -DincludeGroupIds=com.microsoft.playw
 # 运行：仅需 JRE（glibc 基础镜像，兼容 sqlite-jdbc 原生库）
 FROM eclipse-temurin:21-jre-noble
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates libseccomp2 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/backend/target/browser-runtime/ /tmp/playwright/
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
@@ -24,6 +31,7 @@ RUN java -cp "/tmp/playwright/*" com.microsoft.playwright.CLI install --with-dep
     && mkdir -p /data \
     && chown -R minis:minis /app /data /ms-playwright
 COPY --from=build --chown=minis:minis /build/backend/target/*.jar app.jar
+COPY --from=sandbox-build /build/minis-local-sandbox /usr/local/bin/minis-local-sandbox
 USER minis
 
 # 数据统一落盘到 /data（SQLite 库 + markdown 文章目录），由 compose 卷挂载持久化

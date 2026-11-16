@@ -17,7 +17,8 @@ public final class TerminalDtos {
                              List<String> denyPatterns, String dockerHost, String image,
                              String container, String sshHost, Integer sshPort, String sshUser,
                              String sshAuth, String sshPassword, String sshPrivateKey,
-                             String sshPassphrase, String hostKeyCheck, String note, String hostWorkdir) {
+                             String sshPassphrase, String hostKeyCheck, String note, String hostWorkdir,
+                             List<String> writePaths) {
     }
 
     /** 新建 / 整体覆盖一个目标（PUT 时 id 来自路径） */
@@ -26,11 +27,13 @@ public final class TerminalDtos {
                                 List<String> denyPatterns, String dockerHost, String image,
                                 String container, String sshHost, Integer sshPort, String sshUser,
                                 String sshAuth, String sshPassword, String sshPrivateKey,
-                                String sshPassphrase, String hostKeyCheck, String note, String hostWorkdir) {
+                                String sshPassphrase, String hostKeyCheck, String note, String hostWorkdir,
+                                List<String> writePaths) {
     }
 
-    /** 工作空间页的整页视图：全部目标（没有全局总开关，逐目标开关即唯一闸门） */
-    public record TerminalView(List<TargetView> targets) {
+    /** 全部目标，以及当前部署是否支持本机工作空间。 */
+    public record TerminalView(List<TargetView> targets, boolean localAvailable, String localUnavailableReason,
+                               boolean localManageable) {
     }
 
     /** 连通性测试结果（设置页「测试」按钮）：detail=成功摘要，error=失败原因 */

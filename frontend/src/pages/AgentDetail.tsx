@@ -105,7 +105,7 @@ function RoleColorPicker({ value, onChange }: { value: string; onChange: (v: str
   return (
     <label
       title="角色标签的颜色"
-      className="relative inline-flex w-9 shrink-0 cursor-pointer items-center justify-center self-stretch rounded-md border border-line bg-bg transition hover:border-line-strong focus-within:border-secondary focus-within:ring-2 focus-within:ring-secondary/30"
+      className="relative inline-flex w-9 shrink-0 cursor-pointer items-center justify-center self-stretch rounded-md border border-line bg-bg transition-colors hover:border-line-strong focus-within:border-muted"
     >
       <span
         aria-hidden="true"

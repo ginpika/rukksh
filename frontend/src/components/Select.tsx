@@ -1,7 +1,8 @@
 import { AppIcon } from './AppIcon'
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useContext, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { INPUT } from './formStyles'
+import { PortalAppearanceContext } from './portalAppearance'
 import { filterSelectOptions, nextSelectValue, selectPosition, type SelectOption } from './selectModel'
 
 export type { SelectOption } from './selectModel'
@@ -15,11 +16,13 @@ export type SelectProps = {
   size?: 'sm' | 'md' | 'compact'
   className?: string
   menuClassName?: string
+  menuHost?: HTMLElement | null
   placeholder?: string
 }
 
 /** 共享 Tailwind 下拉：键盘导航、长列表搜索、视口内定位，弹层避开主题卡片的裁切。 */
-export function Select({ value, onChange, options, label, disabled = false, searchable = false, size = 'md', className = '', menuClassName = '', placeholder = '请选择' }: SelectProps) {
+export function Select({ value, onChange, options, label, disabled = false, searchable = false, size = 'md', className = '', menuClassName = '', menuHost, placeholder = '请选择' }: SelectProps) {
+  const appearance = useContext(PortalAppearanceContext)
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [highlight, setHighlight] = useState(value)
@@ -42,18 +45,38 @@ export function Select({ value, onChange, options, label, disabled = false, sear
   }
   useLayoutEffect(() => {
     if (!open) return
-    setHost(trigger.current?.closest<HTMLElement>('[role="dialog"]') ?? document.body)
-    const update = () => {
+    setHost(menuHost ?? trigger.current?.closest<HTMLElement>('[role="dialog"]') ?? document.body)
+    const viewport = window.visualViewport
+    const update = (event?: Event) => {
+      if (event?.target instanceof Node && menu.current?.contains(event.target)) return
       const rect = trigger.current?.getBoundingClientRect()
       if (!rect) return
       if (rect.bottom < 0 || rect.top > window.innerHeight) { setOpen(false); return }
-      setPosition(selectPosition(rect, { width: window.innerWidth, height: window.innerHeight }))
+      const left = viewport?.offsetLeft ?? 0
+      const top = viewport?.offsetTop ?? 0
+      const next = selectPosition({
+        left: rect.left - left,
+        width: rect.width,
+        top: rect.top - top,
+        bottom: rect.bottom - top,
+      }, {
+        width: viewport?.width ?? window.innerWidth,
+        height: viewport?.height ?? window.innerHeight,
+      })
+      setPosition({ ...next, left: next.left + left, top: next.top + top })
     }
     update()
     window.addEventListener('resize', update)
     window.addEventListener('scroll', update, true)
-    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true) }
-  }, [open])
+    viewport?.addEventListener('resize', update)
+    viewport?.addEventListener('scroll', update)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+      viewport?.removeEventListener('resize', update)
+      viewport?.removeEventListener('scroll', update)
+    }
+  }, [menuHost, open])
   useEffect(() => {
     if (!open) return
     const outside = (e: PointerEvent) => {
@@ -76,6 +99,7 @@ export function Select({ value, onChange, options, label, disabled = false, sear
   }, [highlight, visible, search])
   const choose = (option: SelectOption) => { if (option.disabled) return; onChange(option.value); close(true) }
   const keyDown = (e: KeyboardEvent<HTMLElement>) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); close(true); return }
     if (e.key === 'Tab' && open) { close(e.target === searchInput.current); return }
     if (!open && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); show(e.key === 'ArrowUp'); return }
@@ -90,14 +114,21 @@ export function Select({ value, onChange, options, label, disabled = false, sear
   }
   // 在对话框中保留 DOM 归属，让现有焦点循环包含搜索输入；其他位置挂到 body 避免裁切。
   return <div className={`relative min-w-0 ${className}`}>
-    <button ref={trigger} type="button" role="combobox" aria-label={label} aria-haspopup="listbox" aria-controls={`${id}-list`} aria-expanded={open && !disabled} aria-activedescendant={!searchable && open ? activeId : undefined} disabled={disabled} onKeyDown={keyDown} onClick={() => open ? close() : show()} className={`${INPUT} flex min-h-9 items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-50 ${size === 'sm' ? '!py-2 !text-[.875rem] max-sm:!text-base' : size === 'compact' ? '!text-[.875rem] max-sm:!text-base' : ''}`}>
+    <button ref={trigger} type="button" role="combobox" aria-label={label} aria-haspopup="listbox" aria-controls={visible ? `${id}-list` : undefined} aria-expanded={visible} aria-activedescendant={!searchable && visible ? activeId : undefined} disabled={disabled} onKeyDown={keyDown} onClick={() => open ? close() : show()} className={`${INPUT} flex min-h-9 items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-50 ${size === 'sm' ? '!py-2 !text-[.875rem] max-sm:!text-base' : size === 'compact' ? '!text-[.875rem] max-sm:!text-base' : ''}`}>
       <span className="flex min-w-0 items-center gap-2">{current?.icon}<span className="truncate">{current?.label ?? placeholder}</span></span><AppIcon name="chevron-down" className={`h-4 w-4 shrink-0 text-faint transition-transform ${open ? 'rotate-180' : ''}`} />
     </button>
-    {open && !disabled && position && host && createPortal(<div ref={menu} className={`fixed z-[150] flex flex-col overflow-hidden rounded-md border border-line-strong bg-bg p-1 shadow-xl ${menuClassName}`} style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight, transform: position.above ? 'translateY(-100%)' : undefined }} onKeyDown={keyDown}>
-      {searchable && <div className="shrink-0 border-b border-line p-1 pb-2"><input ref={searchInput} role="combobox" aria-label={`搜索${label ?? '选项'}`} aria-controls={`${id}-list`} aria-expanded="true" aria-autocomplete="list" aria-activedescendant={activeId} value={search} onChange={e => { setSearch(e.target.value); setHighlight('') }} placeholder="搜索名称或 ID…" className="w-full rounded border border-line bg-bg px-2.5 py-2 text-[.875rem] text-fg outline-none placeholder:text-faint focus:border-accent max-sm:text-base" /></div>}
+    {open && !disabled && position && host && createPortal(<div ref={menu} className={`fixed z-[150] flex flex-col overflow-hidden rounded-md border border-line-strong bg-bg p-1 shadow-xl ${menuClassName}${appearance ? ` ${appearance}` : ''}`} style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight, transform: position.above ? 'translateY(-100%)' : undefined }} onKeyDown={keyDown}>
+      {searchable && <div className="shrink-0 border-b border-line p-1 pb-2"><input ref={searchInput} role="combobox" aria-label={`搜索${label ?? '选项'}`} aria-controls={`${id}-list`} aria-expanded="true" aria-autocomplete="list" aria-activedescendant={activeId} value={search} onChange={e => { setSearch(e.target.value); setHighlight('') }} placeholder="搜索名称或 ID…" className="ui-input w-full rounded border border-line bg-bg px-2.5 py-2 text-[.875rem] text-fg placeholder:text-faint max-sm:text-base" /></div>}
       <div id={`${id}-list`} role="listbox" aria-label={label ?? '选项'} className="scrollbar-slim min-h-0 overflow-y-auto">
         {filtered.map((option, index) => <div key={option.value} id={`${id}-${index}`} role="option" aria-selected={option.value === value} aria-disabled={option.disabled || undefined} data-highlighted={index === activeIndex} onPointerMove={() => { if (!option.disabled) setHighlight(option.value) }} onPointerDown={e => e.preventDefault()} onClick={() => choose(option)} className={`flex items-center justify-between gap-2 rounded px-2.5 py-2 text-left ${option.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${size === 'md' ? 'text-base' : 'text-[.875rem] max-sm:text-base'} ${index === activeIndex ? 'bg-accent-soft text-fg' : size === 'compact' ? 'text-fg' : 'text-muted'} ${option.value === value ? 'font-semibold' : ''}`}>
-          <span className="flex min-w-0 items-center gap-2">{option.icon}<span className="min-w-0 break-words">{option.label}</span></span>{option.value === value && <AppIcon name="check" className="h-4 w-4 shrink-0 text-accent" />}
+          <span className="flex min-w-0 items-center gap-2">
+            {option.icon}
+            <span className="min-w-0 break-words">
+              {option.label}
+              {option.description && <span className="block text-[.75rem] font-normal leading-snug text-muted">{option.description}</span>}
+            </span>
+          </span>
+          {option.value === value && <AppIcon name="check" className="h-4 w-4 shrink-0 text-accent" />}
         </div>)}
         {!filtered.length && <p className="px-2.5 py-3 text-[.75rem] text-muted" role="status">没有匹配的选项</p>}
       </div>

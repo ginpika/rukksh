@@ -8,6 +8,7 @@ import cc.ginpika.minis.project.ProjectStore;
 import cc.ginpika.minis.project.ProjectWorkspaceStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,10 +27,15 @@ public class CollaborationWorkspaceBinding {
     }
     public List<CodingDtos.Workspace> workspaces() { return workspaces.workspaces(); }
     public List<Location> list() {
-        return store.list().stream().map(b -> {
-            try { return location(b); }
-            catch (ResponseStatusException error) { return new Location(b.projectId(),b.repositoryId(),null,"绑定已失效",null,null,false); }
-        }).toList();
+        return store.list().stream().map(this::readLocation).toList();
+    }
+    public Optional<Location> find(String project) { return store.find(project).map(this::readLocation); }
+
+    private Location readLocation(ProjectWorkspaceStore.Binding binding) {
+        try { return location(binding); }
+        catch (ResponseStatusException error) {
+            return new Location(binding.projectId(),binding.repositoryId(),null,"绑定已失效",null,null,false);
+        }
     }
     public Location bind(String project, CodingDtos.OpenProject request) {
         projects.findById(project).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"项目不存在"));

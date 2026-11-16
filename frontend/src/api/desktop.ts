@@ -10,8 +10,9 @@ type TauriInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unkn
 
 declare global {
   interface Window {
-    /** 桌面壳在页面脚本执行前注入的一次性本机令牌（壳的本机模式下才有） */
-    __MINIS_LOCAL_TOKEN__?: string
+    /** 桌面壳在本机后端的主文档中交付的令牌 */
+    __MINIS_LOCAL_TOKEN__?: string | null
+    __MINIS_LOCAL_API_READY__?: boolean
     /** 桌面壳注入的全局 Tauri API（withGlobalTauri）；只用到 core.invoke */
     __TAURI__?: { core?: { invoke?: TauriInvoke } }
   }
@@ -19,6 +20,8 @@ declare global {
 
 /** 桌面壳的标志字段：Tauri v2 会挂在 window 上 */
 const TAURI_FLAG = '__TAURI_INTERNALS__'
+const LOCAL_API_READY = 'minis:desktop-api-ready'
+let localApiReady: Promise<void> | undefined
 
 /** 本机模式令牌；浏览器 / 远程模式下为 null */
 export function localToken(): string | null {
@@ -37,21 +40,42 @@ export function isDesktopShell(): boolean {
  * <p>后端的 DesktopTokenFilter 只校验 /api/**，静态资源不受影响；令牌为空则不加头，
  * 因此 Web 部署与本地开发（浏览器直连）的行为不变。
  */
-export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const token = localToken()
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = new URL(input instanceof Request ? input.url : input, window.location.href)
+  if (url.origin !== window.location.origin || !url.pathname.startsWith('/api/')) {
+    return fetch(input, init)
+  }
+  let token = localToken()
+  if (!token && isDesktopShell() && url.hostname === '127.0.0.1' && url.protocol === 'http:') {
+    await waitForLocalApi()
+    token = localToken()
+  }
   if (!token) return fetch(input, init)
-  const headers = new Headers(init?.headers)
+  const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
   headers.set('X-Minis-Token', token)
-  return fetch(input, { ...init, headers })
+  return fetch(input instanceof Request ? input : url, { ...init, headers, redirect: 'error' })
+}
+
+/** 原生页面提交事件和前端脚本可能先后到达，首个请求等待壳完成令牌交付。 */
+function waitForLocalApi(): Promise<void> | undefined {
+  if (window.__MINIS_LOCAL_API_READY__) return
+  return localApiReady ??= new Promise<void>(resolve => {
+    const finish = () => {
+      window.removeEventListener(LOCAL_API_READY, finish)
+      window.clearTimeout(timeout)
+      resolve()
+    }
+    const timeout = window.setTimeout(finish, 3000)
+    window.addEventListener(LOCAL_API_READY, finish, { once: true })
+  })
 }
 
 /* ----------------------------------------------------------------------------
- * 自绘标题栏的窗口命令（见 shell/DesktopFrame.tsx）
+ * 桌面壳窗口命令（见 shell/DesktopFrame.tsx）
  *
- * 主窗口是无边框的（desktop/src/main.rs 里的 .decorations(false)），标题栏由页面
- * 自绘，窗口操作统一走 Tauri 核心 window 插件。命令名与参数对齐框架自身的拖拽
- * 脚本（plugin:window|…），且不传 label——操作的就是发起命令的那个窗口，因此这里
- * 不需要知道窗口标签。拖拽本身由 data-tauri-drag-region 属性交给框架，无需代码。
+ * macOS 主窗口启用原生装饰与叠加标题栏（TitleBarStyle::Overlay），红绿灯与边缘缩放由
+ * AppKit 原生接管，这里仅保留全屏状态查询与窗口主题同步；非 macOS 平台仍走无边框自绘标题栏。
+ * 命令名与参数对齐 Tauri 核心 window 插件，不传 label 即操作当前窗口。
  *
  * 浏览器里没有 __TAURI__：全部静默降级为 no-op，同一份前端产物照旧跑在 Web 部署上。
  * -------------------------------------------------------------------------- */
@@ -88,6 +112,22 @@ export async function isWindowMaximized(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** 当前是否全屏（macOS 用于在原生全屏下收回左上角红绿灯留白）；不在桌面壳里恒为 false */
+export async function isWindowFullscreen(): Promise<boolean> {
+  const query = windowCmd('is_fullscreen')
+  if (!query) return false
+  try {
+    return Boolean(await query)
+  } catch {
+    return false
+  }
+}
+
+/** 同步原生窗口外观（light / dark / null 跟随系统），使 macOS 原生红绿灯和边框配色一致 */
+export function setWindowTheme(theme: 'light' | 'dark' | null): void {
+  windowCmd('set_theme', { value: theme })?.catch(() => {})
 }
 
 /** 在指定窗缘开始系统缩放；dir 取 "North" / "SouthEast" 等八个方位 */

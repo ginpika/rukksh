@@ -21,6 +21,16 @@ const TOOL_COPY = new Map<string, ActivityCopy>([
   ['delegate_subagent', ['正在分派子任务', '在召集小伙伴帮忙']],
   ['read_subagent_run', ['正在查看子任务结果', '在收小伙伴的回报']],
   ['write_todos', ['正在更新待办', '在整理任务小本本']],
+  ['read_personal_todos', ['正在查看个人待办', '在翻待办清单']],
+  ['manage_personal_todos', ['正在更新个人待办', '在整理待办清单']],
+  ['list_work_projects', ['正在查找项目', '在翻项目目录']],
+  ['read_work_project', ['正在读取项目资料', '在翻项目资料']],
+  ['create_work_project', ['正在创建项目', '在建立项目']],
+  ['update_work_project', ['正在更新项目', '在整理项目资料']],
+  ['set_work_project_members', ['正在更新项目成员', '在整理项目成员']],
+  ['bind_work_project_workspace', ['正在绑定项目工作目录', '在设置项目工作目录']],
+  ['manage_work_collaboration', ['正在更新协作记录', '在整理协作记录']],
+  ['save_work_project_document', ['正在保存项目文档', '在整理项目文档']],
   ['roll_dice', ['正在掷骰子', '摇响了骰盅']],
 ])
 

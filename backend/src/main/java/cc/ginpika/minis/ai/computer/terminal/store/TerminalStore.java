@@ -19,7 +19,7 @@ import org.springframework.stereotype.Repository;
 public class TerminalStore {
 
     /**
-     * 一个终端目标的完整定义。两类目标（docker / ssh）共用一张宽表，各自只填自己那几列：
+     * 一个终端目标的完整定义。Docker、SSH 与本机工作空间各自只填适用的列：
      * 比拆成两张表更省事，读起来也只多几个 null——与 {@code heartbeat_plan} 的多可选列同一个取舍。
      */
     public record TargetRow(String id, String name, String kind, boolean enabled, String workdir,
@@ -27,7 +27,18 @@ public class TerminalStore {
                             String denyPatterns, String dockerHost, String image, String container,
                             String sshHost, Integer sshPort, String sshUser, String sshAuth,
                             String sshPassword, String sshPrivateKey, String sshPassphrase,
-                            String hostKeyCheck, String note, String hostWorkdir, long createdAt, long updatedAt) {
+                            String hostKeyCheck, String note, String hostWorkdir, String writePaths,
+                            long createdAt, long updatedAt) {
+        public TargetRow(String id, String name, String kind, boolean enabled, String workdir,
+                         Long timeoutMs, Integer maxOutput, String allowPatterns, String denyPatterns,
+                         String dockerHost, String image, String container, String sshHost, Integer sshPort,
+                         String sshUser, String sshAuth, String sshPassword, String sshPrivateKey,
+                         String sshPassphrase, String hostKeyCheck, String note, String hostWorkdir,
+                         long createdAt, long updatedAt) {
+            this(id, name, kind, enabled, workdir, timeoutMs, maxOutput, allowPatterns, denyPatterns,
+                    dockerHost, image, container, sshHost, sshPort, sshUser, sshAuth, sshPassword, sshPrivateKey,
+                    sshPassphrase, hostKeyCheck, note, hostWorkdir, null, createdAt, updatedAt);
+        }
     }
 
     /** 一次命令执行的审计行（id 为 null 表示待插入） */
@@ -42,7 +53,7 @@ public class TerminalStore {
             "id, name, kind, enabled, workdir, timeout_ms, max_output, allow_patterns, "
                     + "deny_patterns, docker_host, image, container, ssh_host, ssh_port, ssh_user, "
                     + "ssh_auth, ssh_password, ssh_private_key, ssh_passphrase, host_key_check, "
-                    + "note, host_workdir, created_at, updated_at";
+                    + "note, host_workdir, write_paths, created_at, updated_at";
 
     private final JdbcTemplate jdbc;
 
@@ -86,13 +97,13 @@ public class TerminalStore {
                     "INSERT INTO term_target(id, name, kind, enabled, workdir, timeout_ms, "
                             + "max_output, allow_patterns, deny_patterns, docker_host, image, "
                             + "container, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_password, "
-                            + "ssh_private_key, ssh_passphrase, host_key_check, note, host_workdir, created_at, "
-                            + "updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            + "ssh_private_key, ssh_passphrase, host_key_check, note, host_workdir, write_paths, "
+                            + "created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     id, row.name(), row.kind(), row.enabled() ? 1 : 0, row.workdir(), row.timeoutMs(),
                     row.maxOutput(), row.allowPatterns(), row.denyPatterns(), row.dockerHost(),
                     row.image(), row.container(), row.sshHost(), row.sshPort(), row.sshUser(),
                     row.sshAuth(), row.sshPassword(), row.sshPrivateKey(), row.sshPassphrase(),
-                    row.hostKeyCheck(), row.note(), row.hostWorkdir(), now, now);
+                    row.hostKeyCheck(), row.note(), row.hostWorkdir(), row.writePaths(), now, now);
             return targetById(id).orElseThrow();
         }
         jdbc.update(
@@ -100,13 +111,13 @@ public class TerminalStore {
                         + "timeout_ms = ?, max_output = ?, allow_patterns = ?, deny_patterns = ?, "
                         + "docker_host = ?, image = ?, container = ?, ssh_host = ?, ssh_port = ?, "
                         + "ssh_user = ?, ssh_auth = ?, ssh_password = ?, ssh_private_key = ?, "
-                        + "ssh_passphrase = ?, host_key_check = ?, note = ?, host_workdir = ?, updated_at = ? "
+                        + "ssh_passphrase = ?, host_key_check = ?, note = ?, host_workdir = ?, write_paths = ?, updated_at = ? "
                         + "WHERE id = ?",
                 row.name(), row.kind(), row.enabled() ? 1 : 0, row.workdir(), row.timeoutMs(),
                 row.maxOutput(), row.allowPatterns(), row.denyPatterns(), row.dockerHost(),
                 row.image(), row.container(), row.sshHost(), row.sshPort(), row.sshUser(),
                 row.sshAuth(), row.sshPassword(), row.sshPrivateKey(), row.sshPassphrase(),
-                row.hostKeyCheck(), row.note(), row.hostWorkdir(), now, row.id());
+                row.hostKeyCheck(), row.note(), row.hostWorkdir(), row.writePaths(), now, row.id());
         return targetById(row.id()).orElseThrow();
     }
 
@@ -151,15 +162,18 @@ public class TerminalStore {
     // ---------- 映射 ----------
 
     private static TargetRow mapTarget(ResultSet rs, int rowNum) throws SQLException {
+        long timeoutMs = rs.getLong("timeout_ms");
+        Long configuredTimeout = rs.wasNull() ? null : timeoutMs;
         return new TargetRow(rs.getString("id"), rs.getString("name"), rs.getString("kind"),
                 rs.getInt("enabled") == 1, rs.getString("workdir"),
-                (Long) rs.getObject("timeout_ms"), (Integer) rs.getObject("max_output"),
+                configuredTimeout, (Integer) rs.getObject("max_output"),
                 rs.getString("allow_patterns"), rs.getString("deny_patterns"),
                 rs.getString("docker_host"), rs.getString("image"), rs.getString("container"),
                 rs.getString("ssh_host"), (Integer) rs.getObject("ssh_port"),
                 rs.getString("ssh_user"), rs.getString("ssh_auth"), rs.getString("ssh_password"),
                 rs.getString("ssh_private_key"), rs.getString("ssh_passphrase"),
                 rs.getString("host_key_check"), rs.getString("note"), rs.getString("host_workdir"),
+                rs.getString("write_paths"),
                 rs.getLong("created_at"), rs.getLong("updated_at"));
     }
 

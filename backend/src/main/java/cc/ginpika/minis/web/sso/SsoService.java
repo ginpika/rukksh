@@ -37,7 +37,11 @@ public class SsoService {
     private final SsoProps props;
     private final ObjectMapper objectMapper;
     private final UserStore userStore;
-    private final OkHttpClient client = new OkHttpClient();
+    private final OkHttpClient client = new OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .callTimeout(Duration.ofSeconds(10))
+            .build();
     private final Map<String, Cached> cache = new ConcurrentHashMap<>();
 
     public SsoService(SsoProps props, ObjectMapper objectMapper, UserStore userStore) {
@@ -52,13 +56,13 @@ public class SsoService {
     }
 
     /** 校验登录态：优先缓存，miss 时调 hostid /api/sso/session */
-    public Optional<SsoUser> session(String token) {
+    public Optional<SsoUser> session(String token) throws IOException {
         Cached hit = cache.get(token);
         if (hit != null) {
             if (hit.expiresAt > System.currentTimeMillis()) {
                 return Optional.of(hit.user);
             }
-            cache.remove(token);
+            cache.remove(token, hit);
         }
         return remoteSession(token);
     }
@@ -70,7 +74,7 @@ public class SsoService {
         }
         cache.remove(token);
         Request request = new Request.Builder()
-                .url(props.getServerUrl() + "/api/sso/logout")
+                .url(serverUrl() + "/api/sso/logout")
                 .post(okhttp3.RequestBody.create(new byte[0], null))
                 .header("Cookie", cookie(token))
                 .build();
@@ -87,30 +91,41 @@ public class SsoService {
             return "";
         }
         String encoded = URLEncoder.encode(currentUrl, StandardCharsets.UTF_8);
-        return props.getServerUrl() + "/sso/login?redirect=" + encoded;
+        return serverUrl() + "/sso/login?redirect=" + encoded;
     }
 
-    private Optional<SsoUser> remoteSession(String token) {
+    private String serverUrl() {
+        return props.getServerUrl().strip().replaceFirst("/+$", "");
+    }
+
+    private Optional<SsoUser> remoteSession(String token) throws IOException {
         Request request = new Request.Builder()
-                .url(props.getServerUrl() + "/api/sso/session")
+                .url(serverUrl() + "/api/sso/session")
+                .header("Accept", "application/json")
+                .header("Cache-Control", "no-cache")
                 .header("Cookie", cookie(token))
                 .get()
                 .build();
         try (Response response = execute(request)) {
-            if (response.body() == null) {
-                return Optional.empty();
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("HostID session endpoint returned HTTP " + response.code());
             }
             JsonNode root = objectMapper.readTree(response.body().string());
-            if (!root.path("authenticated").asBoolean(false)) {
+            if (root == null || !root.path("authenticated").isBoolean()) {
+                throw new IOException("HostID session response is missing authenticated");
+            }
+            if (!root.path("authenticated").booleanValue()) {
                 return Optional.empty();
             }
-            SsoUser user = SsoUser.from(root.path("user"));
+            JsonNode profile = root.path("user");
+            if (!profile.path("id").isTextual() || profile.path("id").textValue().isBlank()
+                    || !profile.path("username").isTextual() || profile.path("username").textValue().isBlank()) {
+                throw new IOException("HostID session response is missing user id or username");
+            }
+            SsoUser user = SsoUser.from(profile);
             userStore.upsert(user);
             cache.put(token, new Cached(user, System.currentTimeMillis() + ttlMillis()));
             return Optional.of(user);
-        } catch (IOException e) {
-            log.warn("hostid session check failed: {}", e.getMessage());
-            return Optional.empty();
         }
     }
 

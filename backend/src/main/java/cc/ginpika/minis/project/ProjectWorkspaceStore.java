@@ -15,7 +15,10 @@ public class ProjectWorkspaceStore {
     public List<Binding> list() {
         return jdbc.query("SELECT project_id,repository_id FROM project_workspace", (r,n) -> new Binding(r.getString(1),r.getString(2)));
     }
-    public Optional<Binding> find(String project) { return list().stream().filter(b -> b.projectId().equals(project)).findFirst(); }
+    public Optional<Binding> find(String project) {
+        return jdbc.query("SELECT project_id,repository_id FROM project_workspace WHERE project_id=?",
+                (r, n) -> new Binding(r.getString(1), r.getString(2)), project).stream().findFirst();
+    }
     public void bind(String project, String repository) {
         jdbc.update("INSERT INTO project_workspace(project_id,repository_id) VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET repository_id=excluded.repository_id", project, repository);
     }

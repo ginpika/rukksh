@@ -15,6 +15,7 @@ import cc.ginpika.minis.ai.core.AgentScope;
 import cc.ginpika.minis.ai.core.MemoryExec;
 import cc.ginpika.minis.ai.core.MemoryIdentity;
 import cc.ginpika.minis.ai.core.MemorySurface;
+import cc.ginpika.minis.ai.core.UserScope;
 import cc.ginpika.minis.ai.memory.MemorySnapshot;
 import cc.ginpika.minis.ai.memory.MemorySnapshotBuilder;
 import cc.ginpika.minis.ai.memory.recall.MemoryItemRecall;
@@ -24,6 +25,7 @@ import cc.ginpika.minis.agent.roundtable.RoundtableSessionStore;
 import cc.ginpika.minis.agent.roundtable.RoundtableTopicEventStore;
 import cc.ginpika.minis.agent.roundtable.RoundtableTopicStore;
 import cc.ginpika.minis.agent.roundtable.RoundtableTopicStore.TopicRow;
+import cc.ginpika.minis.ai.core.tool.ToolDomain;
 import cc.ginpika.minis.ai.core.tool.ToolManager;
 import cc.ginpika.minis.ai.core.tool.ToolSurface;
 import cc.ginpika.minis.ai.core.tool.agentmessage.ListAgentsTool;
@@ -208,6 +210,7 @@ public class RoundtableChatService implements ChatExecution {
     private final CollaborationWorkStatus workStatus;
     private final CollaborationQuality quality;
     private final ThreadLocal<String> conversationInput = new ThreadLocal<>();
+    private final ThreadLocal<String> soloUserInput = new ThreadLocal<>();
     private final Set<String> conversing = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public boolean isConversing(String session, String peer) { return conversing.contains(session + "|" + peer); }
@@ -590,6 +593,7 @@ public class RoundtableChatService implements ChatExecution {
         speakSession.set(sessionId);
         speakPeer.set(peerId);
         solo.set(Boolean.TRUE);
+        soloUserInput.set(input);
         speakReplyId.remove();
         speakContext.remove();
         speakBaseRevision.set(revisions.current(sessionId));
@@ -601,6 +605,7 @@ public class RoundtableChatService implements ChatExecution {
             speakSession.remove();
             speakPeer.remove();
             solo.remove();
+            soloUserInput.remove();
             speakReplyId.remove();
             speakContext.remove();
             speakBaseRevision.remove();
@@ -1043,7 +1048,10 @@ public class RoundtableChatService implements ChatExecution {
         if (TerminalService.handles(name)) {
             return terminalTool(call);
         }
-        String result=runner.runTool(call, batchRunId, hubId);
+        String result = isSolo() && soloUserInput.get() != null
+                && tools.find(name).filter(tool -> tool.domain() == ToolDomain.WORK).isPresent()
+                ? runner.runDirectWorkTool(call, soloUserInput.get())
+                : runner.runTool(call, batchRunId, hubId);
         checkCurrentSpeech();
         if(workTodo.get()!=null && "coding_task".equals(name)) {
             try {
@@ -1246,6 +1254,10 @@ public class RoundtableChatService implements ChatExecution {
             }
         }
         append(out, seen, chatTools);
+        String user = UserScope.get();
+        if (isSolo() && soloUserInput.get() != null && user != null && !user.isBlank()) {
+            append(out, seen, tools.toolsOfDomains(Set.of(ToolDomain.WORK), ToolSurface.CHAT));
+        }
         append(out, seen, tools.grantedToolsOf(canSendAgentMessage
                 ? List.of(ListAgentsTool.NAME, ReadAgentMessageTool.NAME, SendAgentMessageTool.NAME)
                 : List.of(ListAgentsTool.NAME, ReadAgentMessageTool.NAME), ToolSurface.CHAT));

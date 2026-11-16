@@ -612,7 +612,7 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
                       <span className="ad-count">{workspaceOptions.length} 个</span>
                     </div>
                     {workspaceOptions.length === 0 ? (
-                      <p className="ad-empty">还没有工作空间。先到「工作空间」页添加一个（docker 容器或 SSH 服务器）。</p>
+                      <p className="ad-empty">还没有工作空间。先到「工作空间」页添加一个运行环境。</p>
                     ) : (
                       <div className="ad-grid">
                         {workspaceOptions.map((target) => (
@@ -622,7 +622,7 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
                             locked={coreAgent}
                             lockedReason="系统主控自动拥有全部工作空间，无需绑定"
                             title={target.name}
-                            badge={target.kind}
+                            badge={target.kind === 'local' ? '本机' : target.kind}
                             description={target.enabled ? undefined : '未启用'}
                             onToggle={() => toggleTerminal(target.id)}
                           />

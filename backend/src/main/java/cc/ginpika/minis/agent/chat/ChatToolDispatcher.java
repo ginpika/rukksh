@@ -5,6 +5,11 @@ import cc.ginpika.minis.ai.computer.terminal.TerminalService;
 import cc.ginpika.minis.agent.member.AgentDirectory;
 import cc.ginpika.minis.agent.peer.AgentMessageService;
 import cc.ginpika.minis.ai.core.AgentScope;
+import cc.ginpika.minis.ai.core.UserScope;
+import cc.ginpika.minis.ai.core.tool.ToolDomain;
+import cc.ginpika.minis.ai.core.tool.ToolManager;
+import cc.ginpika.minis.ai.core.tool.ToolRisk;
+import cc.ginpika.minis.ai.core.tool.ToolSurface;
 import cc.ginpika.minis.ai.core.tool.ToolValidator;
 import cc.ginpika.minis.ai.core.tool.chat.RequestUserInputTool;
 import cc.ginpika.minis.ai.core.tool.memory.ManageProjectTool;
@@ -14,11 +19,15 @@ import cc.ginpika.minis.ai.core.tool.subagent.DelegateSubagentTool;
 import cc.ginpika.minis.ai.core.tool.heartbeat.DeletePlanTool;
 import cc.ginpika.minis.ai.core.tool.subagent.ReadSubagentRunTool;
 import cc.ginpika.minis.ai.core.tool.heartbeat.UpdatePlanTool;
+import cc.ginpika.minis.todo.PersonalTodoTools;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Set;
+import java.util.function.Predicate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /** 单聊工具路由：先校验参数，再交给相应能力；授权仍由能力域负责。 */
@@ -35,10 +44,20 @@ public class ChatToolDispatcher {
     private cc.ginpika.minis.coding.CodingFacade coding;
     private cc.ginpika.minis.ai.computer.integration.ComputerTools computer;
     private AgentMessageService agentMessages;
+    private ProjectTools workProjects;
+    private PersonalTodoTools personalTodos;
+    private ToolManager workToolDefinitions;
 
     @Autowired
     public void setAgentMessages(AgentMessageService agentMessages) {
         this.agentMessages = agentMessages;
+    }
+
+    @Autowired
+    public void setWorkTools(@Lazy ProjectTools workProjects, PersonalTodoTools personalTodos, ToolManager definitions) {
+        this.workProjects = workProjects;
+        this.personalTodos = personalTodos;
+        this.workToolDefinitions = definitions;
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -77,6 +96,9 @@ public class ChatToolDispatcher {
 
     String runTool(JsonNode call, String batchRunId, String hubId, boolean scoped, String actorId) {
         String name = call.path("function").path("name").asText("");
+        if (handlesWorkTool(name)) {
+            return "项目与个人待办工具仅在已认证的用户直接对话中可用。";
+        }
         /* 校验节点（STEP 4）：写入 / 执行类工具落地前过一道参数自检（只读放行），拒了不落执行 */
         String invalid = validator.validate(name,
                 call.path("function").path("arguments").asText(""));
@@ -139,5 +161,40 @@ public class ChatToolDispatcher {
             return terminal.run(call, TerminalService.SOURCE_CHAT).content();
         }
         return toolbox.run(call, "chat").content();
+    }
+
+    static boolean handlesWorkTool(String name) {
+        return ProjectTools.handles(name) || PersonalTodoTools.handles(name);
+    }
+
+    String runWorkTool(JsonNode call, Predicate<String> userRequested) {
+        String user = UserScope.get();
+        if (user == null || user.isBlank()) return "当前执行缺少已认证用户身份。";
+        JsonNode function = call.path("function");
+        String name = function.path("name").asText("");
+        var definition = workToolDefinitions == null ? null : workToolDefinitions.find(name)
+                .filter(tool -> tool.domain() == ToolDomain.WORK && tool.available()).orElse(null);
+        if (definition == null || !definition.surfaces().contains(ToolSurface.CHAT)
+                || !handlesWorkTool(name)) return "当前工具不可用。";
+        String raw = function.path("arguments").asText("");
+        JsonNode args;
+        try {
+            args = om.readTree(raw);
+        } catch (JsonProcessingException error) {
+            return "工具参数必须是有效的 JSON 对象。";
+        }
+        if (args == null || !args.isObject()) return "工具参数必须是有效的 JSON 对象。";
+        if (definition.risk() != ToolRisk.READ) {
+            String basis = args.path("basis").textValue();
+            if (basis == null || basis.isBlank() || !userRequested.test(basis)) {
+                return "请在 basis 逐字引用本轮用户明确要求此项写入的原文。操作尚未执行。";
+            }
+            String invalid = validator.validate(name, raw);
+            if (invalid != null) return invalid;
+        }
+        if (ProjectTools.handles(name)) {
+            return workProjects == null ? "项目工具未就绪。" : workProjects.run(name, args);
+        }
+        return personalTodos == null ? "个人待办工具未就绪。" : personalTodos.execute(name, args);
     }
 }

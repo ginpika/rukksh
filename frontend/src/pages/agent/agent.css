@@ -80,6 +80,8 @@
 .sl-chat__account .menu-pop { max-height: min(430px, 75dvh); overflow: auto; }
 
 .sl-chat__main { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: var(--sl-bg); }
+/* 初始焦点落在对话主区域，避免浏览器给整个布局画焦点描边。 */
+.sl-chat__main:focus { outline: none; }
 .sl-chat__header { position: absolute; z-index: 10; inset: 0 0 auto; isolation: isolate; display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr); align-items: center; gap: 12px; min-height: var(--sl-chat-header-height); padding: 12px 30px; }
 /* Only the background fades; the title and controls retain their full opacity. */
 .sl-chat__header::before {
@@ -201,7 +203,8 @@
 .sl-chat__suggestions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 19px; }
 .sl-chat__suggestions button { display: flex; align-items: center; gap: 7px; padding: 8px 12px; border: 1px solid var(--sl-line); border-radius: 8px; background: transparent; color: var(--sl-fg-2); font-size: 12px; transition: color 130ms ease, border-color 130ms ease, background 130ms ease; }
 .sl-chat__suggestions button svg { color: var(--sl-muted); }
-.sl-chat__suggestions button:hover { border-color: var(--sl-line-strong); background: var(--sl-side); color: var(--sl-fg); }
+.sl-chat__suggestions button:not(:disabled):hover { border-color: var(--sl-line-strong); background: var(--sl-side); color: var(--sl-fg); }
+.sl-chat__suggestions button:disabled { opacity: .55; }
 .sl-chat__toast { position: absolute; z-index: 30; bottom: 150px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; max-width: calc(100% - 32px); width: max-content; padding: 11px 14px; border: 1px solid var(--sl-line); border-radius: 10px; background: var(--sl-panel); color: var(--sl-fg); font-size: 13px; box-shadow: 0 4px 20px #00000012; }
 .sl-chat__toast button { display: flex; border: 0; padding: 3px; background: transparent; color: var(--sl-muted); }
 .sl-chat__scrim { display: none; }
@@ -284,7 +287,9 @@
 .sl-chat__historypanel-head { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 0 0 7px 8px; }
 .sl-chat__historypanel-head > span { min-width: 0; overflow: hidden; color: var(--sl-fg-2); font-size: 12px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .sl-chat__historypanel-search { display: flex; flex: none; align-items: center; gap: 8px; min-height: 36px; margin-bottom: 9px; padding: 6px 10px; border: 1px solid var(--sl-line); border-radius: 7px; color: var(--sl-muted); }
+.sl-chat__historypanel-search:focus-within { border-color: var(--sl-focus-line); }
 .sl-chat__historypanel-search input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--sl-fg); font-size: 13px; }
+.slime-surface .sl-chat__historypanel-search input:focus { outline: none; box-shadow: none; }
 .sl-chat__historypanel-new { display: flex; flex: none; align-items: center; gap: 8px; width: 100%; padding: 9px 11px; border: 0; border-radius: 7px; background: var(--sl-accent-soft); color: var(--sl-accent); font-size: 12px; text-align: left; }
 .sl-chat__historypanel-new:hover { background: var(--sl-hover); }
 .sl-chat__historypanel-list { min-height: 0; overflow-y: auto; margin-top: 13px; overscroll-behavior-y: contain; }
@@ -298,4 +303,79 @@
   .sl-chat__historypanel-search { min-height: 44px; }
   .sl-chat__historypanel-search input { font-size: 16px; }
   .sl-chat__historypanel-new { min-height: 42px; font-size: 13px; }
+}
+
+/* 手机端点按气泡后的全屏阅读层：铺满视口、独立滚动，只留收起 / 标题 / 复制三个锚点。 */
+.sl-chat__reader {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--sl-bg);
+  color: var(--sl-fg);
+  animation: sl-reader-in 180ms ease-out;
+}
+.sl-chat__reader button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.sl-chat__reader-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: max(56px, calc(env(safe-area-inset-top, 0px) + 48px));
+  padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+  border-bottom: 1px solid var(--sl-line);
+  background: color-mix(in srgb, var(--sl-bg) 92%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.sl-chat__reader-head .sl-chat__icon { width: 40px; height: 40px; }
+.sl-chat__reader-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--sl-fg-2);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sl-chat__reader-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.sl-chat__reader-body {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 22px max(32px, calc(env(safe-area-inset-bottom, 0px) + 24px));
+  color: var(--sl-fg);
+  font-size: 17px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+.sl-chat__reader-body.is-user { padding-top: 30px; }
+.sl-chat__reader-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: inherit; line-height: inherit; }
+.sl-chat__reader-markdown > :first-child { margin-top: 0; }
+.sl-chat__reader-markdown pre { max-width: 100%; margin: 14px 0; padding: 14px 16px; overflow-x: auto; border: 1px solid var(--sl-line); border-radius: 9px; background: var(--sl-side); font-size: 14px; line-height: 1.7; }
+.sl-chat__reader-markdown table { display: block; max-width: 100%; overflow-x: auto; }
+.sl-chat__reader-markdown img { max-width: 100%; height: auto; }
+/* 手机端气泡本身就是全屏阅读的热区：点按有轻微反馈，且不阻断长按选字。 */
+.sl-chat__bubble.is-expandable, .sl-chat__answer.is-expandable { cursor: zoom-in; touch-action: manipulation; transition: opacity 120ms ease; }
+.sl-chat__bubble.is-expandable:active, .sl-chat__answer.is-expandable:active { opacity: .82; }
+@keyframes sl-reader-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-chat__reader { animation: none; }
 }

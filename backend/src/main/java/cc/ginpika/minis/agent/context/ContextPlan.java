@@ -580,6 +580,9 @@ public final class ContextPlan {
     }
 
     private static long estimateNode(JsonNode node) {
+        if ("image".equals(node.path("type").asText()) && node.path("source").isObject()) {
+            return 4096 + 12;
+        }
         if ("image_url".equals(node.path("type").asText())) {
             return ToolOutput.estimateTokens(node) + 12;
         }

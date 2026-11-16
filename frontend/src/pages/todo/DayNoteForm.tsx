@@ -17,8 +17,8 @@ export default function DayNoteForm({ note, busy, onSave }: { note: DayNote; bus
     catch (error) { setError(todoError(error)) }
   }
   return <form className="todo-day-note" onSubmit={submit}>
-    <label><span>{base.day === note.day ? '给这一天留一句话' : `给 ${base.day} 留一句话`}</span><textarea value={body} disabled={busy} maxLength={4000} rows={3} onChange={e => { setDraft({ base, body: e.target.value }); setSaved(false) }} placeholder="今天有什么值得记住？也可以留白。" /></label>
-    <div className="todo-actions"><Button size="sm" type="submit" disabled={busy || !dirty}>保存回顾</Button><small role="status">{saved ? '已保存' : dirty ? `尚未保存 · ${base.day}` : note.day}</small></div>
-    {error && <div className="todo-error" role="alert"><p>{error}</p><Button size="sm" onClick={() => { setDraft({ base: note, body: note.body }); setError('') }}>读取最新回顾，舍弃当前修改</Button></div>}
+    <label><span>{base.day === note.day ? '每日记录' : `${base.day} 的记录`}</span><textarea value={body} disabled={busy} maxLength={4000} rows={3} onChange={e => { setDraft({ base, body: e.target.value }); setSaved(false) }} placeholder="添加记录…" /></label>
+    <div className="todo-actions"><Button size="sm" type="submit" disabled={busy || !dirty}>保存记录</Button><small role="status">{saved ? '已保存' : dirty ? `尚未保存 · ${base.day}` : note.day}</small></div>
+    {error && <div className="todo-error" role="alert"><p>{error}</p><Button size="sm" onClick={() => { setDraft({ base: note, body: note.body }); setError('') }}>放弃修改并重新读取</Button></div>}
   </form>
 }

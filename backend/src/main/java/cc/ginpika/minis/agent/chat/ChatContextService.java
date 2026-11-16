@@ -9,6 +9,8 @@ import cc.ginpika.minis.agent.member.AgentDirectory;
 import cc.ginpika.minis.agent.member.AgentPromptService;
 import cc.ginpika.minis.ai.core.AgentScope;
 import cc.ginpika.minis.ai.core.MemoryIdentity;
+import cc.ginpika.minis.ai.core.UserScope;
+import cc.ginpika.minis.ai.core.tool.ToolDomain;
 import cc.ginpika.minis.ai.core.tool.ToolManager;
 import cc.ginpika.minis.ai.core.tool.ToolSurface;
 import cc.ginpika.minis.ai.core.tool.chat.RequestTodoCompletionTool;
@@ -16,6 +18,7 @@ import cc.ginpika.minis.agent.chat.turn.History;
 import cc.ginpika.minis.agent.chat.turn.Turn;
 import cc.ginpika.minis.agent.chat.turn.TurnStore;
 import cc.ginpika.minis.config.ContextProps;
+import cc.ginpika.minis.config.ModelApiFormat;
 import cc.ginpika.minis.config.ModelTarget;
 import cc.ginpika.minis.config.SettingsService;
 import cc.ginpika.minis.project.ProjectStore;
@@ -30,6 +33,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -213,9 +217,13 @@ public class ChatContextService {
                     bounds.scopeRevision(), visible.size(), bounds.maxTurns(), bounds.tokenCap(),
                     stage != null, todoApproval);
         }
+        int anthropicOutput = target.apiFormat() == ModelApiFormat.ANTHROPIC_MESSAGES
+                ? Objects.requireNonNullElse(target.maxOutputTokens(), ModelTarget.DEFAULT_ANTHROPIC_MAX_OUTPUT_TOKENS)
+                : 0;
+        int outputReserve = Math.max(contextProps.getReserveOutputTokens(), anthropicOutput);
         // The approval targets a numbered item in the same Agent-owned list seen in the prompt.
         return AgentScope.run(todoApproval ? agentId : null, () -> context.plan(request, contextWindow,
-                contextProps.getReserveOutputTokens(), currentUserId, visible, stage, extras, bounds));
+                outputReserve, currentUserId, visible, stage, extras, bounds));
     }
 
     /** R1：任务段的临时角色与确认约束——必带片段，仅在本任务段内生效，不改动全局 Agent 提示词。 */
@@ -281,6 +289,14 @@ public class ChatContextService {
            就没了），也会让提示前缀缓存永远命不中。执行权仍由各工具自己的授权把关
            （如终端的目标启用 / 绑定名单）。 */
         ArrayNode toolSchemas = tools.toolsOf(ToolSurface.CHAT);
+        String user = UserScope.get();
+        if (toolSchemas != null && (user == null || user.isBlank())) {
+            toolSchemas = toolSchemas.deepCopy();
+            for (int i = toolSchemas.size() - 1; i >= 0; i--) {
+                String name = toolSchemas.get(i).path("function").path("name").asText();
+                if (tools.find(name).filter(tool -> tool.domain() == ToolDomain.WORK).isPresent()) toolSchemas.remove(i);
+            }
+        }
         if (plannedQuery != null) {
             toolSchemas = toolSchemas == null ? om.createArrayNode() : toolSchemas.deepCopy();
             toolSchemas.add(ChatContextSources.schema(om));

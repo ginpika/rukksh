@@ -3,11 +3,10 @@ package cc.ginpika.minis.ai.computer.terminal;
 import cc.ginpika.minis.ai.computer.terminal.store.TerminalStore;
 
 /**
- * 一台「可执行环境」的执行契约——命令行终端模块两套实现的共同出口。
+ * 一台「可执行环境」的执行契约。
  *
- * <p>本机 docker 容器（Engine API）与远程服务器（SSH）在协议上天差地别，但对模型必须是同一件事：
- * 一段命令进去，退出码与两路输出出来。差异全部收在各自的实现里（{@code DockerExecTarget} /
- * {@code SshExecTarget}），于是模型侧只有一个工具（{@code run_command}），
+ * <p>Docker 容器、SSH 服务器和后端本机环境共用同一个模型工具（{@code run_command}）。
+ * 各实现接收命令并返回退出码与两路输出，
  * 换环境只是换 target 参数——与主流 agent 把「在哪执行」作为工具参数而不是工具的写法一致。
  *
  * <p>由 {@link TerminalService} 按 kind 选用：实现类以 {@link #kind()} 注册自己，
@@ -19,7 +18,7 @@ import cc.ginpika.minis.ai.computer.terminal.store.TerminalStore;
  */
 public interface ExecTarget {
 
-    /** 实现种类：与 {@code term_target.kind} 取值一致（docker | ssh） */
+    /** 实现种类：与 {@code term_target.kind} 取值一致（docker | ssh | local） */
     String kind();
 
     /** 在目标环境里执行一条命令（调用方已完成开关、白/黑名单、超时等护栏判定） */
@@ -42,8 +41,11 @@ public interface ExecTarget {
     /** 未拿到退出码时的占位值（超时被杀 / 通道异常）：与真实退出码区分开 */
     int NO_EXIT_CODE = -1;
 
-    /** 单次执行的可选覆盖项（工作目录、超时、输出上限），来自目标的配置 */
-    record ExecOptions(String workdir, long timeoutMs, int maxOutputChars) {
+    /** 工作目录、超时、输出上限，以及本机沙箱是否只读。 */
+    record ExecOptions(String workdir, long timeoutMs, int maxOutputChars, boolean readOnly) {
+        public ExecOptions(String workdir, long timeoutMs, int maxOutputChars) {
+            this(workdir, timeoutMs, maxOutputChars, false);
+        }
     }
 
     /** 一次执行的结果；{@code timedOut} 与 {@code truncated} 都要如实回给模型，别让它以为看到的是全部 */

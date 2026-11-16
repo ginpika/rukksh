@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { AppIcon } from '../components/AppIcon'
 import { ModelBrandIcon } from '../components/ModelBrandIcon'
 import {
   createModel,
@@ -15,6 +16,7 @@ import {
   testRerank,
   updateModel,
   type EmbeddingView,
+  type ModelApiFormat,
   type ModelRequest,
   type ModelView,
   type RerankView,
@@ -27,13 +29,33 @@ import DeepSeekWebPanel from '../components/DeepSeekWebPanel'
 import DeepSeekBalance from '../components/DeepSeekBalance'
 import { isOfficialDeepSeek } from '../api/deepseekBalance'
 import SettingsDirectory from '../components/SettingsDirectory'
+import { PortalAppearanceContext } from '../components/portalAppearance'
 import Toast from '../components/Toast'
 import { btnDanger, btnPrimary, btnQuiet, miniBtn } from '../components/ui'
 import { ModeBtn, Select } from '../components/formKit'
-import { usePageKit } from '../kit'
+import { PageKitProvider, usePageKit } from '../kit'
 import { DraftNotice } from '../components/DraftNotice'
 import { LoadState } from '../components/LoadState'
 import { resetWindowStates, useDraftState, useRememberedState } from '../components/windowState'
+import { settingsKit } from './settings/SettingsKit'
+import './settings/settings.css'
+
+const SETTINGS_SECTIONS = [
+  { id: 'settings-models', text: '大模型' },
+  { id: 'settings-embedding', text: 'Embedding' },
+  { id: 'settings-rerank', text: 'Rerank' },
+  { id: 'settings-deepseek-web', text: 'DeepSeek Search' },
+  { id: 'settings-tts', text: 'TTS 语音' },
+  { id: 'settings-comfyui', text: 'ComfyUI 绘图' },
+  { id: 'settings-danger', text: '危险操作' },
+]
+
+const OPENAI_FORMAT: ModelApiFormat = 'openai-chat-completions'
+const ANTHROPIC_FORMAT: ModelApiFormat = 'anthropic-messages'
+const MODEL_FORMAT_OPTIONS = [
+  { value: OPENAI_FORMAT, label: 'OpenAI Chat Completions' },
+  { value: ANTHROPIC_FORMAT, label: 'Anthropic Messages' },
+]
 
 /** Embedding 表单草稿（可编辑态） */
 type EmbDraft = {
@@ -57,6 +79,7 @@ function draftFromEmbedding(e: EmbeddingView): EmbDraft {
 /** Rerank 表单草稿（可编辑态）；mode=off 表示关闭精排 */
 type RnkDraft = {
   mode: 'llm' | 'custom' | 'off'
+  resumeMode?: EmbDraft['mode']
   llmModelId: string
   baseUrl: string
   apiKey: string
@@ -64,13 +87,27 @@ type RnkDraft = {
 }
 
 function draftFromRerank(r: RerankView): RnkDraft {
+  const resumeMode: EmbDraft['mode'] = r.baseUrl || r.apiKey ? 'custom' : 'llm'
   return {
     mode: r.mode,
+    ...(r.mode === 'off' && { resumeMode }),
     llmModelId: r.llmModelId ?? 'env',
     baseUrl: r.baseUrl ?? '',
     apiKey: r.apiKey ?? '',
     model: r.model ?? '',
   }
+}
+
+function rerankEndpointMode(draft: RnkDraft): EmbDraft['mode'] {
+  return draft.mode === 'off'
+    ? draft.resumeMode ?? (draft.baseUrl || draft.apiKey ? 'custom' : 'llm')
+    : draft.mode
+}
+
+function toggleRerank(draft: RnkDraft): RnkDraft {
+  if (draft.mode !== 'off') return { ...draft, mode: 'off', resumeMode: draft.mode }
+  const { resumeMode: _, ...fields } = draft
+  return { ...fields, mode: rerankEndpointMode(draft) }
 }
 
 /** api-key 脱敏展示：仅保留头尾少量字符 */
@@ -89,25 +126,38 @@ function ctxLabel(n: number | null | undefined): string | null {
   return `${+k.toFixed(k >= 100 ? 0 : 1)}K`
 }
 
-/** 添加 / 编辑模型弹窗（OpenAI Compatible API 端点） */
+function draftFromModel(initial: ModelView | null) {
+  const windowTokens = initial?.contextWindow
+  return {
+    name: initial?.name ?? '',
+    baseUrl: initial?.baseUrl ?? '',
+    apiKey: initial?.apiKey ?? '',
+    model: initial?.model ?? '',
+    apiFormat: initial?.apiFormat ?? OPENAI_FORMAT,
+    contextWindow: windowTokens != null && windowTokens > 0 ? String(windowTokens) : '',
+    maxOutputTokens: initial?.maxOutputTokens != null ? String(initial.maxOutputTokens) : '',
+  }
+}
+
+/** 添加 / 编辑模型弹窗 */
 function ModelDialog({
   initial,
   busy,
+  loading,
   onClose,
   onSubmit,
 }: {
   initial: ModelView | null
   busy: boolean
+  loading: boolean
   onClose: () => void
   onSubmit: (req: ModelRequest) => Promise<boolean>
 }) {
   const kit = usePageKit()
-  const [modelDraft, setModelDraft, modelDraftState] = useDraftState(`settings:model:${initial?.id ?? 'new'}`, {
-    name: initial?.name ?? '', baseUrl: initial?.baseUrl ?? '', apiKey: initial?.apiKey ?? '', model: initial?.model ?? '',
-    contextWindow: initial?.contextWindow != null ? String(initial.contextWindow) : '',
-    maxOutputTokens: initial?.maxOutputTokens != null ? String(initial.maxOutputTokens) : '',
-  })
+  const [modelDraft, setModelDraft, modelDraftState] = useDraftState(`settings:model:${initial?.id ?? 'new'}`, () => draftFromModel(initial))
   const { name, baseUrl, apiKey, model, contextWindow } = modelDraft
+  const apiFormat = modelDraft.apiFormat ?? OPENAI_FORMAT
+  const usesAnthropic = apiFormat === ANTHROPIC_FORMAT
   const maxOutputTokens = modelDraft.maxOutputTokens ?? ''
   const initializeModelDraft = modelDraftState.initialize
   const setName = (value: string) => setModelDraft(v => ({ ...v, name: value }))
@@ -115,31 +165,33 @@ function ModelDialog({
   const setApiKey = (value: string) => setModelDraft(v => ({ ...v, apiKey: value }))
   const setModel = (value: string) => setModelDraft(v => ({ ...v, model: value }))
   const setContextWindow = (value: string) => setModelDraft(v => ({ ...v, contextWindow: value }))
-  /* 上下文窗口（token 数）：留空则由后端从模型 API 获取，取不到用默认值 */
-  /* 编辑已有模型时自动从模型 API 试取上下文窗口并回填；用户已手动改过则不覆盖 */
+  // Probe missing values as a suggestion without modifying the user's draft.
   const [probing, setProbing] = useState(false)
-  const ctxTouched = useRef(false)
-  const valid = !!(name.trim() && baseUrl.trim() && apiKey.trim() && model.trim())
+  const [detectedWindow, setDetectedWindow] = useState<number | null>(null)
+  const probeEndpoint = !usesAnthropic && initial && (initial.apiFormat ?? OPENAI_FORMAT) === OPENAI_FORMAT
+    && baseUrl === initial.baseUrl && apiKey === initial.apiKey && model === initial.model
+    ? initial : null
+  const suggestion = probeEndpoint ? detectedWindow : null
+  const detecting = !!probeEndpoint && probing
+  const win = contextWindow.trim() ? Number(contextWindow.trim()) : suggestion
+  const output = maxOutputTokens.trim() ? Number(maxOutputTokens.trim()) : null
+  const invalidWindow = win !== null && (!Number.isInteger(win) || win < 1 || win > 2_147_483_647)
+  const invalidOutput = output !== null && (!Number.isInteger(output) || output < 1 || output > 1_000_000)
+  const valid = !!(name.trim() && baseUrl.trim() && apiKey.trim() && model.trim()) && !invalidWindow && !invalidOutput
 
   useEffect(() => {
-    initializeModelDraft({
-      name: initial?.name ?? '', baseUrl: initial?.baseUrl ?? '', apiKey: initial?.apiKey ?? '', model: initial?.model ?? '',
-      contextWindow: initial?.contextWindow != null ? String(initial.contextWindow) : '',
-      maxOutputTokens: initial?.maxOutputTokens != null ? String(initial.maxOutputTokens) : '',
-    })
+    initializeModelDraft(draftFromModel(initial))
   }, [initial, initializeModelDraft])
 
   useEffect(() => {
-    if (!initial) return
-    const { baseUrl: base, apiKey: key, model: mid } = initial
+    if (!probeEndpoint || (probeEndpoint.contextWindow != null && probeEndpoint.contextWindow > 0)) return
+    const { baseUrl: base, apiKey: key, model: mid } = probeEndpoint
     if (!base.trim() || !key.trim() || !mid.trim()) return
     let alive = true
     setProbing(true)
-    fetchModelContextWindow({ baseUrl: base, apiKey: key, model: mid })
-      .then((r) => {
-        if (alive && !ctxTouched.current && r.contextWindow != null && r.contextWindow > 0) {
-          setModelDraft(current => ({ ...current, contextWindow: String(r.contextWindow) }))
-        }
+    fetchModelContextWindow({ baseUrl: base, apiKey: key, model: mid, apiFormat: OPENAI_FORMAT })
+      .then(({ contextWindow: found }) => {
+        if (alive && found != null && Number.isInteger(found) && found > 0 && found <= 2_147_483_647) setDetectedWindow(found)
       })
       .catch(() => {
         /* 取不到就保留原值 */
@@ -150,91 +202,107 @@ function ModelDialog({
     return () => {
       alive = false
     }
-  }, [initial, setModelDraft])
+  }, [probeEndpoint])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!valid || busy) return
-    const win = Number(contextWindow.trim())
-    const output = Number(maxOutputTokens.trim())
+    if (!valid || busy || loading) return
     const saved = await onSubmit({
       name: name.trim(),
       baseUrl: baseUrl.trim(),
       apiKey: apiKey.trim(),
       model: model.trim(),
-      contextWindow: contextWindow.trim() && Number.isFinite(win) && win > 0 ? win : null,
-      maxOutputTokens: maxOutputTokens.trim() && Number.isFinite(output) && output > 0 ? output : null,
+      apiFormat,
+      contextWindow: win,
+      maxOutputTokens: output,
     })
-    if (saved) modelDraftState.accept(initial ? modelDraft : { name: '', baseUrl: '', apiKey: '', model: '', contextWindow: '', maxOutputTokens: '' }, modelDraft)
+    if (saved) modelDraftState.accept(initial ? modelDraft : draftFromModel(null), modelDraft)
   }
 
   return (
     <FloatWindow title={initial ? '编辑模型' : '添加模型'} onClose={onClose} width={480}>
       <form onSubmit={submit} className="space-y-3">
         <DraftNotice dirty={modelDraftState.dirty} onDiscard={modelDraftState.discard} disabled={busy} />
-        <button type="button" className={btnQuiet()} disabled={busy} onClick={() => setModelDraft(current => ({
-          ...current, baseUrl: 'https://api.deepseek.com', name: current.name || 'DeepSeek', model: current.model || 'deepseek-flash',
-        }))}>使用 DeepSeek 官方端点</button>
-        <kit.Field label="名称" hint="用于在列表中区分，例如 GPT-4o / 本地 vLLM">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="GPT-4o"
-            autoFocus
-          />
-        </kit.Field>
-        <kit.Field label="Base URL" hint={isOfficialDeepSeek(baseUrl) ? '已识别 DeepSeek 官方端点；保存后自动查询账户余额。支持根地址或 /v1。' : 'OpenAI Compatible 接口根地址，通常以 /v1 结尾'}>
-          <input
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-            className="font-mono"
-            placeholder="https://api.openai.com/v1"
-            spellCheck={false}
-          />
-        </kit.Field>
-        <kit.Field label="API Key">
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            className="font-mono"
-            placeholder="sk-..."
-            spellCheck={false}
-            autoComplete="off"
-          />
-        </kit.Field>
-        <kit.Field label="模型名" hint="请求体 model 字段，例如 gpt-4o / deepseek-chat">
-          <input
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="font-mono"
-            placeholder="gpt-4o"
-            spellCheck={false}
-          />
-        </kit.Field>
-        <kit.Field
-          label="上下文窗口"
-          hint={
-            probing
-              ? '正在从模型 API 获取上下文窗口 …'
-              : 'token 数；留空则保存时自动从模型 API（/models）获取，取不到用默认值 262144'
-          }
-        >
-          <input
-            value={contextWindow}
-            onChange={(e) => {
-              ctxTouched.current = true
-              setContextWindow(e.target.value.replace(/[^\d]/g, ''))
-            }}
-            className="font-mono"
-            placeholder={probing ? '获取中 …' : '自动获取'}
-            inputMode="numeric"
-            spellCheck={false}
-          />
-        </kit.Field>
-        <kit.Field label="单次输出上限" hint="编码任务使用的 token 数；留空使用模型服务默认。请填写服务支持的上限，与上下文窗口和整项任务预算不同。">
-          <input aria-label="单次输出上限" value={maxOutputTokens} onChange={e => setModelDraft(current => ({ ...current, maxOutputTokens: e.target.value.replace(/[^\d]/g, '') }))} className="font-mono" placeholder="跟随模型服务" inputMode="numeric" spellCheck={false} />
-        </kit.Field>
+        <fieldset className="space-y-3" disabled={busy}>
+          <button type="button" className={btnQuiet()} disabled={busy} onClick={() => setModelDraft(current => ({
+            ...current, apiFormat: OPENAI_FORMAT, baseUrl: 'https://api.deepseek.com', name: current.name || 'DeepSeek', model: current.model || 'deepseek-flash',
+          }))}>使用 DeepSeek 官方端点</button>
+          <kit.Field label="名称" hint="用于在列表中区分，例如 GPT-4o / 本地 vLLM">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="GPT-4o"
+              autoFocus
+            />
+          </kit.Field>
+          <kit.Field label="API 格式" wrap={false}>
+            <Select
+              label="API 格式"
+              value={apiFormat}
+              onChange={value => setModelDraft(current => ({ ...current, apiFormat: value === ANTHROPIC_FORMAT ? ANTHROPIC_FORMAT : OPENAI_FORMAT }))}
+              options={MODEL_FORMAT_OPTIONS}
+              disabled={busy}
+            />
+          </kit.Field>
+          <kit.Field label="Base URL" hint={usesAnthropic
+            ? '支持 Bedrock 的 /anthropic 基础路径，也可粘贴完整的 /anthropic/v1/messages 地址。'
+            : isOfficialDeepSeek(baseUrl)
+              ? '已识别 DeepSeek 官方端点；保存后自动查询账户余额。支持根地址或 /v1。'
+              : 'OpenAI Compatible 接口根地址，通常以 /v1 结尾'}>
+            <input
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              className="font-mono"
+              placeholder={usesAnthropic ? 'https://bedrock-mantle.us-east-1.api.aws/anthropic/v1/messages' : 'https://api.openai.com/v1'}
+              spellCheck={false}
+            />
+          </kit.Field>
+          <kit.Field label="API Key" hint={usesAnthropic ? '连接 Bedrock 时填写 Amazon Bedrock API Key。' : undefined}>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="font-mono"
+              placeholder={usesAnthropic ? undefined : 'sk-...'}
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </kit.Field>
+          <kit.Field label="模型名" hint={usesAnthropic ? '使用 Bedrock 时填写 AWS 模型卡对应端点的模型 ID 或推理配置文件 ID。' : '请求体 model 字段，例如 gpt-4o / deepseek-chat'}>
+            <input
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="font-mono"
+              placeholder={usesAnthropic ? undefined : 'gpt-4o'}
+              spellCheck={false}
+            />
+          </kit.Field>
+          <kit.Field
+            label="上下文窗口"
+            hint={
+              invalidWindow
+                ? '请输入 1 至 2147483647 的整数。'
+                : usesAnthropic
+                  ? '按模型文档填写 token 数，留空使用默认值 262144。'
+                  : detecting
+                    ? '正在从模型 API 获取上下文窗口 …'
+                    : 'token 数；留空则保存时自动从模型 API（/models）获取，取不到用默认值 262144'
+            }
+          >
+            <input
+              value={contextWindow}
+              onChange={(e) => setContextWindow(e.target.value.replace(/[^\d]/g, ''))}
+              className="font-mono"
+              placeholder={usesAnthropic ? '262144' : suggestion !== null ? `自动 · ${suggestion}` : detecting ? '获取中 …' : '自动获取'}
+              aria-invalid={invalidWindow || undefined}
+              inputMode="numeric"
+              spellCheck={false}
+            />
+          </kit.Field>
+          <kit.Field label="单次输出上限" hint={invalidOutput ? '请输入 1 至 1000000 的整数。' : usesAnthropic ? '聊天和编码使用的最大输出 token 数，留空使用 8192。' : '编码任务使用的 token 数；留空使用模型服务默认。'}>
+            <input aria-label="单次输出上限" value={maxOutputTokens} onChange={e => setModelDraft(current => ({ ...current, maxOutputTokens: e.target.value.replace(/[^\d]/g, '') }))} className="font-mono" placeholder={usesAnthropic ? '8192' : '跟随模型服务'} inputMode="numeric" spellCheck={false} aria-invalid={invalidOutput || undefined} />
+          </kit.Field>
+        </fieldset>
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" className={btnQuiet('rounded-md')} onClick={onClose}>
             {modelDraftState.dirty ? '保留草稿并关闭' : '关闭'}
@@ -242,7 +310,7 @@ function ModelDialog({
           <button
             type="submit"
             className={btnPrimary('rounded-md')}
-            disabled={!valid || busy}
+            disabled={!valid || busy || loading}
           >
             {busy ? '保存中 …' : '保存'}
           </button>
@@ -310,7 +378,16 @@ function ResetKnowledgeDialog({
 }
 
 export default function Settings() {
-  const contentRef = useRef<HTMLDivElement>(null)
+  return (
+    <PageKitProvider value={settingsKit}>
+      <PortalAppearanceContext value="slime-surface sl-settings-popover">
+        <SettingsContent />
+      </PortalAppearanceContext>
+    </PageKitProvider>
+  )
+}
+
+function SettingsContent() {
   const kit = usePageKit()
   const [data, setData] = useRememberedState<SettingsView | null>('settings:data', null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
@@ -345,6 +422,7 @@ export default function Settings() {
   const testing = testingId !== null || testingRag !== null
   const [loading, setLoading] = useState(true)
   const [retry, setRetry] = useState(0)
+  const actionPending = busy || loading
   const initializeEmb = embDraft.initialize
   const initializeRnk = rnkDraft.initialize
 
@@ -386,6 +464,7 @@ export default function Settings() {
 
   /** 统一提交：成功后以后端返回的最新视图覆盖本地，并提示结果 */
   const run = async (fn: () => Promise<SettingsView>, ok: string): Promise<boolean> => {
+    if (actionPending) return false
     setBusy(true)
     try {
       setData(await fn())
@@ -498,6 +577,7 @@ export default function Settings() {
   }
 
   const saveEmb = async () => {
+    if (actionPending) return
     setBusy(true)
     try {
       const custom = emb.mode === 'custom'
@@ -518,13 +598,22 @@ export default function Settings() {
     }
   }
 
-  const embInvalid =
-    !emb.model.trim() || (emb.mode === 'custom' && (!emb.baseUrl.trim() || !emb.apiKey.trim()))
+  const modelOptions = (data?.models ?? []).map((model) => ({
+    value: model.id,
+    label: model.name || model.model || '.env',
+  }))
+  const embEndpointAvailable = modelOptions.some(option => option.value === emb.llmModelId)
+  const rnkEndpointAvailable = modelOptions.some(option => option.value === rnk.llmModelId)
+  const endpointPlaceholder = modelOptions.length ? '选择可用端点' : '暂无可复用的端点'
+  const embInvalid = !emb.model.trim() || (emb.mode === 'custom'
+    ? !emb.baseUrl.trim() || !emb.apiKey.trim()
+    : !embEndpointAvailable)
 
   const saveRnk = async () => {
+    if (actionPending) return
     setBusy(true)
     try {
-      const custom = rnk.mode === 'custom'
+      const custom = rerankEndpointMode(rnk) === 'custom'
       const v = await saveRerank({
         mode: rnk.mode,
         llmModelId: custom ? null : rnk.llmModelId,
@@ -545,12 +634,13 @@ export default function Settings() {
     }
   }
 
-  const rnkInvalid =
-    rnk.mode !== 'off' &&
-    (!rnk.model.trim() || (rnk.mode === 'custom' && (!rnk.baseUrl.trim() || !rnk.apiKey.trim())))
+  const rnkInvalid = rnk.mode !== 'off' && (!rnk.model.trim() || (rnk.mode === 'custom'
+    ? !rnk.baseUrl.trim() || !rnk.apiKey.trim()
+    : !rnkEndpointAvailable))
 
   /** 重置知识库：清空全部 chunk、图谱实体与关系，并连带清除整个记忆子系统及相关 embedding（二次确认弹窗内提交） */
   const doReset = async (deleteProjectKnowledge: boolean) => {
+    if (actionPending) return
     setBusy(true)
     try {
       const r = await resetKnowledgeBase(deleteProjectKnowledge)
@@ -574,332 +664,304 @@ export default function Settings() {
   }
 
   return (
-    <kit.Page title="设置" en="SETTINGS">
-      <Toast
-        kind={toast?.kind}
-        message={toast?.msg ?? null}
-        onClose={() => setToast(null)}
-      />
-
-      <LoadState loading={loading} error={loadErr} hasData={!!data} label="设置" onRetry={() => setRetry(v => v + 1)} />
-      <DraftNotice dirty={embDraft.dirty || rnkDraft.dirty} disabled={busy} onDiscard={() => { embDraft.discard(); rnkDraft.discard() }} />
-      {data && <details className="settings-mobile-directory"><summary>跳到设置项</summary><nav aria-label="设置目录">{[
-        ['settings-models', '大模型'], ['settings-embedding', 'Embedding'], ['settings-rerank', 'Rerank'], ['settings-deepseek-web', 'Deepseek Search'], ['settings-tts', 'TTS 语音'], ['settings-comfyui', 'ComfyUI 绘图'], ['settings-danger', '危险操作'],
-      ].map(([id, label]) => <a key={id} href={`#${id}`} onClick={event => { event.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}>{label}</a>)}</nav></details>}
-      <div className="settings-layout">
-      <div ref={contentRef} className="flex w-full min-w-0 max-w-3xl flex-col gap-6">
-
+    <div className="sl-settings">
+      {data && <SettingsDirectory items={SETTINGS_SECTIONS} />}
+      <div className="sl-settings__content">
+        <LoadState loading={loading} error={loadErr} hasData={!!data} label="设置" onRetry={() => { if (!busy) setRetry(v => v + 1) }} />
         {data && (
           <>
-            {/* ---------- 大模型 ---------- */}
-            <section id="settings-models" className="scroll-mt-6">
-            <kit.Panel title="大模型">
-              <kit.Toolbar
-                left={`${data.models.length} 个端点`}
-                right={
-                  <button
-                    type="button"
-                    className={btnPrimary()}
-                    disabled={busy}
-                    onClick={() => setModelDlg({ open: true, editing: null })}
-                  >
-                    添加模型
-                  </button>
-                }
-              />
-              <p className="mt-3 text-sm leading-relaxed text-muted">
-                OpenAI Compatible API 类型的模型端点，可配置多个；.env 传入的作为内置项不可修改。
-              </p>
-              <div className="mt-2 flex flex-col">
-                {data.models.map((m) => (
-                  <kit.Row key={m.id} className="flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <ModelBrandIcon model={m.model} size={20} />
-                        <span className="text-base font-semibold text-fg">
-                          {m.name || m.model || '.env'}
-                        </span>
-                        {m.builtin && <kit.Badge>内置</kit.Badge>}
-                        {ctxLabel(m.contextWindow) && (
-                          <kit.Badge>上下文 {ctxLabel(m.contextWindow)}</kit.Badge>
-                        )}
-                        {m.maxOutputTokens != null && m.maxOutputTokens > 0 && <kit.Badge>编码输出 {ctxLabel(m.maxOutputTokens)}</kit.Badge>}
-                        {data.defaultModelId === m.id && <kit.Badge tone="accent">默认</kit.Badge>}
+            <section id="settings-models">
+              <kit.Panel title="大模型" meta={
+                <button
+                  type="button"
+                  className={btnPrimary()}
+                  disabled={actionPending}
+                  onClick={() => setModelDlg({ open: true, editing: null })}
+                >
+                  <AppIcon name="plus" />
+                  添加模型
+                </button>
+              }>
+                <p className="text-sm leading-relaxed text-muted">
+                  支持 OpenAI Chat Completions 和 Anthropic Messages，可配置多个模型端点。.env 传入的作为内置项不可修改。
+                </p>
+                <div className="sl-settings__model-list">
+                  <p className="sl-settings__model-count">{data.models.length} 个端点</p>
+                  {data.models.map((m) => (
+                    <div key={m.id} className="sl-settings__model">
+                      <div className="sl-settings__model-info">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <ModelBrandIcon model={m.model} size={20} />
+                          <span className="text-base font-semibold text-fg">
+                            {m.name || m.model || '.env'}
+                          </span>
+                          {m.builtin && <kit.Badge>内置</kit.Badge>}
+                          {m.apiFormat === ANTHROPIC_FORMAT && <kit.Badge>Anthropic Messages</kit.Badge>}
+                          {ctxLabel(m.contextWindow) && (
+                            <kit.Badge>上下文 {ctxLabel(m.contextWindow)}</kit.Badge>
+                          )}
+                          {m.maxOutputTokens != null && m.maxOutputTokens > 0 && <kit.Badge>{m.apiFormat === ANTHROPIC_FORMAT ? '输出' : '编码输出'} {ctxLabel(m.maxOutputTokens)}</kit.Badge>}
+                          {data.defaultModelId === m.id && <kit.Badge tone="accent">默认</kit.Badge>}
+                        </div>
+                        <p className="mt-1 break-all font-mono text-xs text-faint">
+                          {m.baseUrl || '（未配置 base-url）'}
+                        </p>
+                        <p className="mt-0.5 font-mono text-xs text-hint">key {maskKey(m.apiKey)}</p>
                       </div>
-                      <p className="mt-1 break-all font-mono text-xs text-faint">
-                        {m.baseUrl || '（未配置 base-url）'}
-                      </p>
-                      <p className="mt-0.5 font-mono text-xs text-hint">key {maskKey(m.apiKey)}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <button
-                        type="button"
-                        className={miniBtn}
-                        disabled={busy || testing}
-                        onClick={() => void testModel(m)}
-                      >
-                        {testingId === m.id ? '测试中 …' : '测试'}
-                      </button>
-                      {data.defaultModelId !== m.id && (
+                      <div className="sl-settings__model-actions">
                         <button
                           type="button"
                           className={miniBtn}
-                          disabled={busy}
-                          onClick={() => setDefaultModel(m.id)}
+                          disabled={actionPending || testing}
+                          onClick={() => void testModel(m)}
                         >
-                          设为默认
+                          {testingId === m.id ? '测试中 …' : '测试'}
                         </button>
-                      )}
-                      {!m.builtin && (
-                        <>
+                        {data.defaultModelId !== m.id && (
                           <button
                             type="button"
                             className={miniBtn}
-                            disabled={busy}
-                            onClick={() => setModelDlg({ open: true, editing: m })}
+                            disabled={actionPending}
+                            onClick={() => setDefaultModel(m.id)}
                           >
-                            编辑
+                            设为默认
                           </button>
-                          <button
-                            type="button"
-                            className={miniBtn}
-                            disabled={busy}
-                            onClick={() => removeModel(m)}
-                          >
-                            删除
-                          </button>
-                        </>
-                      )}
+                        )}
+                        {!m.builtin && (
+                          <>
+                            <button
+                              type="button"
+                              className={miniBtn}
+                              disabled={actionPending}
+                              onClick={() => setModelDlg({ open: true, editing: m })}
+                            >
+                              编辑
+                            </button>
+                            <button
+                              type="button"
+                              className={btnDanger('ui-btn--sm')}
+                              disabled={actionPending}
+                              onClick={() => removeModel(m)}
+                            >
+                              删除
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      {isOfficialDeepSeek(m.baseUrl) && <div className="w-full basis-full"><DeepSeekBalance path={`/api/settings/models/${encodeURIComponent(m.id)}/balance`} revision={m} /></div>}
                     </div>
-                    {isOfficialDeepSeek(m.baseUrl) && <div className="w-full basis-full"><DeepSeekBalance path={`/api/settings/models/${encodeURIComponent(m.id)}/balance`} revision={m} /></div>}
-                  </kit.Row>
-                ))}
-              </div>
-            </kit.Panel>
-
-            {/* ---------- Embedding（与模型配置分开） ---------- */}
-            </section>
-            <section id="settings-embedding" className="scroll-mt-6">
-            <kit.Panel title="Embedding">
-              <p className="text-sm leading-relaxed text-muted">
-                向量化端点独立于大模型配置：可复用某个已配置模型的端点，或单独填写。
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <ModeBtn
-                  active={emb.mode === 'llm'}
-                  title="复用大模型端点"
-                  desc="使用所选模型的 base-url 与 api-key"
-                  onClick={() => setEmb((v) => ({ ...v, mode: 'llm' }))}
-                />
-                <ModeBtn
-                  active={emb.mode === 'custom'}
-                  title="独立端点"
-                  desc="为 Embedding 单独填写 base-url 与 api-key"
-                  onClick={() => setEmb((v) => ({ ...v, mode: 'custom' }))}
-                />
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {emb.mode === 'llm' ? (
-                  <kit.Field label="复用模型端点" wrap={false}>
-                    <Select
-                      value={emb.llmModelId}
-                      onChange={(v) => setEmb((prev) => ({ ...prev, llmModelId: v }))}
-                      options={data.models.map((m) => ({
-                        value: m.id,
-                        label: m.name || m.model || '.env',
-                      }))}
-                    />
-                  </kit.Field>
-                ) : (
-                  <>
-                    <kit.Field label="Base URL">
-                      <input
-                        value={emb.baseUrl}
-                        onChange={(e) => setEmb((v) => ({ ...v, baseUrl: e.target.value }))}
-                        className="font-mono"
-                        placeholder="https://api.openai.com/v1"
-                        spellCheck={false}
-                      />
-                    </kit.Field>
-                    <kit.Field label="API Key">
-                      <input
-                        value={emb.apiKey}
-                        onChange={(e) => setEmb((v) => ({ ...v, apiKey: e.target.value }))}
-                        className="font-mono"
-                        placeholder="sk-..."
-                        spellCheck={false}
-                        autoComplete="off"
-                      />
-                    </kit.Field>
-                  </>
-                )}
-                <kit.Field label="Embedding 模型名" hint="例如 text-embedding-3-small / bge-m3">
-                  <input
-                    value={emb.model}
-                    onChange={(e) => setEmb((v) => ({ ...v, model: e.target.value }))}
-                    className="font-mono"
-                    placeholder="text-embedding-3-small"
-                    spellCheck={false}
-                  />
-                </kit.Field>
-              </div>
-
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className={btnQuiet('rounded-md')}
-                  disabled={busy || embInvalid || testing}
-                  onClick={() => void testEmb()}
-                >
-                  {testingRag === 'emb' ? '测试中 …' : '测试'}
-                </button>
-                <button
-                  type="button"
-                  className={btnPrimary('rounded-md')}
-                  disabled={busy || embInvalid}
-                  onClick={() => void saveEmb()}
-                >
-                  {busy ? '保存中 …' : '保存'}
-                </button>
-              </div>
-            </kit.Panel>
-
-            {/* ---------- Rerank（检索精排，可整体关闭） ---------- */}
-            </section>
-            <section id="settings-rerank" className="scroll-mt-6">
-            <kit.Panel title="Rerank">
-              <p className="text-sm leading-relaxed text-muted">
-                检索召回后对「查询 + 文档」重新打分排序（cross-encoder 精排），端点独立于大模型配置。
-              </p>
-              <div className="mt-4 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-base font-semibold text-fg">启用精排</p>
-                  <p className="mt-1 text-xs leading-relaxed text-faint">
-                    关闭后检索结果保持 RRF 融合原序，不再调用精排端点。
-                  </p>
+                  ))}
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={rnk.mode !== 'off'}
-                  title="开启 / 关闭 Rerank 精排"
-                  onClick={() =>
-                    setRnk((v) => ({ ...v, mode: v.mode === 'off' ? 'llm' : 'off' }))
-                  }
-                  className="mt-0.5 shrink-0 cursor-pointer"
-                >
-                  <span
-                    className={`relative block h-[18px] w-8 rounded-full transition-colors ${
-                      rnk.mode !== 'off' ? 'bg-accent' : 'bg-fg/20'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-3.5 w-3.5 rounded-full shadow-sm transition-all ${
-                        rnk.mode !== 'off' ? 'left-4 bg-accent-fg' : 'left-0.5 bg-bg'
-                      }`}
-                    />
-                  </span>
-                </button>
-              </div>
+              </kit.Panel>
+            </section>
+            <section id="settings-embedding">
+              <kit.Panel title="Embedding">
+                <p className="text-sm leading-relaxed text-muted">
+                  向量化端点独立于大模型配置：可复用某个已配置模型的端点，或单独填写。
+                </p>
+                <div className="sl-settings__modes">
+                  <ModeBtn
+                    active={emb.mode === 'llm'}
+                    title="复用大模型端点"
+                    desc="使用所选模型的 base-url 与 api-key"
+                    onClick={() => setEmb((v) => ({ ...v, mode: 'llm' }))}
+                  />
+                  <ModeBtn
+                    active={emb.mode === 'custom'}
+                    title="独立端点"
+                    desc="为 Embedding 单独填写 base-url 与 api-key"
+                    onClick={() => setEmb((v) => ({ ...v, mode: 'custom' }))}
+                  />
+                </div>
 
-              {rnk.mode !== 'off' && (
-                <>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <ModeBtn
-                      active={rnk.mode === 'llm'}
-                      title="复用大模型端点"
-                      desc="使用所选模型的 base-url 与 api-key"
-                      onClick={() => setRnk((v) => ({ ...v, mode: 'llm' }))}
-                    />
-                    <ModeBtn
-                      active={rnk.mode === 'custom'}
-                      title="独立端点"
-                      desc="为 Rerank 单独填写 base-url 与 api-key"
-                      onClick={() => setRnk((v) => ({ ...v, mode: 'custom' }))}
-                    />
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    {rnk.mode === 'llm' ? (
-                      <kit.Field label="复用模型端点" wrap={false}>
-                        <Select
-                          value={rnk.llmModelId}
-                          onChange={(v) => setRnk((prev) => ({ ...prev, llmModelId: v }))}
-                          options={data.models.map((m) => ({
-                            value: m.id,
-                            label: m.name || m.model || '.env',
-                          }))}
+                <div className="mt-4 space-y-3">
+                  {emb.mode === 'llm' ? (
+                    <kit.Field label="复用模型端点" wrap={false}>
+                      <Select
+                        label="复用模型端点"
+                        value={emb.llmModelId}
+                        onChange={(v) => setEmb((prev) => ({ ...prev, llmModelId: v }))}
+                        options={modelOptions}
+                        placeholder={endpointPlaceholder}
+                        disabled={modelOptions.length === 0}
+                      />
+                    </kit.Field>
+                  ) : (
+                    <>
+                      <kit.Field label="Base URL">
+                        <input
+                          value={emb.baseUrl}
+                          onChange={(e) => setEmb((v) => ({ ...v, baseUrl: e.target.value }))}
+                          className="font-mono"
+                          placeholder="https://api.openai.com/v1"
+                          spellCheck={false}
                         />
                       </kit.Field>
-                    ) : (
-                      <>
-                        <kit.Field label="Base URL">
-                          <input
-                            value={rnk.baseUrl}
-                            onChange={(e) =>
-                              setRnk((v) => ({ ...v, baseUrl: e.target.value }))
-                            }
-                            className="font-mono"
-                            placeholder="https://api.openai.com/v1"
-                            spellCheck={false}
-                          />
-                        </kit.Field>
-                        <kit.Field label="API Key">
-                          <input
-                            value={rnk.apiKey}
-                            onChange={(e) => setRnk((v) => ({ ...v, apiKey: e.target.value }))}
-                            className="font-mono"
-                            placeholder="sk-..."
-                            spellCheck={false}
-                            autoComplete="off"
-                          />
-                        </kit.Field>
-                      </>
-                    )}
-                    <kit.Field label="Rerank 模型名" hint="例如 bge-reranker-v2-m3 / rerank">
-                      <input
-                        value={rnk.model}
-                        onChange={(e) => setRnk((v) => ({ ...v, model: e.target.value }))}
-                        className="font-mono"
-                        placeholder="bge-reranker-v2-m3"
-                        spellCheck={false}
-                      />
-                    </kit.Field>
-                  </div>
-                </>
-              )}
+                      <kit.Field label="API Key">
+                        <input
+                          type="password"
+                          value={emb.apiKey}
+                          onChange={(e) => setEmb((v) => ({ ...v, apiKey: e.target.value }))}
+                          className="font-mono"
+                          placeholder="sk-..."
+                          spellCheck={false}
+                          autoComplete="off"
+                        />
+                      </kit.Field>
+                    </>
+                  )}
+                  <kit.Field label="Embedding 模型名" hint="例如 text-embedding-3-small / bge-m3">
+                    <input
+                      value={emb.model}
+                      onChange={(e) => setEmb((v) => ({ ...v, model: e.target.value }))}
+                      className="font-mono"
+                      placeholder="text-embedding-3-small"
+                      spellCheck={false}
+                    />
+                  </kit.Field>
+                </div>
 
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className={btnQuiet('rounded-md')}
-                  disabled={busy || rnkInvalid || testing}
-                  onClick={() => void testRnk()}
-                >
-                  {testingRag === 'rnk' ? '测试中 …' : '测试'}
-                </button>
-                <button
-                  type="button"
-                  className={btnPrimary('rounded-md')}
-                  disabled={busy || rnkInvalid}
-                  onClick={() => void saveRnk()}
-                >
-                  {busy ? '保存中 …' : '保存'}
-                </button>
-              </div>
-            </kit.Panel>
-
-            {/* ---------- 危险操作（Danger Zone） ---------- */}
+                {embDraft.dirty && <div className="mt-4"><DraftNotice dirty disabled={busy} onDiscard={embDraft.discard} /></div>}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className={btnQuiet('rounded-md')}
+                    disabled={actionPending || embInvalid || testing}
+                    onClick={() => void testEmb()}
+                  >
+                    {testingRag === 'emb' ? '测试中 …' : '测试'}
+                  </button>
+                  <button
+                    type="button"
+                    className={btnPrimary('rounded-md')}
+                    disabled={actionPending || embInvalid}
+                    onClick={() => void saveEmb()}
+                  >
+                    {busy ? '保存中 …' : '保存'}
+                  </button>
+                </div>
+              </kit.Panel>
             </section>
-            <section id="settings-deepseek-web" className="scroll-mt-6"><DeepSeekWebPanel /></section>
-            <section id="settings-tts" className="scroll-mt-6"><TtsPanel /></section>
-            <section id="settings-comfyui" className="scroll-mt-6"><ComfyUiPanel /></section>
-            <section id="settings-danger" className="scroll-mt-6">
-            <kit.Panel title="危险操作">
-              <p className="text-sm leading-relaxed text-muted">以下操作不可撤销，请谨慎执行。</p>
-              <div className="mt-3 rounded-md border border-danger/40 bg-danger/5 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+            <section id="settings-rerank">
+              <kit.Panel title="Rerank">
+                <p className="text-sm leading-relaxed text-muted">
+                  检索召回后对「查询 + 文档」重新打分排序（cross-encoder 精排），端点独立于大模型配置。
+                </p>
+                <div className="sl-settings__toggle-row">
+                  <div>
+                    <p className="font-semibold" id="settings-rerank-toggle">启用精排</p>
+                    <p className="mt-1 text-sm text-muted" id="settings-rerank-hint">
+                      关闭后检索结果保持 RRF 融合原序，不再调用精排端点。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={rnk.mode !== 'off'}
+                    aria-labelledby="settings-rerank-toggle"
+                    aria-describedby="settings-rerank-hint"
+                    title="开启 / 关闭 Rerank 精排"
+                    onClick={() => setRnk(toggleRerank)}
+                    className="sl-settings__switch"
+                  />
+                </div>
+
+                {rnk.mode !== 'off' && (
+                  <>
+                    <div className="sl-settings__modes">
+                      <ModeBtn
+                        active={rnk.mode === 'llm'}
+                        title="复用大模型端点"
+                        desc="使用所选模型的 base-url 与 api-key"
+                        onClick={() => setRnk((v) => ({ ...v, mode: 'llm' }))}
+                      />
+                      <ModeBtn
+                        active={rnk.mode === 'custom'}
+                        title="独立端点"
+                        desc="为 Rerank 单独填写 base-url 与 api-key"
+                        onClick={() => setRnk((v) => ({ ...v, mode: 'custom' }))}
+                      />
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {rnk.mode === 'llm' ? (
+                        <kit.Field label="复用模型端点" wrap={false}>
+                          <Select
+                            label="复用模型端点"
+                            value={rnk.llmModelId}
+                            onChange={(v) => setRnk((prev) => ({ ...prev, llmModelId: v }))}
+                            options={modelOptions}
+                            placeholder={endpointPlaceholder}
+                            disabled={modelOptions.length === 0}
+                          />
+                        </kit.Field>
+                      ) : (
+                        <>
+                          <kit.Field label="Base URL">
+                            <input
+                              value={rnk.baseUrl}
+                              onChange={(e) =>
+                                setRnk((v) => ({ ...v, baseUrl: e.target.value }))
+                              }
+                              className="font-mono"
+                              placeholder="https://api.openai.com/v1"
+                              spellCheck={false}
+                            />
+                          </kit.Field>
+                          <kit.Field label="API Key">
+                            <input
+                              type="password"
+                              value={rnk.apiKey}
+                              onChange={(e) => setRnk((v) => ({ ...v, apiKey: e.target.value }))}
+                              className="font-mono"
+                              placeholder="sk-..."
+                              spellCheck={false}
+                              autoComplete="off"
+                            />
+                          </kit.Field>
+                        </>
+                      )}
+                      <kit.Field label="Rerank 模型名" hint="例如 bge-reranker-v2-m3 / rerank">
+                        <input
+                          value={rnk.model}
+                          onChange={(e) => setRnk((v) => ({ ...v, model: e.target.value }))}
+                          className="font-mono"
+                          placeholder="bge-reranker-v2-m3"
+                          spellCheck={false}
+                        />
+                      </kit.Field>
+                    </div>
+                  </>
+                )}
+
+                {rnkDraft.dirty && <div className="mt-4"><DraftNotice dirty disabled={busy} onDiscard={rnkDraft.discard} /></div>}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className={btnQuiet('rounded-md')}
+                    disabled={actionPending || rnk.mode === 'off' || rnkInvalid || testing}
+                    onClick={() => void testRnk()}
+                  >
+                    {testingRag === 'rnk' ? '测试中 …' : '测试'}
+                  </button>
+                  <button
+                    type="button"
+                    className={btnPrimary('rounded-md')}
+                    disabled={actionPending || rnkInvalid}
+                    onClick={() => void saveRnk()}
+                  >
+                    {busy ? '保存中 …' : '保存'}
+                  </button>
+                </div>
+              </kit.Panel>
+            </section>
+            <section id="settings-deepseek-web"><DeepSeekWebPanel /></section>
+            <section id="settings-tts"><TtsPanel /></section>
+            <section id="settings-comfyui"><ComfyUiPanel /></section>
+            <section id="settings-danger">
+              <kit.Panel title="危险操作">
+                <p className="text-sm leading-relaxed text-muted">以下操作不可撤销，请谨慎执行。</p>
+                <div className="sl-settings__danger-row">
                   <div className="min-w-0">
                     <p className="text-base font-semibold text-fg">重置知识库</p>
                     <p className="mt-1 text-xs leading-relaxed text-faint">
@@ -910,33 +972,29 @@ export default function Settings() {
                   <button
                     type="button"
                     className={btnDanger('rounded-md')}
-                    disabled={busy}
+                    disabled={actionPending}
                     onClick={() => setResetOpen(true)}
                   >
                     重置知识库
                   </button>
                 </div>
-              </div>
-            </kit.Panel>
+              </kit.Panel>
             </section>
           </>
         )}
       </div>
-      <SettingsDirectory contentRef={contentRef} items={[
-        { id: 'settings-models', text: '大模型' },
-        { id: 'settings-embedding', text: 'Embedding' },
-        { id: 'settings-rerank', text: 'Rerank' },
-        { id: 'settings-deepseek-web', text: 'Deepseek Search' },
-        { id: 'settings-tts', text: 'TTS 语音' },
-        { id: 'settings-comfyui', text: 'ComfyUI 绘图' },
-        { id: 'settings-danger', text: '危险操作' },
-      ]} />
-      </div>
+      <Toast
+        kind={toast?.kind}
+        message={toast?.msg ?? null}
+        onClose={() => setToast(null)}
+      />
 
       {modelDlg.open && (
         <ModelDialog
+          key={modelDlg.editing?.id ?? 'new'}
           initial={modelDlg.editing}
           busy={busy}
+          loading={loading}
           onClose={() => setModelDlg({ open: false, editing: null })}
           onSubmit={submitModel}
         />
@@ -944,11 +1002,11 @@ export default function Settings() {
 
       {resetOpen && (
         <ResetKnowledgeDialog
-          busy={busy}
+          busy={actionPending}
           onClose={() => setResetOpen(false)}
           onSubmit={deleteProjectKnowledge => void doReset(deleteProjectKnowledge)}
         />
       )}
-    </kit.Page>
+    </div>
   )
 }

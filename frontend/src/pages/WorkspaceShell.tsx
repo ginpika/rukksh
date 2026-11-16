@@ -1,74 +1,240 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { type TerminalTarget } from '../api/client'
-import { connectWorkspaceTerminal, createWorkspaceTerminal, deleteWorkspaceTerminal, listWorkspaceTerminals, terminalError, type TerminalView } from '../api/terminal'
+import type { TerminalTarget } from '../api/client'
+import {
+  connectWorkspaceTerminal,
+  createWorkspaceTerminal,
+  deleteWorkspaceTerminal,
+  listWorkspaceTerminals,
+  terminalError,
+  type TerminalView,
+} from '../api/terminal'
 import { AppIcon } from '../components/AppIcon'
 import FloatWindow from '../components/FloatWindow'
-import TerminalSession from '../components/TerminalSession'
 import { Select } from '../components/Select'
-import { Button } from '../components/ui'
+import TerminalSession from '../components/TerminalSession'
+import './workspace/workspaceTools.css'
 
 function Shell({ workspace }: { workspace: TerminalTarget }) {
-  const [terminals, setTerminals] = useState<TerminalView[]>([]), [active, setActive] = useState('')
-  const [busy, setBusy] = useState(true), [error, setError] = useState(''), [revision, setRevision] = useState(0)
+  const [sessions, setSessions] = useState<{ items: TerminalView[]; activeId: string }>({
+    items: [],
+    activeId: '',
+  })
+  const [busy, setBusy] = useState(true)
+  const [error, setError] = useState('')
+  const [revision, setRevision] = useState(0)
   const alive = useRef(false)
+
   useEffect(() => {
     let stopped = false
     alive.current = true
-    void (async () => {
+
+    async function load() {
       try {
         const items = await listWorkspaceTerminals(workspace.id)
         if (stopped) return
+
         const running = items.filter(item => item.running)
-        // Do not create a second session when reopening the floating window.
-        if (!running.length && workspace.enabled) running.push(await createWorkspaceTerminal(workspace.id))
+        // Reopening the window resumes an existing session when one is available.
+        if (!running.length && workspace.enabled) {
+          running.push(await createWorkspaceTerminal(workspace.id))
+        }
         if (stopped) return
-        setTerminals(running); setActive(previous => running.some(item => item.id === previous) ? previous : running[0]?.id || '')
+
+        setSessions(previous => ({
+          items: running,
+          activeId: running.some(item => item.id === previous.activeId)
+            ? previous.activeId
+            : running[0]?.id ?? '',
+        }))
         await Promise.all(items.filter(item => !item.running).map(item => deleteWorkspaceTerminal(workspace.id, item.id)))
-      } catch (e) { if (!stopped) setError(terminalError(e)) }
-      finally { if (!stopped) setBusy(false) }
-    })()
-    return () => { stopped = true; alive.current = false }
+      } catch (e) {
+        if (!stopped) setError(terminalError(e))
+      } finally {
+        if (!stopped) setBusy(false)
+      }
+    }
+
+    void load()
+    return () => {
+      stopped = true
+      alive.current = false
+    }
   }, [workspace.id, workspace.enabled, revision])
+
   const exited = useCallback((id: string, message?: string) => {
-    setTerminals(previous => previous.filter(item => item.id !== id)); setActive(previous => previous === id ? '' : previous)
+    setSessions(previous => ({
+      items: previous.items.filter(item => item.id !== id),
+      activeId: previous.activeId === id ? '' : previous.activeId,
+    }))
     setError(message || 'Shell 已退出，可新建会话继续。')
   }, [])
+
   const create = async () => {
     if (busy) return
-    setBusy(true); setError('')
-    try { const terminal = await createWorkspaceTerminal(workspace.id); if (alive.current) { setTerminals(items => [...items, terminal]); setActive(terminal.id) } }
-    catch (e) { if (alive.current) setError(terminalError(e)) }
-    finally { if (alive.current) setBusy(false) }
-  }
-  const remove = async () => {
-    if (busy || !active) return
-    setBusy(true); setError('')
+    setBusy(true)
+    setError('')
     try {
-      await deleteWorkspaceTerminal(workspace.id, active)
-      if (alive.current) { const remaining = terminals.filter(item => item.id !== active); setTerminals(remaining); setActive(remaining[0]?.id || '') }
-    } catch (e) { if (alive.current) setError(terminalError(e)) }
-    finally { if (alive.current) setBusy(false) }
+      const terminal = await createWorkspaceTerminal(workspace.id)
+      if (alive.current) {
+        setSessions(previous => ({ items: [...previous.items, terminal], activeId: terminal.id }))
+      }
+    } catch (e) {
+      if (alive.current) setError(terminalError(e))
+    } finally {
+      if (alive.current) setBusy(false)
+    }
   }
-  const terminal = terminals.find(item => item.id === active)
-  return <>
-    <div className="my-3 flex flex-wrap items-center gap-2">
-      <div className="min-w-28 flex-1"><Select label="Shell 会话" value={active} disabled={busy} onChange={setActive} options={[{ value: '', label: '选择会话' }, ...terminals.map(item => ({ value: item.id, label: item.title }))]} /></div>
-      <Button variant="outline" disabled={busy || !workspace.enabled} onClick={() => void create()}><AppIcon name="terminal" />新建 Shell</Button>
-      <Button variant="quiet" disabled={busy || !terminal} onClick={() => void remove()}>结束会话</Button>
-    </div>
-    {error && <div role="alert" className="mb-3 flex flex-wrap items-center gap-2 text-sm text-danger">{error}<Button size="sm" variant="quiet" disabled={busy} onClick={() => { setBusy(true); setError(''); setRevision(value => value + 1) }}>重新加载</Button></div>}
-    <div className="h-[min(52dvh,32rem)] min-h-40 overflow-hidden rounded-md border border-line">
-      {terminal ? <TerminalSession scope={workspace.id} terminal={terminal} active onExit={exited} connect={connectWorkspaceTerminal} /> : <p role="status" className="p-4 text-sm text-muted">{busy ? '正在打开 Shell…' : workspace.enabled ? '新建 Shell，即可在工作空间中输入命令。' : '工作空间未启用，请先启用。'}</p>}
-    </div>
-    <p className="mt-3 text-xs leading-5 text-muted">关闭窗口会保留会话，离线 30 分钟后自动回收；“结束会话”会关闭 Shell。交互命令不计入“最近执行”。</p>
-  </>
+
+  const remove = async () => {
+    if (busy || !sessions.activeId) return
+    const id = sessions.activeId
+    setBusy(true)
+    setError('')
+    try {
+      await deleteWorkspaceTerminal(workspace.id, id)
+      if (alive.current) {
+        setSessions(previous => {
+          const remaining = previous.items.filter(item => item.id !== id)
+          return { items: remaining, activeId: remaining[0]?.id ?? '' }
+        })
+      }
+    } catch (e) {
+      if (alive.current) setError(terminalError(e))
+    } finally {
+      if (alive.current) setBusy(false)
+    }
+  }
+
+  const terminal = sessions.items.find(item => item.id === sessions.activeId)
+  const idleMessage = workspace.enabled ? '新建 Shell，在工作空间中运行命令。' : '启用工作空间后即可打开 Shell。'
+
+  return (
+    <>
+      <div className="workspace-tools__session-tools">
+        <div className="workspace-tools__field">
+          <span>会话</span>
+          <Select
+            label="Shell 会话"
+            size="compact"
+            value={sessions.activeId}
+            disabled={busy}
+            onChange={activeId => setSessions(previous => ({ ...previous, activeId }))}
+            options={[
+              { value: '', label: '选择会话' },
+              ...sessions.items.map(item => ({ value: item.id, label: item.title })),
+            ]}
+          />
+        </div>
+        <div className="workspace-tools__actions">
+          <button
+            type="button"
+            className="workspace-tools__button"
+            disabled={busy || !workspace.enabled}
+            onClick={() => void create()}
+          >
+            <AppIcon name="plus" size={15} />
+            新建 Shell
+          </button>
+          <button
+            type="button"
+            className="workspace-tools__button workspace-tools__button--end"
+            disabled={busy || !terminal}
+            onClick={() => void remove()}
+          >
+            <AppIcon name="stop" size={14} />
+            结束会话
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div className="workspace-tools__notice" role="alert">
+          <AppIcon name="alert" size={16} />
+          <span>{error}</span>
+          <button
+            type="button"
+            className="workspace-tools__button"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true)
+              setError('')
+              setRevision(value => value + 1)
+            }}
+          >
+            重新加载
+          </button>
+        </div>
+      )}
+      <div className="workspace-tools__terminal">
+        {terminal ? (
+          <TerminalSession
+            scope={workspace.id}
+            terminal={terminal}
+            active
+            onExit={exited}
+            connect={connectWorkspaceTerminal}
+          />
+        ) : (
+          <div className="workspace-tools__state" role="status">
+            <AppIcon name={busy ? 'loading' : 'terminal'} size={22} />
+            <p>{busy ? '正在打开 Shell…' : idleMessage}</p>
+          </div>
+        )}
+      </div>
+    </>
+  )
 }
 
-export default function WorkspaceShell({ targets, initialTarget, onClose }: { targets: TerminalTarget[]; initialTarget: string; onClose: () => void }) {
+export default function WorkspaceShell({
+  targets,
+  initialTarget,
+  onClose,
+}: {
+  targets: TerminalTarget[]
+  initialTarget: string
+  onClose: () => void
+}) {
   const [targetId, setTargetId] = useState(initialTarget)
   const workspace = targets.find(item => item.id === targetId)
-  return <FloatWindow title={<span className="inline-flex items-center gap-2"><AppIcon name="terminal" />Shell{workspace ? ` · ${workspace.name}` : ''}</span>} width={960} onClose={onClose}>
-    <Select label="Shell 工作空间" value={targetId} onChange={setTargetId} options={[{ value: '', label: '选择工作空间' }, ...targets.map(item => ({ value: item.id, label: `${item.name}${item.enabled ? '' : '（未启用）'}`, disabled: !item.enabled }))]} />
-    {workspace ? <Shell key={`${workspace.id}:${workspace.enabled}`} workspace={workspace} /> : <p className="mt-4 text-sm text-muted">选择已启用的工作空间，即可打开 Shell。</p>}
-  </FloatWindow>
+
+  return (
+    <FloatWindow
+      title={
+        <span className="workspace-tools__title">
+          <AppIcon name="terminal" />
+          <span>{workspace ? `Shell · ${workspace.name}` : 'Shell'}</span>
+        </span>
+      }
+      width={920}
+      onClose={onClose}
+    >
+      <div className="workspace-tools workspace-tools--shell">
+        <div className="workspace-tools__field">
+          <span>工作空间</span>
+          <Select
+            label="Shell 工作空间"
+            size="compact"
+            value={workspace?.id ?? ''}
+            onChange={setTargetId}
+            options={[
+              { value: '', label: '选择工作空间' },
+              ...targets.map(item => ({
+                value: item.id,
+                label: item.enabled ? item.name : `${item.name}（未启用）`,
+                disabled: !item.enabled,
+              })),
+            ]}
+          />
+        </div>
+        {workspace ? (
+          <Shell key={`${workspace.id}:${workspace.enabled}`} workspace={workspace} />
+        ) : (
+          <div className="workspace-tools__state workspace-tools__state--boxed">
+            <AppIcon name="terminal" size={22} />
+            <p>选择已启用的工作空间即可打开 Shell。</p>
+          </div>
+        )}
+        <p className="workspace-tools__note">关闭窗口会保留会话，离线 30 分钟后自动回收。交互命令不计入「最近执行」。</p>
+      </div>
+    </FloatWindow>
+  )
 }

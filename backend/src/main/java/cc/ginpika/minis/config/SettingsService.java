@@ -133,13 +133,11 @@ public class SettingsService {
 
     public SettingsDtos.SettingsView createModel(SettingsDtos.ModelRequest req) {
         requireModelFields(req);
+        ModelApiFormat format = requireApiFormat(req.apiFormat());
         /* 插入前判断：此时还没有可用模型 = 应用内首次配置（.env 也没填），新增项要顺手设为默认 */
         boolean needsDefault = !chatConfigured();
         String id = UUID.randomUUID().toString();
-        store.insertModel(new ModelRow(id, req.name().strip(),
-                req.baseUrl().strip(), req.apiKey().strip(), req.model().strip(),
-                resolveContextWindow(req.baseUrl().strip(), req.apiKey().strip(),
-                        req.model().strip(), req.contextWindow()),req.maxOutputTokens()));
+        store.insertModel(modelRow(id, req, format));
         if (needsDefault) {
             store.saveSetting(id);
         }
@@ -149,17 +147,24 @@ public class SettingsService {
     public SettingsDtos.SettingsView updateModel(String id, SettingsDtos.ModelRequest req) {
         requireNotBuiltin(id, "模型");
         requireModelFields(req);
-        requireModelExists(id);
-        store.updateModel(new ModelRow(id, req.name().strip(), req.baseUrl().strip(),
-                req.apiKey().strip(), req.model().strip(),
-                resolveContextWindow(req.baseUrl().strip(), req.apiKey().strip(),
-                        req.model().strip(), req.contextWindow()),req.maxOutputTokens()));
+        ModelRow existing = requireModelRow(id);
+        ModelApiFormat format = req.apiFormat() == null ? existing.apiFormat() : requireApiFormat(req.apiFormat());
+        store.updateModel(modelRow(id, req, format));
         return view();
+    }
+
+    private ModelRow modelRow(String id, SettingsDtos.ModelRequest req, ModelApiFormat format) {
+        String baseUrl = req.baseUrl().strip();
+        String apiKey = req.apiKey().strip();
+        String model = req.model().strip();
+        Integer contextWindow = resolveContextWindow(format, baseUrl, apiKey, model, req.contextWindow());
+        return new ModelRow(id, req.name().strip(), baseUrl, apiKey, model, contextWindow,
+                req.maxOutputTokens(), format);
     }
 
     public SettingsDtos.SettingsView deleteModel(String id) {
         requireNotBuiltin(id, "模型");
-        requireModelExists(id);
+        requireModelRow(id);
         store.deleteModel(id);
         /* 默认项指向被删模型 → 清空，运行时回退内置 env 项 */
         SettingRow setting = store.setting().orElse(null);
@@ -172,12 +177,12 @@ public class SettingsService {
     /** 按给定端点从模型 API 试取上下文窗口（设置页编辑时自动回填）；取不到返回 null */
     public SettingsDtos.ContextWindowView fetchContextWindow(
             SettingsDtos.ContextWindowRequest req) {
-        Integer v = meta.fetchContextWindow(req.baseUrl(), req.apiKey(), req.model());
+        Integer v = fetchModelContextWindow(requireApiFormat(req.apiFormat()), req.baseUrl(), req.apiKey(), req.model());
         return new SettingsDtos.ContextWindowView(v);
     }
 
     /**
-     * 模型连通性测试（设置页模型列表）：基于 Chat 同款 /chat/completions 发一条基准对话，
+     * 模型连通性测试（设置页模型列表）：使用模型配置的聊天协议发一条基准对话，
      * 验证接口能否正常返回；ok=false 时 error 携带失败原因（未配置 / HTTP 错误 / 超时等）。
      */
     public SettingsDtos.ChatTestView testModel(String id) {
@@ -282,11 +287,7 @@ public class SettingsService {
         if (id == null || id.isBlank() || ENV_ID.equals(id)) {
             return resolveModelById(null);
         }
-        ModelRow row = store.model(id).orElse(null);
-        if (row == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "模型不存在: " + id);
-        }
-        return new ModelTarget(row.baseUrl(), row.apiKey(), row.model());
+        return toModelTarget(requireModelRow(id));
     }
 
     private static long elapsedMs(long startNanos) {
@@ -442,7 +443,7 @@ public class SettingsService {
             return target;
         }
         return store.models().stream()
-                .map(m -> new ModelTarget(m.baseUrl(), m.apiKey(), m.model()))
+                .map(SettingsService::toModelTarget)
                 .filter(ModelTarget::configured)
                 .findFirst().orElse(target);
     }
@@ -540,7 +541,7 @@ public class SettingsService {
         if (id != null && !ENV_ID.equals(id)) {
             ModelRow row = store.model(id).orElse(null);
             if (row != null) {
-                return new ModelTarget(row.baseUrl(), row.apiKey(), row.model());
+                return toModelTarget(row);
             }
         }
         return envTarget();
@@ -548,7 +549,12 @@ public class SettingsService {
 
     /** .env 传入的内置端点（未配置时各项为空，configured() 为 false） */
     private ModelTarget envTarget() {
-        return new ModelTarget(props.getBaseUrl(), props.getApiKey(), props.getChatModel());
+        return new ModelTarget(props.getBaseUrl(), props.getApiKey(), props.getChatModel(),
+                ModelApiFormat.fromWireValue(props.getApiFormat()));
+    }
+
+    private static ModelTarget toModelTarget(ModelRow row) {
+        return new ModelTarget(row.baseUrl(), row.apiKey(), row.model(), row.apiFormat(), row.maxOutputTokens());
     }
 
     /** 设置页模型项是否填写完整（与 {@link ModelTarget#configured()} 同一口径） */
@@ -563,12 +569,14 @@ public class SettingsService {
 
     private SettingsDtos.ModelView envModel() {
         /* 大模型以模型 id 为标题（.env 未配置模型名时回退 .env 本身） */
-        String name = normalize(props.getChatModel());
+        ModelTarget target = envTarget();
+        String name = normalize(target.model());
         if (name == null) {
             name = ".env";
         }
-        return new SettingsDtos.ModelView(ENV_ID, name, props.getBaseUrl(),
-                props.getApiKey(), props.getChatModel(), props.getContextWindow(), true);
+        return new SettingsDtos.ModelView(ENV_ID, name, target.baseUrl(), target.apiKey(), target.model(),
+                props.getContextWindow(), true, null, ModelReasoning.efforts(target.model(), target.apiFormat()),
+                target.apiFormat().wireValue());
     }
 
     private SettingsDtos.EmbeddingView embeddingView() {
@@ -605,7 +613,8 @@ public class SettingsService {
 
     private static SettingsDtos.ModelView toModelView(ModelRow m) {
         return new SettingsDtos.ModelView(m.id(), m.name(), m.baseUrl(), m.apiKey(), m.model(),
-                m.contextWindow(), false,m.maxOutputTokens());
+                m.contextWindow(), false, m.maxOutputTokens(), ModelReasoning.efforts(m.model(), m.apiFormat()),
+                m.apiFormat().wireValue());
     }
 
     /** 默认项校验：必须存在于候选 id 中，否则回退首个内置项（env） */
@@ -637,9 +646,19 @@ public class SettingsService {
         }
     }
 
-    private void requireModelExists(String id) {
-        if (id == null || store.model(id).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "模型不存在: " + id);
+    private ModelRow requireModelRow(String id) {
+        ModelRow row = id == null ? null : store.model(id).orElse(null);
+        if (row != null) {
+            return row;
+        }
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "模型不存在: " + id);
+    }
+
+    private static ModelApiFormat requireApiFormat(String value) {
+        try {
+            return ModelApiFormat.fromWireValue(value);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }
     }
 
@@ -652,17 +671,20 @@ public class SettingsService {
     }
 
     /**
-     * 解析上下文窗口：手动填写优先；留空则从模型 API（GET {base}/models）尽力获取，
-     * 接口不返回或调用失败时用 {@link LlmProps#DEFAULT_CONTEXT_WINDOW} 兜底。
+     * 解析上下文窗口：手动填写优先，其次读取模型元数据，最后使用默认值。
      */
-    private Integer resolveContextWindow(String baseUrl, String apiKey, String model,
+    private Integer resolveContextWindow(ModelApiFormat format, String baseUrl, String apiKey, String model,
                                          Integer manual) {
         Integer m = positiveOrNull(manual);
         if (m != null) {
             return m;
         }
-        Integer fetched = meta.fetchContextWindow(baseUrl, apiKey, model);
+        Integer fetched = fetchModelContextWindow(format, baseUrl, apiKey, model);
         return fetched != null ? fetched : LlmProps.DEFAULT_CONTEXT_WINDOW;
+    }
+
+    private Integer fetchModelContextWindow(ModelApiFormat format, String baseUrl, String apiKey, String model) {
+        return format == ModelApiFormat.OPENAI_CHAT_COMPLETIONS ? meta.fetchContextWindow(baseUrl, apiKey, model) : null;
     }
 
     /** 非正数（含未填）视为未设置 */

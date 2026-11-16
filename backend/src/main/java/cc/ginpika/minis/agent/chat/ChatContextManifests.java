@@ -51,7 +51,7 @@ public class ChatContextManifests {
             long now = System.currentTimeMillis();
             var manifest = new Manifest(turnId, executionId, round, retry, submissions.incrementAndGet(),
                     now, body.path("model").asText(), bytes,
-                    fieldValues(body.path("messages"), "role"), fieldValues(body.path("tools"), "function", "name"),
+                    fieldValues(body.path("messages"), "role"), toolNames(body.path("tools")),
                     ContextPlan.estimateRequest(body), selection);
             append(new Stored(row.id(), agentId, row.projectId(), actorId, manifest), now);
             log.info("[ctx] outbound session={} turn={} exec={} round={} retry={} sub={} model={} bytes={} "
@@ -101,10 +101,12 @@ public class ChatContextManifests {
         records.removeIf(stored -> stored.manifest().submittedAt() < now - RETENTION_MS);
     }
 
-    private static List<String> fieldValues(JsonNode array, String... path) {
-        return StreamSupport.stream(array.spliterator(), false).map(node -> {
-            for (String key : path) node = node.path(key);
-            return node.asText();
-        }).toList();
+    private static List<String> fieldValues(JsonNode array, String field) {
+        return StreamSupport.stream(array.spliterator(), false).map(node -> node.path(field).asText()).toList();
+    }
+
+    private static List<String> toolNames(JsonNode tools) {
+        return StreamSupport.stream(tools.spliterator(), false)
+                .map(tool -> tool.path("function").path("name").asText(tool.path("name").asText())).toList();
     }
 }

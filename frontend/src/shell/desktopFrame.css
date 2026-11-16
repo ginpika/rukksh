@@ -26,6 +26,7 @@ body[data-df] {
   --df-ink-dim: #59636e;
   --df-ink-mute: #59636e;
   --df-line: #d1d9e0;
+  --df-edge-line: rgba(15, 15, 15, 0.12);
   --df-accent: var(--c-accent, #1f883d);
   --df-accent-soft: var(--c-accent-soft, #dafbe1);
   --df-frame: #eaeef2;
@@ -49,7 +50,20 @@ body[data-df] {
   --df-ink-dim: #a0a9b2;
   --df-ink-mute: #a0a9b2;
   --df-line: #2c3236;
+  --df-edge-line: rgba(255, 255, 255, 0.14);
   --df-frame: #0d0f10;
+}
+
+/* 无边框窗口在浅色主界面下边缘与白色背景难以区分：非最大化时在最顶层补一圈 1px 细描边，
+   配合 macOS 原生窗口阴影清晰界定轮廓，且不拦截点击或窗缘缩放。 */
+.df:not(.df--maximized)::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 2147483640;
+  border-radius: var(--df-radius);
+  box-shadow: inset 0 0 0 1px var(--df-edge-line);
+  pointer-events: none;
 }
 
 /* 最底层使用纯色窗缘；不叠加渐变或光晕。 */
@@ -59,6 +73,24 @@ body[data-df] {
   pointer-events: none;
   border-radius: var(--df-radius);
   background: var(--df-frame);
+}
+
+/* macOS 使用原生系统窗口（自带圆角、阴影与细描边），不再在页面层裁圆角或叠一层假边框。 */
+.df.df--mac,
+.df.df--mac .df__acrylic {
+  border-radius: 0;
+}
+.df.df--mac::after,
+.df.df--mac:not(.df--maximized)::after {
+  content: none;
+}
+
+/* 兼容外框路由（/search、/memory/ops）在 macOS 非全屏下为原生红绿灯让出左上角栏顶空间。 */
+.df--mac:not(.df--frameless):not(.df--fullscreen) .df__rail {
+  padding-top: 42px;
+}
+.df--mac:not(.df--frameless):not(.df--fullscreen) .df__menu {
+  margin-top: 24px;
 }
 
 /* ------------------------------------------------ 左：菜单栏（88px 独立圆角容器） */
@@ -259,18 +291,22 @@ body[data-df] {
   height: 100%;
 }
 
-/* The conversation fills the window. Its own header and Agent rail share the
-   first row with real window controls, rather than sitting below a second bar. */
-.df--conversation {
+/* Standalone pages (conversation, Dashboard and tool pages) fill the window without
+   an outer bezel or second title bar; only window drag/controls float over their header. */
+.df.df--maximized,
+.df.df--maximized .df__acrylic {
+  border-radius: 0;
+}
+.df--frameless {
   --df-pad: 0px;
   --df-gap: 0px;
   height: 100dvh;
 }
-.df--conversation .df__stage {
+.df--frameless .df__stage {
   border-radius: 0;
   box-shadow: none;
 }
-.df--conversation .df__titlebar {
+.df--frameless .df__titlebar {
   position: absolute;
   z-index: 40;
   inset: 0 0 auto;
@@ -280,73 +316,70 @@ body[data-df] {
   background: transparent;
   pointer-events: none;
 }
-.df--conversation .df__drag {
+.df--frameless .df__drag {
   position: absolute;
   top: 0;
-  right: 120px;
+  right: 136px;
   left: 100px;
   height: 10px;
   pointer-events: auto;
 }
-.df--conversation .df__win {
+.df--frameless .df__win {
   position: absolute;
   top: 15px;
   right: 16px;
   pointer-events: auto;
 }
-.df--conversation:not(.df--mac) .sl-chat__header {
-  padding-right: 120px;
+.df--frameless :is(.sl-page__header, .coding-toolbar) {
+  user-select: none;
+  -webkit-user-select: none;
 }
-.df--conversation.df--mac .df__drag {
+.df--frameless .coding-studio.is-fullscreen {
+  z-index: 35;
+}
+.df--frameless:not(.df--maximized):not(.df--mac) .coding-studio.is-fullscreen {
+  border-radius: var(--df-radius);
+}
+.df--frameless:not(.df--mac) .sl-chat__header {
+  padding-right: 136px;
+}
+.df--frameless:not(.df--mac) .sl-page__header > .sl-appearance {
+  margin-right: 112px;
+}
+.df--frameless:not(.df--mac) .coding-toolbar {
+  padding-right: 138px;
+}
+/* macOS 使用原生红绿灯（Unified 样式：x=19..79, y=19..33, center_y=26px），页面只需让出左上角区域。 */
+.df--frameless.df--mac .df__drag {
   right: 12px;
 }
-.df--conversation.df--mac .df__win {
-  top: 15px;
-  right: auto;
-  left: 16px;
-  gap: 9px;
+.df--frameless.df--mac.df--fullscreen .df__drag {
+  left: 12px;
 }
-.df--conversation.df--mac .df__wbtn {
-  width: 14px;
-  height: 14px;
-  border: 1px solid #00000018;
-  box-shadow: none;
+.df--frameless.df--mac:not(.df--fullscreen) .sl-agents__head {
+  padding-top: 8px;
+  padding-bottom: 16px;
 }
-.df--conversation.df--mac .df__wbtn--close {
-  order: 0;
-  background: #ff5f57;
-  color: #7e1613;
+.df--frameless.df--mac .sl-agents__close {
+  margin-left: 78px;
 }
-.df--conversation.df--mac .df__wbtn--minimize {
-  order: 1;
-  background: #febc2e;
-  color: #815000;
+.df--frameless.df--mac.df--fullscreen .sl-agents__close {
+  margin-left: 0;
 }
-.df--conversation.df--mac .df__wbtn--maximize {
-  order: 2;
-  background: #28c840;
-  color: #075b15;
-}
-.df--conversation.df--mac .df__wbtn svg {
-  width: 9px;
-  height: 9px;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.df--conversation.df--mac .df__win:hover .df__wbtn svg,
-.df--conversation.df--mac .df__wbtn:focus-visible svg {
-  opacity: 1;
-}
-.df--conversation.df--mac .sl-agents__close {
-  margin-left: 68px;
-  opacity: 0;
-}
-.df--conversation.df--mac .sl-agents__head:hover .sl-agents__close,
-.df--conversation.df--mac .sl-agents__close:focus-visible {
-  opacity: 1;
-}
-.df--conversation.df--mac .sl-chat:not(.is-sidebar-open) .sl-chat__header {
+.df--frameless.df--mac:not(.df--fullscreen) .sl-chat:not(.is-sidebar-open) .sl-chat__header {
   padding-left: 100px;
+}
+.df--frameless.df--mac .sl-page__back {
+  margin-left: 76px;
+}
+.df--frameless.df--mac.df--fullscreen .sl-page__back {
+  margin-left: 0;
+}
+.df--frameless.df--mac .coding-toolbar {
+  padding-left: 100px;
+}
+.df--frameless.df--mac.df--fullscreen .coding-toolbar {
+  padding-left: clamp(.375rem, 2vw, 1.25rem);
 }
 
 /* --------------------------------------------------------- 窗缘缩放热区 */

@@ -235,12 +235,7 @@
   line-height: 1.5;
 }
 
-.ad-input:hover { border-color: var(--sl-line-strong); }
-
-.ad-input:focus-visible {
-  outline: 2px solid var(--sl-accent);
-  outline-offset: 1px;
-}
+.ad-input:hover:not(:focus) { border-color: var(--sl-line-strong); }
 
 .ad-textarea { min-height: 4.5rem; resize: vertical; }
 

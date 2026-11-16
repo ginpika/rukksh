@@ -18,6 +18,6 @@ export function rememberCodingProject(id: string): void {
 
 export function resolveCodingProject(params: URLSearchParams, runs: Pick<CodingRun, 'id' | 'repositoryId'>[], remembered: string): string {
   const requested = params.get('project') || runs.find(run => run.id === params.get('run'))?.repositoryId || ''
-  // 项目、任务、目录快捷入口及主动返回起始页，均优先于自动恢复。
+  // 项目、任务、目录快捷入口及主动打开项目选择，均优先于自动恢复。
   return ['project', 'run', 'workspace', 'directory', 'start'].some(key => params.has(key)) ? requested : remembered
 }

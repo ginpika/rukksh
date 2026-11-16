@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url'
 const frontend=fileURLToPath(new URL('../',import.meta.url))
 const require=createRequire(path.join(process.env.MINIS_PLAYWRIGHT_DIR||frontend,'package.json'))
 const {chromium}=require('playwright')
-const dist=path.join(frontend,'dist'),output=path.resolve(frontend,'../backend/target/economy-browser-check')
+const dist=path.resolve(process.env.MINIS_FRONTEND_DIST||path.join(frontend,'dist')),output=path.resolve(frontend,'../backend/target/economy-browser-check')
 await fs.mkdir(output,{recursive:true})
 const browser=await chromium.launch({channel:'chrome',headless:true})
 const context=await browser.newContext({viewport:{width:1680,height:1100}})
@@ -120,8 +120,8 @@ const auditContrast=async()=>{
   });assert.deepEqual(failures,[]);checks++
 }
 const leaveResearch=async()=>{
-  await page.evaluate(()=>location.hash='/economy')
-  await page.getByRole('heading',{name:'三张图，一份隔夜策略报告'}).waitFor()
+  await page.getByRole('link',{name:'返回经济',exact:true}).click()
+  await page.getByRole('heading',{name:'经济',exact:true,level:1}).waitFor()
 }
 const returnResearch=async()=>{
   await page.evaluate(()=>location.hash='/economy/research')
@@ -130,10 +130,13 @@ const returnResearch=async()=>{
 }
 try{
   await page.goto('http://economy.test/#/economy')
-  await page.getByRole('heading',{name:'三张图，一份隔夜策略报告'}).waitFor();checks++
+  await page.getByRole('heading',{name:'经济',exact:true,level:1}).waitFor()
+  assert.equal(await page.getByRole('link',{name:'返回 Dashboard',exact:true}).getAttribute('href'),'#/dashboard')
+  assert.equal(await page.locator('header').count(),1);assert.equal(await page.locator('footer').count(),0);checks++
   assert.equal(await page.getByRole('link',{name:/观测数据库/}).count(),1);await page.screenshot({path:path.join(output,'economy-start.png'),fullPage:true});checks++
   await page.getByRole('link',{name:/隔夜策略工作台/}).click()
   await page.getByRole('heading',{name:'隔夜策略工作台',exact:true}).waitFor()
+  assert.equal(await page.locator('header').count(),1);assert.equal(await page.locator('footer').count(),0)
   assert.equal(await page.getByRole('button',{name:'日线分析',exact:true}).isDisabled(),true)
   assert.equal(await page.getByRole('button',{name:'提交三图总结'}).isDisabled(),true);checks++
   const kindPicker=page.getByRole('combobox',{name:'标的类型',exact:true})
@@ -212,6 +215,8 @@ try{
   Object.assign(reportFixture,originalReport);await page.reload();await decisionReport.getByText('是，尾盘买入',{exact:true}).waitFor()
   assert.equal(listRequests.length,0,'the workbench must not load the database list');checks++
   await page.getByRole('link',{name:'观测数据库',exact:true}).click();await page.getByRole('heading',{name:'观测数据库',exact:true}).waitFor()
+  assert.equal(await page.getByRole('link',{name:'返回经济',exact:true}).getAttribute('href'),'#/economy')
+  assert.equal(await page.locator('header').count(),1);assert.equal(await page.locator('footer').count(),0)
   assert.ok(page.url().endsWith('#/economy/database'));assert.equal(await page.getByRole('application').count(),0);checks++
   await page.reload();await page.getByRole('heading',{name:'观测数据库',exact:true}).waitFor();await page.getByText(/共 26 轮观测/).waitFor();checks++
   await chooseOption('查询标的类型','个股');await page.getByRole('button',{name:'查询观测'}).click();await page.getByText(/共 1 轮观测/).waitFor();await page.getByRole('button',{name:'重置筛选'}).click();await page.getByText(/共 26 轮观测/).waitFor();checks++
@@ -235,11 +240,13 @@ try{
   await recordDetail.getByText('三图总结版本 1',{exact:true}).waitFor();await recordDetail.getByText('本总结引用的三张截图',{exact:true}).click();await recordDetail.getByRole('img',{name:'总结引用周线截图'}).waitFor()
   assert.ok(imageRequests.includes(submittedIds[0]));assert.equal(stepRequests.length,stepCount);checks++
   await recordDetail.evaluate(e=>e.scrollTo(0,0));await page.screenshot({path:path.join(output,'database-detail.png'),fullPage:true});await auditContrast();await auditScrollbars()
-  await page.getByRole('button',{name:'主题',exact:true}).click();await page.getByRole('button',{name:'深色',exact:true}).click();await page.keyboard.press('Escape');await page.waitForFunction(()=>document.documentElement.dataset.scheme==='dark')
+  await page.getByRole('button',{name:/^外观：浅色/}).click();await page.waitForFunction(()=>document.documentElement.dataset.scheme==='dark')
   await page.getByRole('combobox',{name:'总结版本',exact:true}).click();await page.screenshot({path:path.join(output,'tailwind-report-menu-dark.png'),fullPage:true});await auditScrollbars();await page.keyboard.press('Escape')
   await page.screenshot({path:path.join(output,'database-dark.png'),fullPage:true});await auditContrast()
-  await page.getByRole('button',{name:'主题',exact:true}).click();await page.getByRole('button',{name:'浅色',exact:true}).click();await page.keyboard.press('Escape')
-  await page.setViewportSize({width:390,height:844});await recordDetail.evaluate(e=>e.scrollIntoView({block:'start'}));await page.screenshot({path:path.join(output,'database-mobile.png'),fullPage:true})
+  await page.getByRole('button',{name:/^外观：深色/}).click()
+  await page.getByRole('button',{name:/^外观：跟随系统/}).click()
+  await page.waitForFunction(()=>document.documentElement.dataset.scheme==='light')
+  await page.setViewportSize({width:390,height:844});await recordDetail.evaluate(e=>e.scrollIntoView({block:'start'}));await page.screenshot({path:path.join(output,'database-mobile.png')})
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));checks++
   await page.getByRole('combobox',{name:'总结版本',exact:true}).click();const mobileList=page.getByRole('listbox',{name:'总结版本',exact:true});const menuBox=await mobileList.boundingBox()
   assert.ok(menuBox.x>=0&&menuBox.x+menuBox.width<=390&&menuBox.y>=0&&menuBox.y+menuBox.height<=844)
@@ -311,8 +318,11 @@ try{
   await page.getByRole('button',{name:'停止观察'}).click()
   await page.evaluate(()=>{delete window.__TAURI_INTERNALS__;delete window.__TAURI__})
   await page.goto('http://economy.test/#/economy/stock');await page.reload();await page.getByRole('heading',{name:'隔夜策略工作台',exact:true}).waitFor();checks++
-  await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(output,'unified-mobile.png'),fullPage:true});assert.ok((await page.locator('.eco-research').boundingBox()).width>=350);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));checks++
-  await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>document.documentElement.style.zoom='2');await page.screenshot({path:path.join(output,'unified-zoom200.png'),fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));checks++
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(output,'unified-mobile.png')});assert.ok((await page.locator('.eco-research').boundingBox()).width>=350);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));checks++
+  await page.getByRole('button',{name:'提交三图总结',exact:true}).scrollIntoViewIfNeeded()
+  assert.ok(await page.getByRole('main').evaluate(el=>el.scrollTop>0))
+  await page.getByRole('main').evaluate(el=>el.scrollTo(0,0))
+  await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>document.documentElement.style.zoom='2');await page.screenshot({path:path.join(output,'unified-zoom200.png')});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));checks++
   assert.deepEqual(errors,[])
   console.log(JSON.stringify({browserChecks:checks,browserErrors:errors,output}))
 }finally{await browser.close()}

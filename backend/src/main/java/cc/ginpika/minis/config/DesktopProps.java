@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * <p>壳在拉起进程时通过环境变量注入：{@code MINIS_DESKTOP=1}、{@code MINIS_LOCAL_TOKEN=<随机值>}，
  * 以及引导页配好的 {@code MINIS_LOCAL_USER_NAME} / {@code MINIS_LOCAL_USER_AVATAR}（本地用户），
- * 并由壳在页面脚本执行前把同一枚令牌写进 {@code window.__MINIS_LOCAL_TOKEN__}，前端请求统一带上。
+ * 壳只在本机后端的主页面交付令牌，前端同源 API 请求统一带上。
  */
 @ConfigurationProperties(prefix = "minis.desktop")
 public class DesktopProps {

@@ -49,17 +49,14 @@ import {
 import { Card } from '../components/Card'
 import FloatWindow from '../components/FloatWindow'
 import { Select } from '../components/Select'
+import { INPUT } from '../components/formStyles'
 import Toast from '../components/Toast'
 import { btnPrimary, btnQuiet, miniBtn } from '../components/ui'
 import { usePageKit } from '../kit'
 
-/** 表单控件基底：与设置页保持一致的输入框风格 */
-const INPUT =
-  'w-full rounded-md border border-line bg-bg px-3 py-2 text-base text-fg outline-none transition placeholder:text-hint hover:border-line-strong focus:border-accent focus:ring-2 focus:ring-accent/25'
-
-/** 心跳控制条的节拍输入：透明底描边输入框（聚焦时点缀色描边） */
+/** 心跳控制条的节拍输入。 */
 const DASH_INPUT =
-  'w-[104px] rounded-lg border border-line bg-transparent px-3 py-1.5 font-mono text-base text-fg outline-none transition placeholder:text-hint hover:border-line-strong focus:border-accent focus:ring-2 focus:ring-accent/30'
+  'ui-input w-[104px] rounded-lg border border-line bg-transparent px-3 py-1.5 font-mono text-base text-fg transition-colors placeholder:text-hint hover:border-line-strong'
 
 /** 心跳重连间隔（后端单条流有最长保持时长，断开属正常） */
 const RECONNECT_MS = 1500

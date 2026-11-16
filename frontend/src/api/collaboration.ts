@@ -31,7 +31,10 @@ export const archiveCollaborationTask = (id: string, archived: boolean) => reque
 export const deleteCollaborationTask = (id: string) => requestJson<{ deleted: boolean }>(`/api/agents/collaboration/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const collaborationWorkspaces = () => requestJson<{ id: string; name: string; kind: string; enabled: boolean; workdir: string | null }[]>('/api/agents/collaboration/workspaces')
 export const bindCollaborationWorkspace = (id: string, body: { workspaceId: string; directory: string; create: boolean; name?: string }) => requestJson<ProjectWorkspaceBinding>(`/api/projects/${encodeURIComponent(id)}/collaboration-workspace`, { method: 'PUT', body: JSON.stringify(body) })
-export const collaborationWorkspace = () => requestJson<CollaborationWorkspace>('/api/agents/collaboration')
+export const collaborationWorkspace = (signal?: AbortSignal) => requestJson<CollaborationWorkspace>('/api/agents/collaboration', { signal })
+export async function listProjectWorkspaceBindings(signal?: AbortSignal) {
+  return (await collaborationWorkspace(signal)).workspaceBindings ?? []
+}
 export const createCollaborationTask = (projectId: string, title: string, memberIds: string[], coordinatorId?: string) => requestJson<{ sessionId: string }>('/api/agents/collaboration/tasks', { method: 'POST', body: JSON.stringify({ projectId, title, memberIds, coordinatorId }) })
 export const createCollaborationIssue = (sessionId: string, title: string, memberIds: string[]) => requestJson<CollaborationIssue>(`/api/agents/sessions/${encodeURIComponent(sessionId)}/issues`, { method: 'POST', body: JSON.stringify({ title, memberIds }) })
 export const concludeCollaborationIssue = (id: string, conclusion: string) => requestJson<CollaborationIssue>(`/api/agents/issues/${encodeURIComponent(id)}/conclusion`, { method: 'PUT', body: JSON.stringify({ conclusion }) })

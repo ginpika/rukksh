@@ -24,6 +24,8 @@ public class WebConfig implements WebMvcConfigurer {
                         // 静态资源（后端托管 dist 时；页面本身仍需登录）
                         "/assets/**", "/favicon.svg", "/vite.svg",
                         "/*.svg", "/*.png", "/*.ico", "/*.js", "/*.css",
+                        // 桌面端在登录前需要知道 HostID 地址和 Cookie 名称
+                        "/api/auth/sso",
                         // 登出需在未登录（或 token 已过期）时也可调用
                         "/api/auth/logout",
                         // Only a short-lived, single-use ticket from an authenticated REST request

@@ -31,6 +31,17 @@ public class AuthController {
         return (SsoUser) request.getAttribute(SsoInterceptor.ATTR);
     }
 
+    /** 桌面端用它确定 HostID 站点与 Cookie 名称，再从 WebView 的 Cookie 存储校验会话。 */
+    @GetMapping("/sso")
+    public Map<String, Object> sso(HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-store");
+        if (!ssoService.isEnabled()) {
+            return Map.of("enabled", false);
+        }
+        return Map.of("enabled", true, "serverUrl", ssoProps.getServerUrl(),
+                "cookieName", ssoProps.getCookieName());
+    }
+
     /** 登出：服务端撤销 hostid 会话；前端随后可跳 hostid 登录页重登 */
     @PostMapping("/logout")
     public Map<String, Object> logout(HttpServletRequest request, HttpServletResponse response) {

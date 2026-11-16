@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type SelectOption = { value: string; label: string; disabled?: boolean; icon?: ReactNode }
+export type SelectOption = { value: string; label: string; description?: string; disabled?: boolean; icon?: ReactNode }
 export function filterSelectOptions(options: SelectOption[], query: string) {
   const needle = query.trim().toLocaleLowerCase()
   return options.filter(o => !needle || `${o.label} ${o.value}`.toLocaleLowerCase().includes(needle))

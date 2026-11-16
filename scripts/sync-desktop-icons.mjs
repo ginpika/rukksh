@@ -4,9 +4,18 @@ import { readFileSync, writeFileSync } from 'node:fs'
 const require = createRequire(new URL('../frontend/package.json', import.meta.url))
 const { createElement } = require('react')
 const { renderToStaticMarkup } = require('react-dom/server')
-const { CirclePlay, UserRound, Mail, Info, Minus, Square, Copy, X } = require('lucide-react')
+const { ArrowLeft, Monitor, Sun, Moon, Minus, Square, Copy, X } = require('lucide-react')
 const { version } = require('lucide-react/package.json')
-const icons = { launch: CirclePlay, user: UserRound, mail: Mail, about: Info, minimize: Minus, maximize: Square, restore: Copy, close: X }
+const icons = {
+  'arrow-left': ArrowLeft,
+  'appearance-system': Monitor,
+  'appearance-light': Sun,
+  'appearance-dark': Moon,
+  minimize: Minus,
+  maximize: Square,
+  restore: Copy,
+  close: X,
+}
 
 // 启动页是无构建器的静态 HTML；生成并提交本地资源，运行时无需 React 或网络。
 const symbols = Object.entries(icons).map(([name, Icon]) => {

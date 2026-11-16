@@ -1,661 +1,477 @@
-/**
- * 工作空间页：以 docker 容器 / SSH 服务器为 agent 的工作空间——在此维护环境（增删改、连通性测试、
- * 逐目标启用），并浏览其中的文件（列目录、文本预览、下载）。
- *
- * <p>「工作空间」是命令行终端（{@code ai.terminal}）之上的扩展：环境定义与凭证仍由终端模块的接口
- * 维护（{@code /api/terminal}），本页额外接上工作空间的文件面（{@code /api/workspaces/*}）。
- * 因此这里不再重复一套环境配置，只是把终端能力组织成一个面向「工作空间」的页面。
- *
- * <p>视觉交给 PageKit 与主题原语：标题区用 kit.Page，面板用 Card（描边环 + 面板底），
- * 按钮用 ui-btn 变体（primary / outline / quiet / icon），标签用 kit.Badge，层次随主题令牌自适应。
- */
-import { AppIcon } from '../components/AppIcon'
-import { useCallback, useEffect, useState } from 'react'
-import WorkspaceDialog from './WorkspaceDialog'
-import WorkspaceShell from './WorkspaceShell'
-import ComputerConnection from './ComputerConnection'
+import { useEffect, useState } from 'react'
 import {
   ApiError,
   createTerminalTarget,
   deleteTerminalTarget,
-  downloadWorkspaceFile,
   getTerminal,
   listTerminalCommands,
-  listWorkspaceFiles,
   loginUrlOf,
   probeTerminalTarget,
-  readWorkspaceFile,
+  runTerminalCommand,
   updateTerminalTarget,
   type TerminalCommand,
   type TerminalTarget,
   type TerminalTargetRequest,
   type TerminalView,
-  type WorkspaceDirView,
-  type WorkspaceFileView,
 } from '../api/client'
-import { Card, CardHead } from '../components/Card'
+import { AppIcon, type AppIconName } from '../components/AppIcon'
 import FloatWindow from '../components/FloatWindow'
+import { Field, INPUT } from '../components/formKit'
+import { PortalAppearanceContext } from '../components/portalAppearance'
 import Toast from '../components/Toast'
-import { btnIcon, btnOutline, btnPrimary, btnQuiet, miniBtn } from '../components/ui'
-import { usePageKit } from '../kit'
+import ComputerConnection from './ComputerConnection'
+import WorkspaceDialog from './WorkspaceDialog'
+import WorkspaceShell from './WorkspaceShell'
+import WorkspaceFiles from './workspace/WorkspaceFiles'
+import WorkspaceHistory from './workspace/WorkspaceHistory'
+import './workspace/workspacePage.css'
 
-/* ---------------- 小工具 ---------------- */
-
-/** 后排错误 → 可读文案（Spring 错误体是 JSON，取出 message 后展示） */
-function errMsg(e: unknown): string {
-  if (e instanceof ApiError) {
-    const raw = e.body?.trim()
-    if (raw) {
+function errorText(error: unknown): string {
+  if (error instanceof ApiError) {
+    const body = error.body?.trim()
+    if (body) {
       try {
-        const j = JSON.parse(raw) as { message?: string }
-        if (j.message) return j.message
+        const parsed = JSON.parse(body) as { message?: string } | null
+        if (parsed?.message) return parsed.message
       } catch {
-        /* 非 JSON：原样展示 */
+        // 部分接口返回纯文本错误。
       }
-      return raw
+      return body
     }
-    return `请求失败（${e.status}）`
+    return `请求失败（${error.status}）`
   }
-  return e instanceof Error ? e.message : String(e)
+  return error instanceof Error ? error.message : String(error)
 }
 
-function fmtSize(n: number): string {
-  if (n < 1024) return `${n} B`
-  const kb = n / 1024
-  if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`
-  const mb = kb / 1024
-  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`
-}
+const environmentTypes = {
+  docker: { label: 'Docker', icon: 'workspace' },
+  ssh: { label: 'SSH', icon: 'terminal' },
+  local: { label: '本机', icon: 'system' },
+} satisfies Record<TerminalTarget['kind'], { label: string; icon: AppIconName }>
 
-/** 一行目标的位置摘要（与后端 describe 同义，便于一眼认出这台环境） */
-function targetWhere(t: TerminalTarget): string {
-  if (t.kind === 'docker') {
-    return `${t.container ? `容器 ${t.container}` : `镜像 ${t.image}`}${t.dockerHost ? ` @ ${t.dockerHost}` : ''}`
+function environmentAddress(target: TerminalTarget): string {
+  if (target.kind === 'local') return target.workdir ?? ''
+  if (target.kind === 'docker') {
+    const source = target.container ? `容器 ${target.container}` : `镜像 ${target.image || '未指定'}`
+    return target.dockerHost ? `${source} @ ${target.dockerHost}` : source
   }
-  return `${t.sshUser || 'root'}@${t.sshHost}:${t.sshPort ?? 22}`
+  return `${target.sshUser || 'root'}@${target.sshHost ?? ''}:${target.sshPort ?? 22}`
 }
 
-/* ---------------- 图标 ---------------- */
-
-function IconFolder() {
-  return (
-    <AppIcon name="folder" className="h-4 w-4" />
-  )
-}
-
-function IconFile() {
-  return (
-    <AppIcon name="file" className="h-4 w-4" />
-  )
-}
-
-function IconLink() {
-  return (
-    <AppIcon name="link" className="h-4 w-4" />
-  )
-}
-
-function IconDownload() {
-  return (
-    <AppIcon name="download" className="h-4 w-4" />
-  )
-}
-
-function IconUp() {
-  return (
-    <AppIcon name="arrow-up" className="h-4 w-4" />
-  )
-}
-
-function IconRefresh() {
-  return (
-    <AppIcon name="refresh" className="h-4 w-4" />
-  )
-}
-
-function IconChevron() {
-  return (
-    <AppIcon name="chevron-right" className="h-3.5 w-3.5" />
-  )
-}
-
-/* ---------------- 新建 / 编辑工作空间 ---------------- */
-
-/* ---------------- 文件浏览 ---------------- */
-
-/**
- * 文件浏览：面包屑（工作空间名 → 各级目录）+ 目录项列表 + 文本预览 / 下载。
- *
- * <p>路径状态用「段数组」而不是拼串：既天然把浏览限制在工作空间起点之下（不会出现 {@code ..}），
- * 也让面包屑与后端沙箱路径一一对应。切换工作空间时由外层用 key 重挂载本组件来复位。
- */
-function FileBrowser({
-  workspace,
-  onToast,
+function EnvironmentList({
+  targets,
+  selectedId,
+  onSelect,
 }: {
-  workspace: TerminalTarget
-  onToast: (t: { kind: 'success' | 'error'; msg: string }) => void
+  targets: TerminalTarget[]
+  selectedId: string
+  onSelect: (id: string) => void
 }) {
-  const kit = usePageKit()
-  const [segments, setSegments] = useState<string[]>([])
-  const [dir, setDir] = useState<WorkspaceDirView | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-  const [preview, setPreview] = useState<WorkspaceFileView | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewErr, setPreviewErr] = useState<string | null>(null)
-  const [downloading, setDownloading] = useState<string | null>(null)
-
-  const path = segments.length ? segments.join('/') : '.'
-  const entryPath = useCallback((name: string) => [...segments, name].join('/'), [segments])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setErr(null)
-    try {
-      setDir(await listWorkspaceFiles(workspace.id, path))
-    } catch (e) {
-      setDir(null)
-      setErr(errMsg(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [workspace.id, path])
-
-  useEffect(() => {
-    void load()
-  }, [load])
-
-  /* 换目录即收起预览：上一层的文件内容不该留在这一层 */
-  useEffect(() => {
-    setPreview(null)
-    setPreviewErr(null)
-  }, [path])
-
-  const openFile = async (name: string) => {
-    setPreviewLoading(true)
-    setPreviewErr(null)
-    setPreview(null)
-    try {
-      setPreview(await readWorkspaceFile(workspace.id, entryPath(name)))
-    } catch (e) {
-      setPreviewErr(errMsg(e))
-    } finally {
-      setPreviewLoading(false)
-    }
-  }
-
-  const download = async (name: string) => {
-    const p = entryPath(name)
-    setDownloading(p)
-    try {
-      const { filename, blob } = await downloadWorkspaceFile(workspace.id, p)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      onToast({ kind: 'error', msg: `下载失败：${errMsg(e)}` })
-    } finally {
-      setDownloading(null)
-    }
-  }
+  const [query, setQuery] = useState('')
+  const search = query.trim().toLowerCase()
+  const matches = targets.filter(target =>
+    `${target.name} ${environmentTypes[target.kind].label} ${environmentAddress(target)}`.toLowerCase().includes(search),
+  )
 
   return (
-    <Card pad="lg" className="flex min-h-0 flex-col">
-      {/* 面包屑 + 刷新 */}
-      <div className="flex shrink-0 items-center gap-2">
-        <button
-          type="button"
-          title="上一层"
-          disabled={segments.length === 0}
-          onClick={() => setSegments((s) => s.slice(0, -1))}
-          className={btnIcon('rounded-sm')}
-        >
-          <IconUp />
-        </button>
-        <div className="scrollbar-hide flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-xs">
-          <button
-            type="button"
-            onClick={() => setSegments([])}
-            className={`shrink-0 px-2 py-1 font-medium transition ${
-              segments.length === 0
-                ? 'bg-accent-soft text-fg'
-                : 'text-muted hover:bg-fg/5 hover:text-fg'
-            }`}
-          >
-            {workspace.name}
-          </button>
-          {segments.map((seg, i) => (
-            <span key={`${seg}-${i}`} className="flex shrink-0 items-center gap-1">
-              <span className="text-faint">
-                <IconChevron />
-              </span>
-              <button
-                type="button"
-                onClick={() => setSegments((s) => s.slice(0, i + 1))}
-                className={`mono px-2 py-1 transition ${
-                  i === segments.length - 1
-                    ? 'bg-accent-soft text-fg'
-                    : 'text-muted hover:bg-fg/5 hover:text-fg'
-                }`}
-              >
-                {seg}
-              </button>
-            </span>
-          ))}
-        </div>
-        <button
-          type="button"
-          title="刷新"
-          onClick={() => void load()}
-          className={btnIcon('rounded-sm')}
-        >
-          <IconRefresh />
-        </button>
-        <a className="ui-btn ui-btn--quiet text-xs" href={`#/coding?workspace=${encodeURIComponent(workspace.id)}&directory=${encodeURIComponent(path)}`}>编程 ↗</a>
+    <section className="workspace-environments" aria-labelledby="workspace-environments-title">
+      <div className="workspace-environments__heading">
+        <h2 id="workspace-environments-title">运行环境</h2>
+        <span aria-label={`${targets.length} 个环境`}>{targets.length}</span>
       </div>
-
-      {/* 目录项 */}
-      <div className="mt-2 min-h-0 flex-1 overflow-y-auto scrollbar-slim">
-        {loading && <p className="px-3 py-6 text-xs text-muted">加载中 …</p>}
-        {!loading && err && (
-          <p className="rounded-md border border-line bg-fg/[0.03] px-3 py-4 text-xs leading-relaxed text-muted">
-            {err}
-          </p>
-        )}
-        {!loading && !err && dir?.entries.length === 0 && (
-          <p className="px-3 py-6 text-xs text-muted">（空目录）</p>
-        )}
-        {!loading &&
-          !err &&
-          dir?.entries.map((e) => {
-            const p = entryPath(e.name)
-            return (
-              <kit.Row key={e.name} className="gap-3 py-2">
-                <span className="shrink-0 text-muted">
-                  {e.dir ? <IconFolder /> : e.link ? <IconLink /> : <IconFile />}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => (e.dir ? setSegments((s) => [...s, e.name]) : void openFile(e.name))}
-                  title={e.name}
-                  className="min-w-0 flex-1 truncate text-left text-base text-fg transition hover:underline"
-                >
-                  {e.name}
-                </button>
-                <span className="mono hidden w-32 shrink-0 truncate text-right text-2xs text-dim sm:block">
-                  {e.modified}
-                </span>
-                <span className="mono w-20 shrink-0 text-right text-2xs text-dim">
-                  {e.dir ? '—' : fmtSize(e.size)}
-                </span>
-                <button
-                  type="button"
-                  title="下载"
-                  disabled={downloading === p}
-                  onClick={() => void download(e.name)}
-                  className={btnIcon('rounded-sm')}
-                >
-                  <IconDownload />
-                </button>
-              </kit.Row>
-            )
-          })}
-      </div>
-
-      {/* 预览 */}
-      {(previewLoading || preview || previewErr) && (
-        <div className="mt-3 shrink-0 rounded-md border border-line">
-          <div className="flex items-center gap-2 px-3.5 py-2">
-            <span className="mono min-w-0 flex-1 truncate text-xs font-bold text-fg">
-              {previewLoading ? '加载中 …' : preview?.name ?? '预览'}
-            </span>
-            {preview && <kit.Badge>{fmtSize(preview.size)}</kit.Badge>}
-            {preview?.truncated && <kit.Badge tone="warn">已截断</kit.Badge>}
-            {preview?.binary && <kit.Badge>二进制</kit.Badge>}
-            {preview && (
-              <button
-                type="button"
-                className={miniBtn}
-                disabled={downloading === preview.path}
-                onClick={() => void download(preview.name)}
-              >
-                下载
-              </button>
-            )}
+      {targets.length > 1 && (
+        <label className="workspace-environments__search">
+          <AppIcon name="search" size={15} />
+          <input
+            type="search"
+            value={query}
+            placeholder="搜索环境"
+            aria-label="搜索环境"
+            onChange={event => setQuery(event.target.value)}
+          />
+        </label>
+      )}
+      <ul className="workspace-environments__list scrollbar-slim">
+        {matches.map(target => (
+          <li key={target.id}>
             <button
               type="button"
-              title="关闭预览"
-              onClick={() => {
-                setPreview(null)
-                setPreviewErr(null)
-              }}
-              className={btnIcon('rounded-sm')}
+              className="workspace-environment"
+              aria-current={target.id === selectedId ? 'true' : undefined}
+              onClick={() => onSelect(target.id)}
             >
-              <AppIcon name="close" className="h-3.5 w-3.5" />
+              <span className="workspace-environment__icon">
+                <AppIcon name={environmentTypes[target.kind].icon} size={17} />
+              </span>
+              <span className="workspace-environment__body">
+                <strong title={target.name}>{target.name}</strong>
+                <span title={environmentAddress(target)}>{environmentTypes[target.kind].label} · {environmentAddress(target)}</span>
+              </span>
+              <span className="workspace-status-dot" data-enabled={target.enabled} title={target.enabled ? '已启用' : '未启用'} />
+              <span className="sr-only">{target.enabled ? '已启用' : '未启用'}</span>
             </button>
-          </div>
-          <div className="border-t border-line px-3.5 py-3">
-            {previewLoading && (
-              <p className="text-xs text-muted">读取中 …</p>
-            )}
-            {!previewLoading && previewErr && (
-              <p className="text-xs leading-relaxed text-muted">{previewErr}</p>
-            )}
-            {!previewLoading && preview?.binary && (
-              <p className="text-xs leading-relaxed text-muted">
-                二进制文件（{fmtSize(preview.size)}），不支持文本预览，可下载后查看。
-              </p>
-            )}
-            {!previewLoading && preview && !preview.binary && (
-              <pre className="scrollbar-slim max-h-[360px] overflow-auto whitespace-pre-wrap break-words rounded-md border border-line bg-fg/[0.03] p-3 font-mono text-xs leading-5 text-muted">
-                {preview.content?.length ? preview.content : '（空文件）'}
-              </pre>
-            )}
-          </div>
-        </div>
-      )}
-    </Card>
+          </li>
+        ))}
+      </ul>
+      {matches.length === 0 && <p className="workspace-environments__empty" role="status">没有匹配的环境</p>}
+    </section>
   )
 }
 
-/* ---------------- 页面 ---------------- */
+function LocalCommand({ target, onClose }: { target: TerminalTarget; onClose: () => void }) {
+  const [command, setCommand] = useState('')
+  const [result, setResult] = useState<TerminalCommand | null>(null)
+  const [error, setError] = useState('')
+  const [running, setRunning] = useState(false)
+
+  async function run() {
+    if (running || !command.trim()) return
+    setRunning(true)
+    setResult(null)
+    setError('')
+    try {
+      setResult(await runTerminalCommand(target.id, command))
+    } catch (error) {
+      const loginUrl = loginUrlOf(error)
+      if (loginUrl) window.location.assign(loginUrl)
+      else setError(errorText(error))
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <FloatWindow title={`试跑命令 · ${target.name}`} width={620} onClose={onClose}>
+      <form className="workspace-command" onSubmit={event => {
+        event.preventDefault()
+        void run()
+      }}>
+        <Field label="本机命令" hint="命令使用与 Agent 相同的写入白名单。">
+          <textarea
+            className={INPUT}
+            value={command}
+            onChange={event => setCommand(event.target.value)}
+            rows={3}
+            placeholder="pwd"
+            spellCheck={false}
+          />
+        </Field>
+        <button type="submit" className="workspace-button workspace-button--primary" disabled={running || !command.trim()}>
+          <AppIcon name="play" />{running ? '执行中…' : '执行'}
+        </button>
+        {error && <p role="alert">{error}</p>}
+        {result && (
+          <div role="status">
+            <p>{result.ok ? '执行成功' : result.timedOut ? '执行超时' : '执行失败'}{result.exitCode != null ? ` · 退出码 ${result.exitCode}` : ''}{result.truncated ? ' · 输出已截断' : ''}</p>
+            {result.stdout && <pre tabIndex={0} aria-label="标准输出">{result.stdout}</pre>}
+            {result.stderr && <pre tabIndex={0} aria-label="错误输出">{result.stderr}</pre>}
+          </div>
+        )}
+      </form>
+    </FloatWindow>
+  )
+}
 
 export default function Workspace() {
-  const kit = usePageKit()
   const [view, setView] = useState<TerminalView | null>(null)
-  const [commands, setCommands] = useState<TerminalCommand[]>([])
   const [loadErr, setLoadErr] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null)
-  const [dlg, setDlg] = useState<{ editing: TerminalTarget | null } | null>(null)
+  const [dialog, setDialog] = useState<{ editing: TerminalTarget | null } | null>(null)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
   const [probing, setProbing] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState(() => new URLSearchParams(window.location.hash.split('?')[1] || '').get('target') || '')
+  const [selectedId, setSelectedId] = useState(() =>
+    new URLSearchParams(window.location.hash.split('?')[1] || '').get('target') ?? '',
+  )
+  const [filesRevision, setFilesRevision] = useState(0)
+  const [shellTarget, setShellTarget] = useState<string | null>(null)
+  const [commandTargetId, setCommandTargetId] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [commands, setCommands] = useState<TerminalCommand[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
 
-  const [shell, setShell] = useState<{ target: string } | null>(null)
-  const [cmdDlg, setCmdDlg] = useState(false)
+  useEffect(() => {
+    let active = true
+    getTerminal()
+      .then(next => { if (active) setView(next) })
+      .catch((error: unknown) => { if (active) setLoadErr(errorText(error)) })
+    return () => { active = false }
+  }, [loadAttempt])
 
-  const fail = useCallback((e: unknown): void => {
-    const loginUrl = loginUrlOf(e)
+  const targets = view?.targets ?? []
+  const selected = targets.find(target => target.id === selectedId)
+  const deleteTarget = targets.find(target => target.id === deleteId)
+  const localAvailable = view?.localAvailable === true
+  const localManageable = localAvailable && view?.localManageable !== false
+  const localUnavailableReason = view?.localUnavailableReason ?? (
+    view?.localAvailable === undefined
+      ? '当前后端版本未提供本机环境，请更新后端。'
+      : '当前后端无法启动本机环境。'
+  )
+  const localManageReason = localAvailable ? '请以管理员身份管理本机工作空间。' : localUnavailableReason
+  const commandTarget = localManageable
+    ? targets.find(target => target.id === commandTargetId && target.kind === 'local' && target.enabled)
+    : undefined
+  const shellTargets = targets.filter(target => target.kind !== 'local')
+
+  function fail(error: unknown) {
+    const loginUrl = loginUrlOf(error)
     if (loginUrl) {
       window.location.assign(loginUrl)
       return
     }
-    setToast({ kind: 'error', msg: errMsg(e) })
-  }, [])
+    setToast({ kind: 'error', msg: errorText(error) })
+  }
 
-  const refreshCommands = useCallback(() => {
-    listTerminalCommands(20)
-      .then(setCommands)
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    let alive = true
-    getTerminal()
-      .then((v) => {
-        if (alive) setView(v)
-      })
-      .catch((e: unknown) => {
-        if (alive) setLoadErr(errMsg(e))
-      })
-    refreshCommands()
-    return () => {
-      alive = false
+  async function refreshCommands() {
+    if (historyLoading) return
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      setCommands(await listTerminalCommands(20))
+    } catch (error) {
+      setHistoryError(errorText(error))
+    } finally {
+      setHistoryLoading(false)
     }
-  }, [refreshCommands])
+  }
 
-  const targets = view?.targets ?? []
-
-  /* 选中的工作空间：只有显式点选才激活（选中的被删掉即回到未选中）——渲染期直接推导，
-     避免用「同步 state 的 effect」再触发一轮渲染 */
-  const selected = targets.find((t) => t.id === selectedId) ?? null
-
-  /** 统一提交：成功后以后端返回的最新视图覆盖本地，并提示结果 */
-  const runView = async (fn: () => Promise<TerminalView>, ok: string): Promise<boolean> => {
+  async function updateView(action: () => Promise<TerminalView>, message: string): Promise<TerminalView | null> {
     setBusy(true)
     try {
-      setView(await fn())
-      setToast({ kind: 'success', msg: ok })
-      return true
-    } catch (e) {
-      fail(e)
-      return false
+      const next = await action()
+      setView(next)
+      setToast({ kind: 'success', msg: message })
+      return next
+    } catch (error) {
+      fail(error)
+      return null
     } finally {
       setBusy(false)
     }
   }
 
-  const submitTarget = async (req: TerminalTargetRequest) => {
-    const editing = dlg?.editing ?? null
-    const saved = await runView(
-      () => (editing ? updateTerminalTarget(editing.id, req) : createTerminalTarget(req)),
+  async function submitTarget(request: TerminalTargetRequest) {
+    const editing = dialog?.editing
+    const saved = await updateView(
+      () => editing ? updateTerminalTarget(editing.id, request) : createTerminalTarget(request),
       editing ? '工作空间已更新' : '工作空间已创建',
     )
-    if (saved) setDlg(null)
-  }
-
-  const removeTarget = (t: TerminalTarget) => {
-    if (!window.confirm(`删除工作空间「${t.name}」？`)) return
-    void runView(() => deleteTerminalTarget(t.id), '工作空间已删除')
-  }
-
-  const probeTarget = async (t: TerminalTarget) => {
-    setProbing(t.id)
-    try {
-      const r = await probeTerminalTarget(t.id)
-      if (r.ok) {
-        setToast({
-          kind: 'success',
-          msg: `「${t.name}」连接正常（${(r.elapsedMs / 1000).toFixed(1)}s）：${r.detail ?? ''}`,
-        })
-      } else {
-        setToast({ kind: 'error', msg: `「${t.name}」连接失败：${r.error ?? '未知错误'}` })
+    if (saved) {
+      setDialog(null)
+      if (editing?.id === selectedId) setFilesRevision(value => value + 1)
+      if (!editing && request.kind === 'local') {
+        const created = saved.targets.find(target => target.name === request.name && target.kind === 'local')
+        if (created) setSelectedId(created.id)
       }
-    } catch (e) {
-      fail(e)
+    }
+  }
+
+  async function probeTarget(target: TerminalTarget) {
+    setProbing(target.id)
+    try {
+      const result = await probeTerminalTarget(target.id)
+      setToast(result.ok
+        ? {
+            kind: 'success',
+            msg: `「${target.name}」${target.kind === 'local' ? '环境可用' : '连接正常'}（${(result.elapsedMs / 1000).toFixed(1)} 秒）${result.detail ? ` · ${result.detail}` : ''}`,
+          }
+        : { kind: 'error', msg: `「${target.name}」${target.kind === 'local' ? '环境不可用' : '连接失败'}：${result.error ?? '未知错误'}` })
+    } catch (error) {
+      fail(error)
     } finally {
       setProbing(null)
     }
   }
 
   return (
-    /* 满幅页：lg 档把 kit.Page 的 section 拉伸到视口高（App 路由已给 h-full），
-       两栏列表与文件浏览器各自内部滚动 */
-    <div className="flex min-h-0 flex-col lg:h-full lg:[&>section]:min-h-0 lg:[&>section]:flex-1">
-      <kit.Page
-        title="工作空间"
-        en="WORKSPACES"
-        meta={
-          <button
-            type="button"
-            className={btnPrimary('rounded-sm')}
-            disabled={busy}
-            onClick={() => setDlg({ editing: null })}
-          >
-            新建工作空间
-          </button>
-        }
-      >
-        {/* 页头动作条：左侧定位说明，右侧收进浮窗的 Shell 与执行记录（把版面让给文件浏览器） */}
-        <kit.Toolbar
-          left={
-            <p className="max-w-2xl leading-relaxed">
-              以 docker 容器或 SSH 服务器为 agent 的工作空间：模型通过命令行直接在其中作业，
-              你也可以在这里浏览、预览与下载其中的文件。没有全局总开关——启用哪个工作空间，
-              模型就能在哪里执行命令（run_command / list_terminals）。
-            </p>
-          }
-          right={
-            <>
-              <ComputerConnection />
-              <button type="button" className={btnQuiet('rounded-sm')} onClick={() => setShell({ target: selected?.id || targets.find(t => t.enabled)?.id || '' })}>
-                <AppIcon name="terminal" />Shell
-              </button>
+    <PortalAppearanceContext value="slime-surface workspace-popover">
+      <div className="workspace-page">
+        <div className="workspace-toolbar">
+          <p>管理智能体可访问的运行环境。</p>
+          <div className="workspace-toolbar__actions">
+            <ComputerConnection />
+            {selected?.kind !== 'local' && (shellTargets.length > 0 || targets.length === 0) && (
               <button
                 type="button"
-                className={btnOutline('rounded-sm')}
-                onClick={() => {
-                  refreshCommands()
-                  setCmdDlg(true)
-                }}
+                className="workspace-button"
+                onClick={() => setShellTarget(selected?.id ?? shellTargets.find(target => target.enabled)?.id ?? '')}
               >
-                最近执行
+                <AppIcon name="terminal" />Shell
               </button>
-            </>
-          }
-        />
-
-        {loadErr && <kit.Note tone="warn">加载失败：{loadErr}</kit.Note>}
-
-        {/* 工作空间列表 + 文件编辑器：占据页头之下的全部剩余高度 */}
-        <div className="grid min-h-0 gap-5 lg:flex-1 lg:grid-cols-[320px_1fr]">
-          <Card pad="none" className="flex min-h-0 flex-col">
-            <CardHead
-              title="全部工作空间"
-              meta={
-                <span className="mono text-2xs text-dim">
-                  {targets.length > 0 ? `${targets.length} 台` : '—'}
-                </span>
-              }
-            />
-            <div className="scrollbar-slim flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
-              {targets.length === 0 && (
-                <kit.Empty>
-                  还没有工作空间。新建一个 docker 容器或 SSH 服务器后，模型才知道能在哪里执行命令。
-                </kit.Empty>
-              )}
-              {targets.map((t) => {
-                const active = t.id === selected?.id
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => setSelectedId(t.id)}
-                    className={`cursor-pointer rounded-md border p-3.5 transition ${
-                      active
-                        ? 'border-accent bg-accent-soft'
-                        : 'border-line hover:border-line-strong hover:bg-fg/[0.03]'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(t.id)}
-                      className="block w-full text-left"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-base font-semibold text-fg">{t.name}</span>
-                        <kit.Badge>{t.kind}</kit.Badge>
-                        {t.enabled ? (
-                          <kit.Badge tone="ok">已启用</kit.Badge>
-                        ) : (
-                          <kit.Badge tone="warn">未启用</kit.Badge>
-                        )}
-                      </div>
-                      <p className="mono mt-1 break-all text-2xs text-dim">{targetWhere(t)}</p>
-                      {t.note && <p className="mt-0.5 text-2xs text-faint">{t.note}</p>}
-                    </button>
-                    {/* 动作行独立于卡片点击：只响应各自按钮，不把点击冒泡成「选中」 */}
-                    <div className="mt-2 flex cursor-default items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        className={miniBtn}
-                        disabled={busy || probing !== null}
-                        onClick={() => void probeTarget(t)}
-                      >
-                        {probing === t.id ? '测试中 …' : '测试'}
-                      </button>
-                      <button type="button" className={miniBtn} disabled={busy} onClick={() => setDlg({ editing: t })}>
-                        编辑
-                      </button>
-                      <button
-                        type="button"
-                        className={miniBtn}
-                        disabled={busy || !t.enabled}
-                        onClick={() => {
-                          setSelectedId(t.id)
-                          setShell({ target: t.id })
-                        }}
-                      >
-                        Shell
-                      </button>
-                      <button type="button" className={miniBtn} disabled={busy} onClick={() => removeTarget(t)}>
-                        删除
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </Card>
-
-          {selected ? (
-            <FileBrowser
-              key={selected.id}
-              workspace={selected}
-              onToast={(t) => setToast(t)}
-            />
-          ) : (
-            <div className="flex min-h-[320px] items-center justify-center">
-              <kit.Empty>选择左侧的工作空间，即可浏览其中的文件。</kit.Empty>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              className="workspace-button"
+              onClick={() => {
+                setHistoryOpen(true)
+                void refreshCommands()
+              }}
+            >
+              <AppIcon name="clock" />最近执行
+            </button>
+            <button
+              type="button"
+              className="workspace-button workspace-button--primary"
+              disabled={busy || !view}
+              onClick={() => setDialog({ editing: null })}
+            >
+              <AppIcon name="plus" />新建工作空间
+            </button>
+          </div>
         </div>
 
-        {shell && <WorkspaceShell targets={targets} initialTarget={shell.target} onClose={() => setShell(null)} />}
-
-        {/* 最近执行：页头按钮唤起的浮窗 */}
-        {cmdDlg && (
-          <FloatWindow title="最近执行" onClose={() => setCmdDlg(false)} width={560}>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs leading-relaxed text-hint">
-                最近 20 条单次命令记录；交互式 Shell 命令不在此列表中。
-              </p>
-              <button type="button" className={`${miniBtn} shrink-0`} onClick={refreshCommands}>
-                刷新
-              </button>
-            </div>
-            <div className="mt-3 flex flex-col gap-1.5">
-              {commands.length === 0 && <kit.Empty>还没有执行记录。</kit.Empty>}
-              {commands.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex select-text items-start justify-between gap-3 rounded-md border border-line px-3 py-2.5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="mono truncate text-xs text-fg">{c.command}</p>
-                    <p className="mono mt-0.5 text-2xs text-dim">
-                      {c.targetName} · {c.source} · {new Date(c.createdAt).toLocaleString()}
-                    </p>
+        {loadErr ? (
+          <div className="workspace-state workspace-state--error">
+            <span className="workspace-state__icon"><AppIcon name="alert" size={23} /></span>
+            <h2>无法读取工作空间</h2>
+            <p role="alert">{loadErr}</p>
+            <button type="button" className="workspace-button" onClick={() => {
+              setLoadErr(null)
+              setLoadAttempt(value => value + 1)
+            }}>
+              <AppIcon name="refresh" />重新加载
+            </button>
+          </div>
+        ) : !view ? (
+          <div className="workspace-state" role="status">
+            <span className="workspace-state__icon"><AppIcon name="loading" size={23} className="workspace-spinner" /></span>
+            <p>正在加载工作空间…</p>
+          </div>
+        ) : targets.length === 0 ? (
+          <div className="workspace-state">
+            <span className="workspace-state__icon"><AppIcon name="workspace" size={24} /></span>
+            <h2>还没有工作空间</h2>
+            <p>添加{view.localAvailable ? '本机环境、Docker 容器或 SSH 服务器' : 'Docker 容器或 SSH 服务器'}，为 Agent 提供运行环境。</p>
+          </div>
+        ) : (
+          <div className="workspace-layout">
+            <EnvironmentList targets={targets} selectedId={selectedId} onSelect={setSelectedId} />
+            {selected ? (
+              <section className="workspace-detail" aria-labelledby="workspace-detail-title">
+                <div className="workspace-detail__header">
+                  <span className="workspace-detail__icon">
+                    <AppIcon name={environmentTypes[selected.kind].icon} size={22} />
+                  </span>
+                  <div className="workspace-detail__info">
+                    <div className="workspace-detail__name">
+                      <h2 id="workspace-detail-title">{selected.name}</h2>
+                      <span className="workspace-label">{environmentTypes[selected.kind].label}</span>
+                      <span className="workspace-label workspace-label--status" data-enabled={selected.enabled}>
+                        <span className="workspace-status-dot" data-enabled={selected.enabled} />
+                        {selected.enabled ? '已启用' : '未启用'}
+                      </span>
+                    </div>
+                    <p className="workspace-detail__address">{environmentAddress(selected)}</p>
+                    {selected.kind === 'local' && (
+                      selected.writePaths?.length ? (
+                        <details className="workspace-detail__allowlist">
+                          <summary>写入白名单（{selected.writePaths.length} 个目录）</summary>
+                          <ul>{selected.writePaths.map(path => <li key={path}><code>{path}</code></li>)}</ul>
+                        </details>
+                      ) : <p className="workspace-detail__note">只读访问</p>
+                    )}
+                    {selected.note && <p className="workspace-detail__note">{selected.note}</p>}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    {c.timedOut && <kit.Badge tone="warn">超时</kit.Badge>}
-                    {c.truncated && <kit.Badge tone="warn">截断</kit.Badge>}
-                    <kit.Badge tone={c.ok ? 'ok' : 'danger'}>
-                      {c.exitCode == null ? 'exit ?' : `exit ${c.exitCode}`}
-                    </kit.Badge>
+                  <div className="workspace-detail__actions">
+                    <button
+                      type="button"
+                      className="workspace-button"
+                      disabled={busy || probing !== null || (selected.kind === 'local' && !localManageable)}
+                      onClick={() => void probeTarget(selected)}
+                    >
+                      <AppIcon name={probing === selected.id ? 'loading' : 'link'} className={probing === selected.id ? 'workspace-spinner' : undefined} />
+                      {selected.kind === 'local'
+                        ? probing === selected.id ? '检测中…' : '检测环境'
+                        : probing === selected.id ? '连接中…' : '测试连接'}
+                    </button>
+                    {selected.kind === 'local' && (
+                      <button type="button" className="workspace-button" disabled={busy || !selected.enabled || !localManageable}
+                        onClick={() => setCommandTargetId(selected.id)}>
+                        <AppIcon name="play" />试跑命令
+                      </button>
+                    )}
+                    <button type="button" className="workspace-button" disabled={busy || (selected.kind === 'local' && !localManageable)} onClick={() => setDialog({ editing: selected })}>
+                      <AppIcon name="edit" />编辑
+                    </button>
+                    <button
+                      type="button"
+                      className="workspace-button workspace-button--icon workspace-button--danger"
+                      aria-label={`删除工作空间 ${selected.name}`}
+                      title="删除工作空间"
+                      disabled={busy || (selected.kind === 'local' && view.localManageable === false)}
+                      onClick={() => setDeleteId(selected.id)}
+                    >
+                      <AppIcon name="trash" />
+                    </button>
                   </div>
                 </div>
-              ))}
+                {selected.kind === 'local' && (!selected.enabled || !view.localAvailable) ? (
+                  <div className="workspace-state">
+                    <span className="workspace-state__icon"><AppIcon name="folder-open" size={24} /></span>
+                    <p>{localAvailable ? '启用本机工作空间后即可浏览文件。' : localUnavailableReason}</p>
+                  </div>
+                ) : <WorkspaceFiles key={`${selected.id}:${filesRevision}`} workspace={selected} onToast={setToast} />}
+              </section>
+            ) : (
+              <div className="workspace-state">
+                <span className="workspace-state__icon"><AppIcon name="folder-open" size={24} /></span>
+                <h2>选择工作空间</h2>
+                <p>选择一个运行环境，即可查看文件和管理连接。</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {shellTarget !== null && (
+          <WorkspaceShell key={shellTarget} targets={shellTargets} initialTarget={shellTarget} onClose={() => setShellTarget(null)} />
+        )}
+        {commandTarget && <LocalCommand key={commandTarget.id} target={commandTarget} onClose={() => setCommandTargetId(null)} />}
+        {historyOpen && (
+          <WorkspaceHistory
+            commands={commands}
+            loading={historyLoading}
+            error={historyError}
+            onRefresh={() => void refreshCommands()}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
+        {dialog && (
+          <WorkspaceDialog
+            key={dialog.editing?.id ?? 'new'}
+            initial={dialog.editing}
+            localAvailable={localManageable}
+            localUnavailableReason={localManageReason}
+            busy={busy}
+            onClose={() => setDialog(null)}
+            onSubmit={request => void submitTarget(request)}
+          />
+        )}
+        {deleteTarget && (
+          <FloatWindow title="删除工作空间" width={420} onClose={() => setDeleteId(null)}>
+            <div className="workspace-confirm">
+              <p>确定删除工作空间「<strong>{deleteTarget.name}</strong>」？</p>
+              <div className="workspace-confirm__actions">
+                <button type="button" className="workspace-button" onClick={() => setDeleteId(null)}>取消</button>
+                <button
+                  type="button"
+                  className="workspace-button workspace-button--destructive"
+                  disabled={busy}
+                  onClick={() => {
+                    setDeleteId(null)
+                    void updateView(() => deleteTerminalTarget(deleteTarget.id), '工作空间已删除')
+                  }}
+                >
+                  删除工作空间
+                </button>
+              </div>
             </div>
           </FloatWindow>
         )}
-
-        {dlg && (
-          <WorkspaceDialog
-            initial={dlg.editing}
-            busy={busy}
-            onClose={() => setDlg(null)}
-            onSubmit={(req) => void submitTarget(req)}
-          />
-        )}
-
         <Toast kind={toast?.kind} message={toast?.msg ?? null} onClose={() => setToast(null)} />
-      </kit.Page>
-    </div>
+      </div>
+    </PortalAppearanceContext>
   )
 }

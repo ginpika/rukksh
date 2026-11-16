@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,6 +21,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
  *   <li>未接入 hostid（server-url 空）→ 直通并注入本地用户（壳配过就用它，否则 dev）；</li>
  *   <li>页面/非 /api：未登录 302 → hostid /sso/login?redirect=当前地址；</li>
  *   <li>/api/**：未登录 401 + {error, loginUrl}（前端据此跳登录）。</li>
+ *   <li>HostID 校验暂不可用：返回 503。</li>
  * </ul>
  */
 @Component
@@ -54,7 +56,14 @@ public class SsoInterceptor implements HandlerInterceptor {
         if (token == null || token.isBlank()) {
             return unauthorized(request, response);
         }
-        var user = ssoService.session(token);
+        Optional<SsoUser> user;
+        try {
+            user = ssoService.session(token);
+        } catch (IOException e) {
+            log.warn("HostID session check unavailable ({})", e.getClass().getSimpleName());
+            return jsonError(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE,
+                    Map.of("error", "sso_unavailable"));
+        }
         if (user.isEmpty()) {
             return unauthorized(request, response);
         }
@@ -76,23 +85,27 @@ public class SsoInterceptor implements HandlerInterceptor {
 
     private boolean unauthorized(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String loginUrl = ssoService.loginUrl(redirectTarget(request));
-        String uri = request.getRequestURI();
+        String uri = request.getRequestURI().substring(request.getContextPath().length());
         if (uri.startsWith("/api/")) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            objectMapper.writeValue(response.getWriter(),
+            return jsonError(response, HttpServletResponse.SC_UNAUTHORIZED,
                     Map.of("error", "unauthorized", "loginUrl", loginUrl));
-            return false;
         }
         if (isHtmlRequest(request)) {
+            response.setHeader("Cache-Control", "no-store");
             log.info("redirect to login: {} -> {}", uri, loginUrl);
             response.sendRedirect(loginUrl);
             return false;
         }
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json;charset=UTF-8");
-        objectMapper.writeValue(response.getWriter(),
+        return jsonError(response, HttpServletResponse.SC_UNAUTHORIZED,
                 Map.of("error", "unauthorized", "loginUrl", loginUrl));
+    }
+
+    private boolean jsonError(HttpServletResponse response, int status, Map<String, String> body)
+            throws IOException {
+        response.setHeader("Cache-Control", "no-store");
+        response.setStatus(status);
+        response.setContentType("application/json;charset=UTF-8");
+        objectMapper.writeValue(response.getWriter(), body);
         return false;
     }
 

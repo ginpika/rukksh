@@ -65,7 +65,8 @@ minis:
   llm:
     base-url: ${LLM_BASE_URL:}                        # 带版本前缀，如 https://api.openai.com/v1
     api-key: ${LLM_API_KEY:}
-    chat-model: ${LLM_CHAT_MODEL:}                    # AI 会话模型（/chat/completions）
+    chat-model: ${LLM_CHAT_MODEL:}                    # AI 会话模型 ID
+    api-format: ${LLM_API_FORMAT:openai-chat-completions} # 或 anthropic-messages
     system-prompt: ${LLM_SYSTEM_PROMPT:}              # 可选：聊天默认 system prompt
     context-window: ${LLM_CONTEXT_WINDOW:262144}      # 内置模型上下文窗口（token 数）；会话页上下文占比用
     embedding-model: ${EMBEDDING_MODEL:}              # 固定供应商+模型；换模型需全库重嵌

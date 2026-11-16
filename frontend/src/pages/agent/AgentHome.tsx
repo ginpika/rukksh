@@ -1,6 +1,7 @@
 /** The everyday Slime surface. Existing specialist tools live in Dashboard. */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ArrowDown, BookOpen, Check, Copy, History, MessageSquare, PanelLeftOpen, PenLine, Plus, Search, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type SetStateAction } from 'react'
+import { createPortal } from 'react-dom'
+import { ArrowDown, BookOpen, Check, ChevronDown, Copy, History, MessageSquare, PanelLeftOpen, PenLine, Plus, Search, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { ApiError, createSession, getSettings, listMaPeers, listSessions, sessionMessages, sessionPreviews, updateSessionConfig, type MaPeer, type ReasoningEffort, type SessionItem, type SessionMessage, type SettingsView } from '../../api/client'
 import { CORE_AGENT_ID, isCodingAgent, sortAgentPeers } from '../../api/agentRuntime'
 import { AppIcon } from '../../components/AppIcon'
@@ -8,6 +9,7 @@ import AgentMessageReceipt from '../../components/AgentMessageReceipt'
 import ChatMarkdown from '../../components/ChatMarkdown'
 import UserQuestionCard from '../../components/UserQuestionCard'
 import { SlimeAppearanceButton } from '../../components/SlimeAppearance'
+import { useRememberedState } from '../../components/windowState'
 import { registerChatOpener } from '../../components/ChatNotifier'
 import { subscribeSessionEvents } from '../../components/sessionEvents'
 import { AGENT_MESSAGE_SENT, backfillSettledReply, isBackgroundReply, mergeAgentMessageReceipts, mergeLiveChat } from '../../components/settledChat'
@@ -22,6 +24,18 @@ import { useWelcomeSlogan } from './useWelcomeSlogan'
 import './agent.css'
 
 const LAST_SESSION_KEY = 'minis.agent.lastSession'
+type ComposerDrafts = Record<string, string>
+const sessionDraftKey = (id: string) => `session:${id}`
+const newDraftKey = (agentId: string | null) => `new:${agentId ?? CORE_AGENT_ID}`
+
+function writeComposerDraft(drafts: ComposerDrafts, key: string, value: string): ComposerDrafts {
+  if ((drafts[key] ?? '') === value) return drafts
+  const next = { ...drafts }
+  if (value) next[key] = value
+  else delete next[key]
+  return next
+}
+
 type ViewMsg = ChatMsg & { at?: string | null }
 type ComposerPreference = { modelId: string; effort?: ReasoningEffort }
 const SUGGESTIONS = [
@@ -47,6 +61,20 @@ function agentOf(session: SessionItem): string | null { return !session.agentId 
 function previewSnippet(value?: string | null): string | undefined {
   return value?.replace(/\s+/g, ' ').trim().slice(0, 220) || undefined
 }
+
+/** 手机端点气泡进全屏阅读时，气泡内的链接、按钮、表单控件与正在进行的文本选择保持原行为。 */
+function canExpandBubble(event: ReactMouseEvent<HTMLElement>): boolean {
+  const selection = window.getSelection()
+  /* 只让行「在这只气泡里」的选择：别处的残留选区不该把点按吞掉 */
+  if (selection && !selection.isCollapsed && selection.anchorNode && event.currentTarget.contains(selection.anchorNode)) return false
+  const target = event.target
+  return !(target instanceof Element && target.closest(
+    'a, button, input, textarea, select, summary, label, [contenteditable="true"], [role="button"]',
+  ))
+}
+
+/** 全屏阅读层在历史栈里那一格的标记：手机返回手势先消费这一格，不会直接退出页面。 */
+const READER_HISTORY_KEY = 'minisAgentReader'
 export default function AgentHome({ connErr, userSlot }: { connErr?: string | null; userSlot?: ReactNode }) {
   const { slogan, randomize: randomizeSlogan } = useWelcomeSlogan()
   const [sessions, setSessions] = useState<SessionItem[]>([])
@@ -54,7 +82,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   const [peersLoading, setPeersLoading] = useState(true)
   const [peersError, setPeersError] = useState(false)
   const [previews, setPreviews] = useState<Record<string, string>>({})
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  const [selectedAgentId, setSelectedAgentId] = useRememberedState<string | null>('agent:home-selection', null)
   const [settings, setSettings] = useState<SettingsView | null>(null)
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [settingsError, setSettingsError] = useState(false)
@@ -64,30 +92,52 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   const [msgs, setMsgs] = useState<ViewMsg[]>([])
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [text, setText] = useState('')
+  const [drafts, setDrafts] = useRememberedState<ComposerDrafts>('agent:composer-drafts', {})
+  const draftKey = sessionId ? sessionDraftKey(sessionId) : newDraftKey(selectedAgentId)
+  const text = drafts[draftKey] ?? ''
+  const setText = useCallback((action: SetStateAction<string>) => {
+    setDrafts(current => {
+      const value = typeof action === 'function' ? action(current[draftKey] ?? '') : action
+      return writeComposerDraft(current, draftKey, value)
+    })
+  }, [draftKey, setDrafts])
   const [query, setQuery] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  /** 手机端点开的气泡：全屏阅读层的数据（null=未打开）；桌面布局不启用。 */
+  const [reader, setReader] = useState<{ message: ViewMsg; index: number } | null>(null)
+  const readerRef = useRef<HTMLElement>(null)
+  const readerCloseRef = useRef<HTMLButtonElement>(null)
+  const readerTriggerRef = useRef<HTMLElement | null>(null)
+  /** 历史栈顶是不是阅读层压入的那一格（用于区分主动关闭与手机返回手势）。 */
+  const readerHistoryActive = useRef(false)
+  /** 收起全屏阅读层：有历史格就后退一格把页面交还给对话，没有则只关层。 */
+  const closeReader = useCallback(() => {
+    if (readerHistoryActive.current) {
+      readerHistoryActive.current = false
+      window.history.back()
+    }
+    setReader(null)
+  }, [])
   const [sessionsError, setSessionsError] = useState(false)
   const [messageError, setMessageError] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [copied, setCopied] = useState<number | null>(null)
   const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 760px)').matches)
-  const [sidebarOpen, setSidebarOpen] = useState(() => !window.matchMedia('(max-width: 760px)').matches)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const sidebarOpen = !narrow || drawerOpen
   const [awayFromBottom, setAwayFromBottom] = useState(false)
   const live = useLiveChat(sessionId)
   const busy = live?.running ?? false
   const currentRef = useRef<string | null>(null)
-  const selectedAgentRef = useRef<string | null>(null)
+  const selectedAgentRef = useRef(selectedAgentId)
   const sessionsRef = useRef<SessionItem[]>([])
   const sessionsVersion = useRef(0)
   const settledRef = useRef<LiveChat | null>(null)
   const creatingRef = useRef(false)
   const historyVersion = useRef(0)
-  const drafts = useRef(new Map<string, string>())
-  const textRef = useRef(text)
-  textRef.current = text
   const followBottom = useRef(true)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
   const sideRef = useRef<HTMLElement>(null)
   const menuRef = useRef<HTMLButtonElement>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -107,6 +157,13 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
     },
     onError: setToast,
   })
+  useEffect(() => {
+    if (document.activeElement === document.body) mainRef.current?.focus({ preventScroll: true })
+    return () => {
+      historyVersion.current++
+      sessionsVersion.current++
+    }
+  }, [])
   const toggleDictation = () => {
     if (!dictation.listening) dictationOwner.current = currentRef.current ?? `new:${selectedAgentRef.current ?? CORE_AGENT_ID}`
     dictation.toggle()
@@ -143,7 +200,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   const selectIdentity = useCallback((id: string | null) => {
     selectedAgentRef.current = id
     setSelectedAgentId(id)
-  }, [])
+  }, [setSelectedAgentId])
   const reloadPeers = useCallback(() => {
     setPeersLoading(true)
     void listMaPeers().then(list => { setPeers(sortAgentPeers(list)); setPeersError(false) })
@@ -161,20 +218,83 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
       .catch(() => { /* Older backends can still show a conversation title. */ })
   }, [])
   useEffect(reloadSessions, [reloadSessions])
+  /* 手机系统返回（含全面屏手势）：消费阅读层压入的历史格，先收起全屏层。
+     监听常驻组件生命周期；只有阅读层自己那格在栈顶时才处理，普通返回交给浏览器。 */
+  useEffect(() => {
+    const onPopState = () => {
+      if (!readerHistoryActive.current) return
+      readerHistoryActive.current = false
+      setReader(null)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
   useEffect(() => {
     const media = window.matchMedia('(max-width: 760px)')
-    const change = () => { setNarrow(media.matches); setSidebarOpen(!media.matches) }
+    const change = () => {
+      setNarrow(media.matches)
+      setDrawerOpen(false)
+      /* 全屏阅读只服务手机布局：拉宽窗口时收起，避免阅读层悬挂在桌面布局上 */
+      if (!media.matches) closeReader()
+    }
     media.addEventListener('change', change)
     return () => media.removeEventListener('change', change)
+  }, [closeReader])
+
+  /* 阅读层打开期间：锁住背景滚动、Esc 收起、Tab 在层内循环，关闭后把焦点还给被点的那只气泡。 */
+  useEffect(() => {
+    if (!reader) return
+    const trigger = readerTriggerRef.current
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeReader()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const items = Array.from(readerRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ) ?? []).filter(element => element.offsetParent !== null)
+      if (!items.length) return
+      const first = items[0], last = items[items.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    const raf = requestAnimationFrame(() => readerCloseRef.current?.focus({ preventScroll: true }))
+    return () => {
+      cancelAnimationFrame(raf)
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previousOverflow
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true })
+    }
+  }, [closeReader, reader])
+
+  const closeSidebar = useCallback(() => {
+    setDrawerOpen(false)
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      requestAnimationFrame(() => menuRef.current?.focus({ preventScroll: true }))
+    }
   }, [])
+
+  const closeNarrowSidebar = useCallback(() => {
+    if (!window.matchMedia('(max-width: 760px)').matches) return
+    if (sideRef.current?.contains(document.activeElement)) closeSidebar()
+    else setDrawerOpen(false)
+  }, [closeSidebar])
 
   const openSession = useCallback((id: string) => {
     if (creatingRef.current) return
+    closeReader()
     rememberPreferences()
     const snapshot = getLive(id)
     const settled = snapshot && !snapshot.running ? snapshot : null
     if (settled) clearLive(id)
-    drafts.current.set(currentRef.current ?? `new:${selectedAgentRef.current ?? CORE_AGENT_ID}`, textRef.current)
     const known = sessionsRef.current.find(session => session.id === id)
     if (known) selectIdentity(agentOf(known))
     restorePreferences(id, known?.modelId ?? '')
@@ -182,10 +302,9 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
     currentRef.current = id
     const version = ++historyVersion.current
     setSessionId(id); setMsgs([]); setLoading(true); setMessageError(false)
-    setText(drafts.current.get(id) ?? '')
     followBottom.current = true; setAwayFromBottom(false)
     window.localStorage.setItem(LAST_SESSION_KEY, id)
-    if (window.matchMedia('(max-width: 760px)').matches) setSidebarOpen(false)
+    closeNarrowSidebar()
     // Notifications and restoration can arrive before the session list. Resolve
     // the Agent before exposing the conversation as ready for another message.
     const identity = known ? Promise.resolve(known) : listSessions().then(list => {
@@ -212,7 +331,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
       if (currentRef.current === id && historyVersion.current === version) setLoading(false)
     })
     if (!snapshot) void attachLive(id)
-  }, [selectIdentity, rememberPreferences, restorePreferences])
+  }, [closeReader, closeNarrowSidebar, selectIdentity, rememberPreferences, restorePreferences])
 
   useEffect(() => {
     const session = sessions.find(item => item.id === sessionId)
@@ -230,45 +349,40 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
 
   const newChat = useCallback(() => {
     if (creatingRef.current) return
+    closeReader()
     const active = currentRef.current ? sessionsRef.current.find(session => session.id === currentRef.current) : null
     if (currentRef.current && !active) { setToast('正在读取 Agent 信息，请稍后再试'); return }
     rememberPreferences()
-    drafts.current.set(currentRef.current ?? `new:${selectedAgentRef.current ?? CORE_AGENT_ID}`, textRef.current)
     if (active) selectIdentity(agentOf(active))
     currentRef.current = null; historyVersion.current++
     composerPreferences.current.set(`new:${selectedAgentRef.current ?? CORE_AGENT_ID}`, preferenceRef.current)
     randomizeSlogan()
-    setSessionId(null); setMsgs([]); setText(''); setLoading(false); setMessageError(false)
+    setDrafts(current => writeComposerDraft(current, newDraftKey(selectedAgentRef.current), ''))
+    setSessionId(null); setMsgs([]); setLoading(false); setMessageError(false)
     setHistoryOpen(false); setQuery('')
     followBottom.current = true; setAwayFromBottom(false)
     window.localStorage.removeItem(LAST_SESSION_KEY)
-    if (window.matchMedia('(max-width: 760px)').matches) setSidebarOpen(false)
+    setDrawerOpen(false)
     requestAnimationFrame(() => taRef.current?.focus())
-  }, [selectIdentity, rememberPreferences, randomizeSlogan])
-
-  const closeSidebar = useCallback(() => {
-    setSidebarOpen(false)
-    requestAnimationFrame(() => menuRef.current?.focus())
-  }, [])
+  }, [closeReader, selectIdentity, rememberPreferences, randomizeSlogan, setDrafts])
 
   const selectAgent = useCallback((id: string | null) => {
     if (creatingRef.current) return
+    closeReader()
     const peer = peers.find(item => item.id === id)
     if (peer && isCodingAgent(peer)) { window.location.hash = '#/coding'; return }
     const recent = [...sessionsRef.current].filter(session => agentOf(session) === id)
       .sort((a, b) => (Date.parse(b.updatedAt ?? '') || 0) - (Date.parse(a.updatedAt ?? '') || 0))[0]
     if (recent) { openSession(recent.id); return }
     rememberPreferences()
-    drafts.current.set(currentRef.current ?? `new:${selectedAgentRef.current ?? CORE_AGENT_ID}`, textRef.current)
     currentRef.current = null; historyVersion.current++
     selectIdentity(id); setSessionId(null); setMsgs([]); setLoading(false); setMessageError(false)
     restorePreferences(`new:${id ?? CORE_AGENT_ID}`)
     randomizeSlogan()
-    setText(drafts.current.get(`new:${id ?? CORE_AGENT_ID}`) ?? '')
     setHistoryOpen(false); setQuery(''); followBottom.current = true; setAwayFromBottom(false)
     window.localStorage.removeItem(LAST_SESSION_KEY)
-    if (window.matchMedia('(max-width: 760px)').matches) setSidebarOpen(false)
-  }, [peers, openSession, selectIdentity, rememberPreferences, restorePreferences, randomizeSlogan])
+    closeNarrowSidebar()
+  }, [closeReader, closeNarrowSidebar, peers, openSession, selectIdentity, rememberPreferences, restorePreferences, randomizeSlogan])
 
   useEffect(() => {
     if (!historyOpen) return
@@ -324,20 +438,25 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
 
   // On phones the history is an actual drawer, including keyboard focus and Escape handling.
   useEffect(() => {
-    if (!sidebarOpen || !narrow) return
+    if (!drawerOpen || !narrow) return
     const aside = sideRef.current
     aside?.querySelector<HTMLElement>('button, a')?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeSidebar()
+      if (event.defaultPrevented) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeSidebar()
+      }
       if (event.key !== 'Tab' || !aside) return
-      const items = Array.from(aside.querySelectorAll<HTMLElement>('button:not(:disabled), a, input'))
+      const items = Array.from(aside.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled)'))
+        .filter(element => element.getClientRects().length > 0 && element.tabIndex >= 0)
       const first = items[0], last = items.at(-1)
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [narrow, sidebarOpen, closeSidebar])
+  }, [narrow, drawerOpen, closeSidebar])
 
   const inheritedAgent = peers.find(peer => peer.id === (selectedAgentId ?? CORE_AGENT_ID))
   const inheritedModelId = inheritedAgent ? inheritedAgent.modelId || settings?.defaultModelId : undefined
@@ -359,7 +478,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
     try {
       if (id && active?.running && active.userMessageId != null) {
         await steerActiveChat(id, active.userMessageId, value)
-        if (currentRef.current === id) setText(current => current === raw ? '' : current)
+        setText(current => current === raw ? '' : current)
         return
       }
       if (!id) {
@@ -379,9 +498,16 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
         setSessions(sessionsRef.current)
       }
       historyVersion.current++
-      setText(''); drafts.current.delete(id); drafts.current.delete(`new:${agentId ?? CORE_AGENT_ID}`)
       composerPreferences.current.set(id, { modelId, effort: supportedEffort })
       startChat({ sessionId: id, text: value, modelId: modelId || undefined, reasoningEffort: supportedEffort, onSettled: reloadSessions })
+      const destination = sessionDraftKey(id)
+      setDrafts(current => {
+        const latest = current[draftKey] ?? ''
+        const remaining = latest === raw ? '' : latest
+        return destination === draftKey
+          ? writeComposerDraft(current, draftKey, remaining)
+          : writeComposerDraft(writeComposerDraft(current, draftKey, ''), destination, remaining)
+      })
       reloadSessions()
     } catch (error) {
       if (active?.running) {
@@ -389,10 +515,10 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
           ? '当前任务状态已变化，请重新发送'
           : '补充消息未能发送，请稍后重试')
       } else {
-        setText(value); setToast('暂时无法发送，请稍后重试')
+        setToast('暂时无法发送，请稍后重试')
       }
     } finally { creatingRef.current = false; setCreating(false) }
-  }, [loading, messageError, reloadSessions, modelId, supportedEffort])
+  }, [loading, messageError, reloadSessions, modelId, supportedEffort, draftKey, setDrafts, setText])
 
   const view = useMemo(() => live ? mergeLiveChat(msgs, live) : msgs, [live, msgs])
   const empty = !loading && !messageError && view.length === 0
@@ -447,20 +573,38 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
       copyTimer.current = window.setTimeout(() => setCopied(null), 1800)
     } catch { setToast('复制失败，请手动选择文字复制') }
   }
+  const openReader = useCallback((message: ViewMsg, index: number, trigger: HTMLElement) => {
+    if (!message.content) return
+    readerTriggerRef.current = trigger
+    /* 压一格同地址历史：手机返回手势先回到这格之前的对话页，由 popstate 收起全屏层，
+       而不是被浏览器当成「退出页面」。同地址保证路由不跳转、hashchange 不触发。 */
+    if (!readerHistoryActive.current) {
+      try {
+        const previous = window.history.state
+        const base = previous && typeof previous === 'object' ? previous : {}
+        window.history.pushState({ ...base, [READER_HISTORY_KEY]: true }, '')
+        readerHistoryActive.current = true
+      } catch {
+        /* 极端环境下 History API 不可用：层照常打开，只是返回手势会按浏览器默认行为离开页面 */
+        readerHistoryActive.current = false
+      }
+    }
+    setReader({ message, index })
+  }, [])
 
   return (
     <div className={`slime-surface sl-chat${sidebarOpen ? ' is-sidebar-open' : ''}${empty ? ' is-welcome' : ''}`}>
-      {narrow && sidebarOpen && <button type="button" className="sl-chat__scrim" aria-label="关闭会话列表" onClick={closeSidebar} />}
-      <aside className="sl-chat__side" id="slime-history" ref={sideRef} inert={!sidebarOpen} aria-label="Agent 导航" role={narrow && sidebarOpen ? 'dialog' : undefined} aria-modal={narrow && sidebarOpen ? true : undefined}>
+      {narrow && sidebarOpen && <button type="button" className="sl-chat__scrim" tabIndex={-1} aria-label="关闭会话列表" onClick={closeSidebar} />}
+      <aside className="sl-chat__side" id="slime-history" ref={sideRef} inert={!sidebarOpen || reader !== null} aria-label="Agent 导航" role={narrow && sidebarOpen ? 'dialog' : undefined} aria-modal={narrow && sidebarOpen ? true : undefined}>
         <AgentSidebar mainAgent={mainAgent} agents={peers.filter(peer => peer.id !== CORE_AGENT_ID)}
           selectedAgentId={selectedAgentId} previews={agentPreviews} loading={peersLoading} error={peersError}
           disabled={creating} narrow={narrow} userSlot={userSlot} onSelectAgent={selectAgent}
           onReload={reloadPeers} onClose={closeSidebar} />
       </aside>
 
-      <main className="sl-chat__main" inert={narrow && sidebarOpen}>
+      <main ref={mainRef} className="sl-chat__main" aria-label="对话" tabIndex={-1} inert={reader !== null || (narrow && sidebarOpen)}>
         <header className="sl-chat__header" data-tauri-drag-region>
-          <button ref={menuRef} type="button" className={`sl-chat__icon sl-chat__menubtn${sidebarOpen ? ' is-hidden' : ''}`} title="展开 Agent 列表" aria-label="展开 Agent 列表" aria-expanded={sidebarOpen} aria-controls="slime-history" onClick={() => { setHistoryOpen(false); setSidebarOpen(true) }}><PanelLeftOpen size={19} /></button>
+          {narrow && <button ref={menuRef} type="button" className={`sl-chat__icon sl-chat__menubtn${sidebarOpen ? ' is-hidden' : ''}`} title="展开 Agent 列表" aria-label="展开 Agent 列表" aria-expanded={sidebarOpen} aria-controls="slime-history" onClick={() => { setHistoryOpen(false); setDrawerOpen(true) }}><PanelLeftOpen size={19} /></button>}
           <div className="sl-chat__heading sl-chat__agent-heading">
             {avatarBadge}
             <span className="sl-chat__agent-title"><strong>{agentName}</strong><small>{busy ? '处理中…' : title ? sessionTitle(title) : '新对话'}</small></span>
@@ -500,9 +644,17 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
                   return sessionId ? <AgentMessageReceipt key={message.id} sessionId={sessionId} content={message.content} peers={peersById} /> : null
                 }
                 const turn = questionTurn(message)
+                /* 手机端：点气泡直接进全屏阅读。流式中的回复先不开放，避免点开时内容还在长；
+                   气泡里的链接 / 按钮 / 输入控件和文本选择由 canExpandBubble 让行。 */
+                const expandable = narrow && Boolean(message.content) && !message.streaming
+                const expand = expandable
+                  ? (event: ReactMouseEvent<HTMLElement>) => {
+                      if (canExpandBubble(event)) openReader(message, index, event.currentTarget)
+                    }
+                  : undefined
                 return <article key={message.id ?? `live-${index}`} className={`sl-chat__turn sl-chat__turn--${message.role}`} aria-label={message.role === 'user' ? '你的消息' : `${agentName} 的回复`}>
-                  {message.role === 'user' ? <div className="sl-chat__bubble">{message.content}</div> : <>
-                    <div className="sl-chat__answer">
+                  {message.role === 'user' ? <div className={`sl-chat__bubble${expandable ? ' is-expandable' : ''}`} onClick={expand} title={expandable ? '点按全屏查看' : undefined} tabIndex={expandable ? -1 : undefined}>{message.content}</div> : <>
+                    <div className={`sl-chat__answer${expandable ? ' is-expandable' : ''}`} onClick={expand} title={expandable ? '点按全屏查看' : undefined} tabIndex={expandable ? -1 : undefined}>
                       {turn ? <>{turn.before && <ChatMarkdown content={turn.before} />}<UserQuestionCard key={JSON.stringify(turn.question)} question={turn.question} active={!busy && !creating && !loading && !live?.error && index === latestTurn} onAnswer={sendText} />{turn.after && <ChatMarkdown content={turn.after} />}</>
                         : message.streaming ? message.content ? <div className="sl-chat__stream">{message.content}</div> : <span className="sl-chat__thinking" aria-hidden="true"><i /><i /><i /></span>
                         : <ChatMarkdown content={message.content} />}
@@ -561,10 +713,55 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
               </div>
             </div>
           </form>
-          {empty && <div className="sl-chat__suggestions">{SUGGESTIONS.map(({ label, text: suggestion, icon: Icon }) => <button type="button" key={label} onClick={() => { setText(suggestion); taRef.current?.focus() }}><Icon size={15} />{label}</button>)}</div>}
+          {empty && <div className="sl-chat__suggestions">{SUGGESTIONS.map(({ label, text: suggestion, icon: Icon }) => <button type="button" key={label} disabled={!!text.trim()} onClick={() => { setText(current => current.trim() ? current : suggestion); taRef.current?.focus() }}><Icon size={15} />{label}</button>)}</div>}
         </div>
         {toast && <div className="sl-chat__toast" role="status">{toast}<button type="button" aria-label="关闭提示" onClick={() => setToast(null)}><X size={14} /></button></div>}
       </main>
+
+      {/* 手机端气泡的全屏阅读层：铺满视口、独立滚动，关闭后焦点回到被点开的那只气泡。
+          挂到 body 上，避免被会话页的 overflow 与层叠上下文裁掉。 */}
+      {reader && createPortal(
+        <section
+          ref={readerRef}
+          className="slime-surface sl-chat__reader"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sl-chat-reader-title"
+        >
+          <header className="sl-chat__reader-head">
+            <button
+              ref={readerCloseRef}
+              type="button"
+              className="sl-chat__icon"
+              aria-label="收起全屏视图"
+              title="收起全屏视图"
+              onClick={closeReader}
+            >
+              <ChevronDown size={20} />
+            </button>
+            <span id="sl-chat-reader-title" className="sl-chat__reader-title">
+              {reader.message.role === 'user' ? '你的消息' : `${agentName} 的回复`}
+            </span>
+            <button
+              type="button"
+              className="sl-chat__icon"
+              aria-label={copied === reader.index ? '已复制全文' : '复制全文'}
+              title={copied === reader.index ? '已复制' : '复制全文'}
+              onClick={() => void copy(reader.message.content, reader.index)}
+            >
+              {copied === reader.index ? <Check size={17} /> : <Copy size={17} />}
+            </button>
+          </header>
+          <div className="sl-chat__reader-scroll scrollbar-slim">
+            <div className={`sl-chat__reader-body${reader.message.role === 'user' ? ' is-user' : ''}`}>
+              {reader.message.role === 'user'
+                ? <p className="sl-chat__reader-text">{reader.message.content}</p>
+                : <div className="sl-chat__reader-markdown"><ChatMarkdown content={reader.message.content} /></div>}
+            </div>
+          </div>
+        </section>,
+        document.body,
+      )}
     </div>
   )
 }

@@ -41,6 +41,7 @@ public class SchemaColumnPatches {
             new ColumnPatch("graph_claim", "temporal_json", "TEXT"),
             new ColumnPatch("project_document", "graph_claim_id", "INTEGER"),
             new ColumnPatch("term_target", "host_workdir", "TEXT"),
+            new ColumnPatch("term_target", "write_paths", "TEXT"),
             new ColumnPatch("token_usage", "provider", "TEXT"),
             new ColumnPatch("token_usage", "quality", "TEXT"),
             new ColumnPatch("token_usage", "status", "TEXT"),
@@ -73,6 +74,7 @@ public class SchemaColumnPatches {
             new ColumnPatch("graph_claim", "pinned", "INTEGER"),
             new ColumnPatch("task", "memory_checkpoint", "TEXT"),
             new ColumnPatch("llm_model", "max_output_tokens", "INTEGER"),
+            new ColumnPatch("llm_model", "api_format", "TEXT"),
             /* memory-v5 §4.2：记忆归属/治理增量列（全部可空；历史回填由 SchemaMigrations 负责） */
             new ColumnPatch("graph_claim", "user_id", "TEXT"),
             new ColumnPatch("graph_claim", "owner", "TEXT"),

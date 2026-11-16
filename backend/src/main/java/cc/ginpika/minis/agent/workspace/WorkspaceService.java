@@ -1,6 +1,7 @@
 package cc.ginpika.minis.agent.workspace;
 
 import cc.ginpika.minis.ai.computer.terminal.ExecTarget;
+import cc.ginpika.minis.ai.computer.terminal.exec.LocalExecTarget;
 import cc.ginpika.minis.ai.computer.terminal.store.TerminalStore;
 import cc.ginpika.minis.config.TerminalProps;
 import java.util.ArrayList;
@@ -23,7 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
  * {@code term_target}（命令行终端设置）维护，本类不新增持久化，只在执行契约 {@link ExecTarget}
  * 之上组装只读的文件操作。
  *
- * <p><b>为什么能覆盖 docker 与 ssh</b>：{@code ExecTarget} 已经把两套协议收成「命令进去、输出出来」，
+ * <p>{@code ExecTarget} 为 Docker、SSH 和后端本机环境提供共同的命令执行契约，
  * 文件操作只需拼出正确的命令行（{@code ls} / {@code head} / {@code base64}），不必分别对接
  * Docker Engine 的文件 API 与 SFTP——两条实现的路由、认证、超时护栏都是同一套。
  *
@@ -31,8 +32,8 @@ import org.springframework.web.server.ResponseStatusException;
  * 的沙箱路径，由目录项名字逐级拼成；{@link #normalize} 拒绝 {@code ..} 与绝对路径。
  * 命令参数一律经 {@link ExecTarget#quote} 单引号包裹，目录项名字里的空格、引号、分号都不会被 shell 二次解释。
  *
- * <p><b>与模型护栏的关系</b>：这里的命令<b>不</b>过目标的白/黑名单——那是约束模型的，而工作空间页是
- * 人操作自己的环境（与设置页「人工试跑」同一条执行权）。超时与输出上限仍按 {@link TerminalProps} 兜底。
+ * <p>文件操作使用服务端组装的只读命令。本机命令也由操作系统沙箱执行。
+ * 超时与输出上限由 {@link TerminalProps} 兜底。
  */
 @Component
 public class WorkspaceService {
@@ -77,11 +78,9 @@ public class WorkspaceService {
     public WorkspaceDtos.DirView list(String workspaceId, String path) {
         TerminalStore.TargetRow target = require(workspaceId);
         String rel = normalize(path);
-        ExecTarget.ExecOutcome out = exec(target, "ls -la " + ExecTarget.quote("./" + rel),
-                LIST_MAX_CHARS);
-        if (out.exitCode() != ExecTarget.NO_EXIT_CODE && out.exitCode() != 0) {
-            throw badRequest(failMessage(out, rel));
-        }
+        ExecTarget.ExecOutcome out = exec(target, localPathGuard(target, rel)
+                + "ls -la " + ExecTarget.quote("./" + rel), LIST_MAX_CHARS);
+        requireSuccess(out, rel);
         List<WorkspaceDtos.FileEntry> entries = new ArrayList<>();
         String stdout = out.stdout() == null ? "" : out.stdout();
         for (String line : stdout.split("\n")) {
@@ -115,11 +114,10 @@ public class WorkspaceService {
         TerminalStore.TargetRow target = require(workspaceId);
         String rel = requireFile(path);
         String arg = ExecTarget.quote("./" + rel);
-        String command = "wc -c < " + arg + " && head -c " + PREVIEW_MAX_BYTES + " " + arg;
+        String command = localPathGuard(target, rel)
+                + "wc -c < " + arg + " && head -c " + PREVIEW_MAX_BYTES + " " + arg;
         ExecTarget.ExecOutcome out = exec(target, command, PREVIEW_MAX_BYTES + 256);
-        if (out.exitCode() != ExecTarget.NO_EXIT_CODE && out.exitCode() != 0) {
-            throw badRequest(failMessage(out, rel));
-        }
+        requireSuccess(out, rel);
         String stdout = out.stdout() == null ? "" : out.stdout();
         int nl = stdout.indexOf('\n');
         long size = parseLong(nl < 0 ? stdout : stdout.substring(0, nl));
@@ -134,29 +132,67 @@ public class WorkspaceService {
     public WorkspaceDtos.Download download(String workspaceId, String path) {
         TerminalStore.TargetRow target = require(workspaceId);
         String rel = requireFile(path);
-        ExecTarget.ExecOutcome out = exec(target,
-                "base64 < " + ExecTarget.quote("./" + rel) + " | tr -d '\\n'", DOWNLOAD_MAX_CHARS);
-        if (out.exitCode() != ExecTarget.NO_EXIT_CODE && out.exitCode() != 0) {
-            throw badRequest(failMessage(out, rel));
-        }
+        String arg = ExecTarget.quote("./" + rel);
+        String command = LocalExecTarget.KIND.equals(target.kind())
+                ? localPathGuard(target, rel) + "base64 "
+                    + (System.getProperty("os.name", "").startsWith("Mac") ? "-b" : "-w") + " 0 < " + arg
+                : "base64 < " + arg + " | tr -d '\\n'";
+        ExecTarget.ExecOutcome out = exec(target, command, DOWNLOAD_MAX_CHARS);
+        requireSuccess(out, rel);
         if (out.truncated()) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
-                    "文件过大（下载上限 " + (DOWNLOAD_MAX_BYTES / 1024 / 1024) + " MB）");
+            throw downloadTooLarge();
         }
         try {
-            byte[] bytes = Base64.getDecoder().decode(out.stdout() == null ? "" : out.stdout().trim());
+            String encoded = out.stdout() == null ? "" : out.stdout().trim();
+            byte[] bytes = Base64.getDecoder().decode(encoded);
+            if (bytes.length > DOWNLOAD_MAX_BYTES) {
+                throw downloadTooLarge();
+            }
             return new WorkspaceDtos.Download(fileName(rel), bytes);
         } catch (IllegalArgumentException e) {
             throw badRequest("文件内容解码失败（可能不是普通文件）：" + rel);
         }
     }
 
+    private static ResponseStatusException downloadTooLarge() {
+        return new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+                "文件过大（下载上限 " + (DOWNLOAD_MAX_BYTES / 1024 / 1024) + " MB）");
+    }
+
+    private static void requireSuccess(ExecTarget.ExecOutcome outcome, String path) {
+        if (outcome.timedOut()) {
+            throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "文件操作超时");
+        }
+        if (outcome.exitCode() != ExecTarget.NO_EXIT_CODE && !outcome.ok()) {
+            throw badRequest(failMessage(outcome, path));
+        }
+    }
+
+    /** 本机文件浏览逐级检查链接；Agent 命令的访问权限由操作系统沙箱决定。 */
+    private static String localPathGuard(TerminalStore.TargetRow target, String relative) {
+        if (!LocalExecTarget.KIND.equals(target.kind()) || ".".equals(relative)) {
+            return "";
+        }
+        StringBuilder guard = new StringBuilder();
+        String path = ".";
+        for (String segment : relative.split("/")) {
+            path += "/" + segment;
+            guard.append("if [ -L ").append(ExecTarget.quote(path))
+                    .append(" ]; then echo '本机文件浏览不跟随符号链接' >&2; exit 73; fi; ");
+        }
+        return guard.toString();
+    }
+
     // ---------- 执行 ----------
 
     private TerminalStore.TargetRow require(String workspaceId) {
-        return store.targetById(workspaceId)
+        TerminalStore.TargetRow target = store.targetById(workspaceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "工作空间不存在：" + workspaceId));
+        if (LocalExecTarget.KIND.equals(target.kind()) && !target.enabled()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "请先启用本机工作空间");
+        }
+        return target;
     }
 
     /** 在目标环境里执行一条只读命令（起点目录用目标自带的 workdir） */
@@ -167,7 +203,7 @@ public class WorkspaceService {
             throw badRequest("未知的目标类型：" + target.kind());
         }
         ExecTarget.ExecOptions options = new ExecTarget.ExecOptions(target.workdir(),
-                Math.max(1_000L, props.getDefaultTimeoutMs()), maxOutputChars);
+                Math.max(1_000L, props.getDefaultTimeoutMs()), maxOutputChars, true);
         try {
             return impl.run(target, command, options);
         } catch (RuntimeException e) {

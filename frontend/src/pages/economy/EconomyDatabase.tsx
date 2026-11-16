@@ -59,11 +59,13 @@ export default function EconomyDatabase() {
   const newStudy = () => { rememberStudy(null); location.hash = '/economy/research' }
   const report = detail?.reports.find(r => r.id === reportId)
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
-  return <section className="eco-page eco-database-page scrollbar-slim" aria-labelledby="eco-database-title">
-    <header className="eco-header">
-      <div><a className="eco-back" href="#/economy"><AppIcon name="arrow-left"/>经济</a><h1 id="eco-database-title">观测数据库</h1><p>让每次判断留下证据，按标的与日期持续回看。</p></div>
-      <div className="eco-inline-actions"><a className="eco-button" href="#/economy/research">返回工作台</a><button className="eco-primary" onClick={newStudy}><AppIcon name="plus"/>新一轮观测</button></div>
-    </header>
+  return <div className="eco-page eco-database-page" data-page="economy-database">
+    <div className="eco-page-tools">
+      <div className="eco-inline-actions">
+        <a className="eco-button" href="#/economy/research"><AppIcon name="economy"/>返回工作台</a>
+        <button type="button" className="eco-primary" onClick={newStudy}><AppIcon name="plus"/>新一轮观测</button>
+      </div>
+    </div>
     <div className={`eco-database-layout${selectedId ? ' is-inspecting' : ''}`}>
       <div className="eco-database-list scrollbar-slim">
         <form className="eco-database-filters" noValidate onSubmit={e => {
@@ -119,5 +121,5 @@ export default function EconomyDatabase() {
         </>}
       </section>}
     </div>
-  </section>
+  </div>
 }

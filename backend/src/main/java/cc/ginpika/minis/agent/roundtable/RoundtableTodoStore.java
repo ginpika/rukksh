@@ -108,6 +108,11 @@ public class RoundtableTodoStore {
                 RoundtableTodoStore::map, sessionId);
     }
 
+    public List<TodoRow> page(String sessionId, int offset, int limit) {
+        return jdbc.query("SELECT " + COLS + " FROM roundtable_todo WHERE session_id=? ORDER BY seq,id LIMIT ? OFFSET ?",
+                RoundtableTodoStore::map, sessionId, limit, offset);
+    }
+
     /** 某会话里还没做完的条目（pending / doing / blocked） */
     public List<TodoRow> openOnes(String sessionId) {
         return jdbc.query("SELECT " + COLS + " FROM roundtable_todo WHERE session_id = ? "

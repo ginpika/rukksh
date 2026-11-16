@@ -1,5 +1,6 @@
 import { AppIcon } from './AppIcon'
 import {
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
@@ -11,6 +12,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useThemeState } from '../theme/store'
+import { PortalAppearanceContext } from './portalAppearance'
 
 let windowStack: string[] = []
 const stackListeners = new Set<() => void>()
@@ -53,7 +55,9 @@ type Props = {
 
 export default function FloatWindow({ title, onClose, children, width = 520, contentClassName = '', expandable = false }: Props) {
   const { vars } = useThemeState()
-  const workbench = !!vars['--ui-win-title-bg']
+  const appearance = useContext(PortalAppearanceContext)
+  const workbench = !appearance && !!vars['--ui-win-title-bg']
+  const windowClassName = appearance || (workbench ? 'ui-win-workbench' : '')
   const id = useId()
   const stack = useSyncExternalStore(subscribeStack, readStack)
   const closeRef = useRef(onClose)
@@ -179,9 +183,7 @@ export default function FloatWindow({ title, onClose, children, width = 520, con
               /* 量到尺寸前先隐身，避免在 (0,0) 处闪一下 */
               visibility: pos ? 'visible' : 'hidden',
             }}
-            className={`ui-float-window fixed flex max-h-[82dvh] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-md border border-line bg-bg shadow-xl${
-              workbench ? ' ui-win-workbench' : ''
-            }`}
+            className={`ui-float-window fixed flex max-h-[82dvh] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-md border border-line bg-bg shadow-xl ${windowClassName}`}
           >
             {/* 标题栏：拖动手柄。工作台档换深炭底，并在栏内把 --c-fg 切到
                 标题栏前景——标题文字 / 关闭钮的 text-* 类与 hover 逻辑无需改动 */}

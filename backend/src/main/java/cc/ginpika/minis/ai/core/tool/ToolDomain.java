@@ -22,6 +22,9 @@ public enum ToolDomain {
     /** 记忆：事件流回忆、向量回填 */
     MEMORY("memory", "记忆"),
 
+    /** 全局项目与个人待办 */
+    WORK("work", "项目与待办"),
+
     /** 终端：在工作空间上执行命令、查看可用环境 */
     TERMINAL("terminal", "终端"),
     COMPUTER("computer", "电脑与浏览器"),

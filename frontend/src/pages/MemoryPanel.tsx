@@ -20,7 +20,7 @@ type Data = { items: MemoryItem[]; shares: MemoryShare[]; agents: MaPeer[]; proj
 const initial: Data = { items: [], shares: [], agents: [], projects: [], sessions: [], work: [], snapshots: [], summary: null, health: null, metrics: null }
 const loaders = { items: memoryItems, shares: memoryShared, agents: listMaPeers, projects: listProjects, sessions: listSessions, work: memoryObservedWork, snapshots: memorySnapshots, summary: memorySummary, health: memoryHealth, metrics: memoryMetrics }
 const labels: Record<keyof Data, string> = { items: '记忆条目', shares: '发布授权', agents: 'Agent 目录', projects: '项目目录', sessions: '会话目录', work: '工作集', snapshots: '快照索引', summary: '概要', health: '体检', metrics: '进程指标' }
-const views: [View, string, string][] = [['home', '记忆内容', '新增与保留状态'], ['overview', '架构与边界', '层级与归属'], ['agent', 'Agent 视角', '归属与可读'], ['replay', '运行回放', '选入与发送'], ['governance', '治理工作台', '审批与控制']]
+const views: [View, string, string][] = [['overview', '架构与边界', '层级与归属'], ['agent', 'Agent 视角', '归属与可读'], ['replay', '运行回放', '选入与发送'], ['governance', '治理工作台', '审批与控制']]
 const governance: [WorkbenchTab, string, string][] = [['candidates', '画像候选', '审核原文证据，批准后才成为全局规则'], ['publish', '交接与提升', '查看收件箱，决定接收与共享层提升'], ['shared', '发布授权', '检查定向共享，并撤回具体授权'], ['working', '工作集', '关闭临时材料、检查恢复点与会话收尾'], ['health', '记忆体检', '检查污染、挤占、漂移与过程指标'], ['timeline', '时间与取代链', '查看双时态记录和替换历史'], ['items', '条目管理', '人工新增、编辑、固定与批量维护'], ['swimlane', '四层泳道', '按内容域和层级检查存储分布']]
 function bounded<T>(promise: Promise<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -31,7 +31,7 @@ function bounded<T>(promise: Promise<T>): Promise<T> {
 
 export default function MemoryPanel() {
   const kit = usePageKit()
-  const [view, setView] = useState<View>('home')
+  const [view, setView] = useState<View>('overview')
   const [data, setData] = useState<Data>(initial)
   const [errors, setErrors] = useState<Partial<Record<keyof Data, string>>>({})
   const [loaded, setLoaded] = useState<Partial<Record<keyof Data, boolean>>>({})
@@ -151,7 +151,7 @@ export default function MemoryPanel() {
           <strong>{name}</strong><small>{desc}</small>
         </button>)}
       </nav>
-      {view !== 'home' && <kit.Toolbar left={<span className="mem-muted">{view === 'overview' ? '查看系统保存的记忆与共享边界。点击层级、范围或 Agent 继续探索。' : view === 'agent' ? '用真实权限区分「归属这个 Agent」和「这个 Agent 能读到」。' : view === 'replay' ? '对照当时选中的版本与实际请求，检查记忆是否送达模型。' : '审核来源和目标，控制记忆的保留、发布与遗忘。'}</span>} right={
+      {view !== 'home' && <kit.Toolbar left={<span className="mem-muted"><a className="mem-ops-back" href="#/memory">← 返回记忆</a> · {view === 'overview' ? '查看系统保存的记忆与共享边界。点击层级、范围或 Agent 继续探索。' : view === 'agent' ? '用真实权限区分「归属这个 Agent」和「这个 Agent 能读到」。' : view === 'replay' ? '对照当时选中的版本与实际请求，检查记忆是否送达模型。' : '审核来源和目标，控制记忆的保留、发布与遗忘。'}</span>} right={
         <div className="mem-refresh"><small>{updated ? `最近读取完成 ${time(updated)}` : '正在连接观察接口'}</small><MemoryButton disabled={loading} onClick={refresh}>{loading ? '读取中…' : '刷新观察'}</MemoryButton></div>
       } />}
       {Object.values(errors).some(Boolean) && <div role="alert" className="mem-error">

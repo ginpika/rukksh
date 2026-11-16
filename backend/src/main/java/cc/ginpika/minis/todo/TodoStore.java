@@ -40,6 +40,24 @@ public class TodoStore {
                 + filter + " ORDER BY t.created_at DESC,t.id", (r,n) -> item(r), args.toArray());
     }
 
+    List<Item> list(String owner, String project, String state, String query, long now, int limit, int offset) {
+        List<Object> args = new ArrayList<>(List.of(now, owner));
+        StringBuilder where = new StringBuilder(filter("t", project, args));
+        if (state != null) {
+            where.append(" AND t.state=?");
+            args.add(state);
+        }
+        if (query != null) {
+            where.append(" AND (instr(lower(t.title),lower(?))>0 OR instr(lower(t.note),lower(?))>0)");
+            args.add(query);
+            args.add(query);
+        }
+        args.add(limit);
+        args.add(offset);
+        return jdbc.query(ITEM_SELECT + where + " ORDER BY t.created_at DESC,t.id LIMIT ? OFFSET ?",
+                (r, n) -> item(r), args.toArray());
+    }
+
     List<Item> closed(String owner, long from, long to, String project, long now) {
         List<Object> args = new ArrayList<>(List.of(now,owner,from,to));
         return jdbc.query(ITEM_SELECT + " AND t.state IN ('done','dropped') AND t.closed_at>=? AND t.closed_at<?"

@@ -51,6 +51,7 @@
         --mds-bg: #ffffff;
         --mds-chrome: #f6f8fa;
         --mds-line: #d1d9e0;
+        --mds-edge-line: rgba(15, 15, 15, 0.12);
         --mds-frame: #eaeef2;
         display: none;
       }
@@ -58,6 +59,7 @@
         --mds-bg: #0d0f10;
         --mds-chrome: #141719;
         --mds-line: #2c3236;
+        --mds-edge-line: rgba(255, 255, 255, 0.14);
         --mds-frame: #0d0f10;
       }
       @media (prefers-color-scheme: dark) {
@@ -65,6 +67,7 @@
           --mds-bg: #0d0f10;
           --mds-chrome: #141719;
           --mds-line: #2c3236;
+          --mds-edge-line: rgba(255, 255, 255, 0.14);
           --mds-frame: #0d0f10;
         }
       }
@@ -83,6 +86,15 @@
         border-radius: 20px;
         overflow: hidden;
         /* 骨架是占位：可看不可点，免得挡住真实窗口按钮 */
+        pointer-events: none;
+      }
+      html.minis-df-skeleton #minis-df-skeleton::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 90;
+        border-radius: inherit;
+        box-shadow: inset 0 0 0 1px var(--mds-edge-line);
         pointer-events: none;
       }
       /* 最底层：纯色窗缘（同 .df__acrylic） */
@@ -164,34 +176,52 @@
         height: 30px;
         border-radius: 50%;
       }
-      /* The conversation starts at the window origin, including its 280px rail. */
-      html.minis-df-conversation #minis-df-skeleton {
+      /* Standalone pages (conversation, Dashboard and tool pages) fill the window cleanly. */
+      html.minis-df-frameless #minis-df-skeleton {
         padding: 0;
         gap: 0;
       }
+      html.minis-df-frameless .mds-acrylic,
+      html.minis-df-frameless .mds-rail,
+      html.minis-df-frameless .mds-logo,
+      html.minis-df-frameless .mds-titlebar {
+        display: none;
+      }
+      html.minis-df-frameless .mds-stage {
+        border-radius: 0;
+        box-shadow: none;
+      }
+      :root[data-scheme='dark'].minis-df-frameless #minis-df-skeleton {
+        --mds-bg: #101213;
+        --mds-chrome: #151819;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-scheme]).minis-df-frameless #minis-df-skeleton {
+          --mds-bg: #101213;
+          --mds-chrome: #151819;
+        }
+      }
+      /* The conversation starts at the window origin, including its 280px rail. */
       html.minis-df-conversation .mds-rail {
+        display: flex;
         width: 280px;
         padding: 0;
         border-radius: 0;
         box-shadow: inset -1px 0 var(--mds-line);
       }
-      html.minis-df-conversation .mds-logo,
-      html.minis-df-conversation .mds-titlebar {
-        display: none;
-      }
-      html.minis-df-conversation .mds-stage {
+      /* macOS 使用原生系统窗口：不画自绘圆角/描边/右侧窗口按钮，外框路由给栏顶让出红绿灯位 */
+      html.minis-df-mac #minis-df-skeleton,
+      html.minis-df-mac .mds-acrylic {
         border-radius: 0;
-        box-shadow: none;
       }
-      :root[data-scheme='dark'].minis-df-conversation #minis-df-skeleton {
-        --mds-bg: #101213;
-        --mds-chrome: #151819;
+      html.minis-df-mac #minis-df-skeleton::after {
+        content: none;
       }
-      @media (prefers-color-scheme: dark) {
-        :root:not([data-scheme]).minis-df-conversation #minis-df-skeleton {
-          --mds-bg: #101213;
-          --mds-chrome: #151819;
-        }
+      html.minis-df-mac:not(.minis-df-conversation) .mds-rail {
+        padding-top: 42px;
+      }
+      html.minis-df-mac .mds-wbtn {
+        display: none;
       }
     </style>
     <script>
@@ -199,15 +229,26 @@
         // 只在本机桌面壳里铺骨架（浏览器里 #minis-df-skeleton 保持 display:none）
         if (!('__TAURI_INTERNALS__' in window)) return
         document.documentElement.classList.add('minis-df-skeleton')
-        var hash = window.location.hash
-        if (!hash || hash === '#' || hash === '#/' || hash.indexOf('#/?') === 0) {
-          document.documentElement.classList.add('minis-df-conversation')
+        if (typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)) {
+          document.documentElement.classList.add('minis-df-mac')
+        }
+        var raw = (window.location.hash || '').replace(/^#/, '').split('?')[0]
+        var path = raw.charAt(0) === '/' ? raw : '/' + raw
+        if (path === '/') {
+          document.documentElement.classList.add('minis-df-frameless', 'minis-df-conversation')
+        } else if (path !== '/search' && path !== '/memory/ops') {
+          document.documentElement.classList.add('minis-df-frameless')
         }
         // 兜底：bundle 跑不起来时也别让骨架一直挂着
         setTimeout(function () {
           var el = document.getElementById('minis-df-skeleton')
           if (el) el.remove()
-          document.documentElement.classList.remove('minis-df-skeleton', 'minis-df-conversation')
+          document.documentElement.classList.remove(
+            'minis-df-skeleton',
+            'minis-df-conversation',
+            'minis-df-frameless',
+            'minis-df-mac',
+          )
         }, 6000)
       })()
     </script>

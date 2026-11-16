@@ -287,15 +287,16 @@ CREATE TABLE IF NOT EXISTS entity_embedding (
 -- 运行时配置（设置页读写；.env 传入的 LLM/EMBEDDING 作为内置项 "env"，不可编辑删除）
 -- ---------------------------------------------------------------------------
 
--- 用户配置的大模型（OpenAI Compatible /chat/completions 端点）；内置 env 项不入库
+-- 用户配置的聊天模型端点；内置 env 项不入库
 CREATE TABLE IF NOT EXISTS llm_model (
   id              TEXT PRIMARY KEY,          -- uuid
   name            TEXT NOT NULL,             -- 展示名
   base_url        TEXT NOT NULL,             -- 带版本前缀，如 https://api.openai.com/v1
   api_key         TEXT NOT NULL,
-  model           TEXT NOT NULL,             -- chat/completions 的 model
+  model           TEXT NOT NULL,             -- 请求中的模型 ID
   context_window  INTEGER,                   -- 上下文窗口（token 数）；NULL=按默认值估算
   max_output_tokens INTEGER,                 -- 单次输出上限；NULL=模型服务默认，与上下文窗口独立
+  api_format      TEXT,                      -- NULL=OpenAI Chat Completions（旧配置）
   created_at      INTEGER NOT NULL,
   updated_at      INTEGER NOT NULL
 );
@@ -979,10 +980,10 @@ CREATE TABLE IF NOT EXISTS token_price (
 -- 命令行终端（ai/terminal 包）：让 Agent 直接控制所在环境的能力面。
 --
 --   一个 term_target = 一台「可执行环境」/ 一个工作空间：本机 docker 的一个容器（Engine API + exec），
---   或一台远程服务器（SSH）。由人在工作空间页维护，模型只读（list_terminals）并按 name 选用；
+--   一台远程服务器（SSH），或带写入白名单的后端本机环境。由人在工作空间页维护，模型按 name 选用；
 --   工作空间页（agent/workspace）在此之上再提供目录浏览与文件下载。
 --
---   两套实现共用一个执行契约（ExecTarget）：命令进去、退出码与两路输出出来，
+--   各类环境共用一个执行契约（ExecTarget）：命令进去、退出码与两路输出出来，
 --   于是模型侧只有一个工具（run_command），换环境只是换 target。
 --
 --   没有全局总闸：enabled 是逐目标开关——开哪台模型才能用哪台（默认关）。
@@ -993,13 +994,14 @@ CREATE TABLE IF NOT EXISTS token_price (
 CREATE TABLE IF NOT EXISTS term_target (
   id              TEXT PRIMARY KEY,             -- uuid
   name            TEXT NOT NULL UNIQUE,         -- 目标名（模型按名指认，故唯一）
-  kind            TEXT NOT NULL,                -- docker | ssh
+  kind            TEXT NOT NULL,                -- docker | ssh | local
   enabled         INTEGER NOT NULL DEFAULT 0,   -- 逐目标开关（1=模型可见可用）
   workdir         TEXT,                         -- 默认工作目录（每条命令执行前 cd 进去）
   timeout_ms      INTEGER,                      -- 单条命令超时；NULL=用全局默认
   max_output      INTEGER,                      -- 回给模型的输出上限（字符）；NULL=用全局默认
   allow_patterns  TEXT,                         -- JSON：命令白名单正则数组；非空时命令须命中其一
   deny_patterns   TEXT,                         -- JSON：命令黑名单正则数组；命中即拒（先于白名单判定）
+  write_paths     TEXT,                         -- local：允许写入的绝对目录（JSON 数组）；NULL 表示只读
   -- docker：container 与 image 二选一。给了 container 就直接 exec 进去（容器由外部管理）；
   -- 只给 image 时惰性起一个常驻会话容器（minis-term-<name>）并复用，于是文件与环境改动跨调用保留。
   docker_host     TEXT,                         -- 如 unix:///var/run/docker.sock、tcp://localhost:2375；NULL=环境默认

@@ -1,6 +1,7 @@
 import { AppIcon } from './AppIcon'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { PortalAppearanceContext } from './portalAppearance'
 
 let toastDock: HTMLDivElement | null = null
 let dockUsers = 0
@@ -42,6 +43,7 @@ export default function Toast({
   duration?: number
   onClose: () => void
 }) {
+  const appearance = useContext(PortalAppearanceContext)
   /** 入场/退场动画开关（false = 透明 + 上移） */
   const [shown, setShown] = useState(false)
   const [host, setHost] = useState<HTMLElement | null>(null)
@@ -91,7 +93,7 @@ export default function Toast({
         onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false) }}
         className={`toast-card toast-card--${kind} pointer-events-auto flex w-max max-w-full shrink-0 items-center gap-2.5 rounded-lg border border-line border-l-4 bg-bg/95 px-4 py-3 shadow-lg backdrop-blur-md transition-all duration-300 ${
           kind === 'error' ? 'border-l-danger' : 'border-l-ok'
-        } ${shown ? 'translate-y-0 opacity-100' : '-translate-y-3 opacity-0'}`}
+        } ${shown ? 'translate-y-0 opacity-100' : '-translate-y-3 opacity-0'}${appearance ? ` ${appearance}` : ''}`}
       >
         {kind === 'error' ? (
           <AppIcon name="alert" className="h-4 w-4 shrink-0 text-danger" />
