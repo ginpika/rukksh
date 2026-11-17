@@ -56,13 +56,14 @@ jobs:
           RUKKSH_IMAGE_TAG: sha-${{ github.sha }}
         run: docker compose -f docker-compose.yml -f docker-compose.ghcr.yml config --quiet
 
-      - name: Build frontend and backend with Compose
+      - name: Build all three images with Compose
         env:
           NO_CACHE: ${{ inputs.no-cache }}
         run: |
           flags=(--pull)
           if [[ "$NO_CACHE" == true ]]; then flags+=(--no-cache); fi
-          docker compose -f docker-compose.yml -f - build "${flags[@]}" <<'YAML'
+          docker compose -f docker-compose.yml -f docker-compose.fullstack.yml -f - \
+            --profile fullstack build "${flags[@]}" <<'YAML'
           x-build: &ci-build
             provenance: false
             labels:
@@ -72,6 +73,8 @@ jobs:
             backend:
               build: *ci-build
             frontend:
+              build: *ci-build
+            rukksh:
               build: *ci-build
           YAML
 
@@ -85,13 +88,37 @@ jobs:
           curl --fail --silent --show-error "$url/" | grep -F '<div id="root"></div>'
           docker compose exec -T backend test -s /data/rukksh.db
 
-      - name: Show Compose logs on failure
+      - name: Verify the standalone image
+        run: |
+          docker run -d --name rukksh-fullstack-smoke --init --shm-size 256m \
+            -p 127.0.0.1:18082:18081 rukksh:latest
+          url=http://127.0.0.1:18082
+          curl --fail --silent --show-error --max-time 5 \
+            --retry 45 --retry-delay 2 --retry-all-errors "$url/api/health" | \
+            jq -e '.status == "ok" and (.version | type == "string" and . != "dev")'
+          html=$(curl --fail --silent --show-error "$url/")
+          grep -F '<div id="root"></div>' <<< "$html"
+          asset=$(sed -nE 's|.*<script type="module"[^>]*src="(/assets/[^" ]+\.js)".*|\1|p' <<< "$html")
+          test -n "$asset"
+          curl --fail --silent --show-error --output /dev/null --write-out '%{content_type}\n' "$url$asset" | \
+            grep -E '^(application|text)/(javascript|ecmascript)'
+          docker exec rukksh-fullstack-smoke test -s /data/rukksh.db
+
+      - name: Show container logs on failure
         if: failure()
-        run: docker compose logs --no-color
+        run: |
+          docker compose logs --no-color
+          if docker container inspect rukksh-fullstack-smoke >/dev/null 2>&1; then
+            docker logs rukksh-fullstack-smoke
+          fi
 
       - name: Stop the test environment
         if: always()
-        run: docker compose down --volumes
+        run: |
+          if docker container inspect rukksh-fullstack-smoke >/dev/null 2>&1; then
+            docker rm --force --volumes rukksh-fullstack-smoke
+          fi
+          docker compose down --volumes
 
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
@@ -106,12 +133,14 @@ jobs:
         env:
           ARCH: ${{ matrix.arch }}
         run: |
-          config=$(docker compose config --format json)
-          for service in backend frontend; do
-            image=$(jq -er --arg service "$service" '.services[$service].image' <<< "$config")
+          config=$(docker compose -f docker-compose.yml -f docker-compose.fullstack.yml --profile fullstack config --format json)
+          for service in rukksh backend frontend; do
+            local_image=$(jq -er --arg service "$service" '.services[$service].image' <<< "$config")
+            suffix="-$service"
+            if [[ "$service" == rukksh ]]; then suffix=''; fi
             # Keep the candidate tag stable across reruns of failed matrix jobs.
-            candidate="ghcr.io/${GITHUB_REPOSITORY,,}-$service:build-$GITHUB_RUN_ID-$ARCH"
-            docker tag "$image" "$candidate"
+            candidate="ghcr.io/${GITHUB_REPOSITORY,,}$suffix:build-$GITHUB_RUN_ID-$ARCH"
+            docker tag "$local_image" "$candidate"
             docker push "$candidate"
           done
 
@@ -136,8 +165,8 @@ jobs:
 
       - name: Assemble and verify both architectures
         run: |
-          for service in backend frontend; do
-            image="ghcr.io/${GITHUB_REPOSITORY,,}-$service"
+          for suffix in '' -backend -frontend; do
+            image="ghcr.io/${GITHUB_REPOSITORY,,}$suffix"
             docker buildx imagetools create --tag "$image:sha-$GITHUB_SHA" \
               "$image:build-$GITHUB_RUN_ID-amd64" "$image:build-$GITHUB_RUN_ID-arm64"
             docker buildx imagetools inspect --raw "$image:sha-$GITHUB_SHA" | \
@@ -158,11 +187,12 @@ jobs:
             if [[ "$head" == "$GITHUB_SHA" ]]; then alias_tag=latest; fi
           fi
 
-          for service in backend frontend; do
-            image="ghcr.io/${GITHUB_REPOSITORY,,}-$service"
+          for suffix in '' -backend -frontend; do
+            image="ghcr.io/${GITHUB_REPOSITORY,,}$suffix"
             if [[ -n "$alias_tag" && "$alias_tag" != "sha-$GITHUB_SHA" ]]; then
               docker buildx imagetools create --tag "$image:$alias_tag" "$image:sha-$GITHUB_SHA"
             fi
             echo "- \`$image:sha-$GITHUB_SHA\` (linux/amd64, linux/arm64)" >> "$GITHUB_STEP_SUMMARY"
           done
-          echo "Deploy both images with \`RUKKSH_IMAGE_TAG=sha-$GITHUB_SHA\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "Use \`ghcr.io/${GITHUB_REPOSITORY,,}:sha-$GITHUB_SHA\` for the single-container deployment." >> "$GITHUB_STEP_SUMMARY"
+          echo "Use \`RUKKSH_IMAGE_TAG=sha-$GITHUB_SHA\` for the two-container Compose deployment." >> "$GITHUB_STEP_SUMMARY"

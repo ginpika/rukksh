@@ -1,0 +1,27 @@
+# Use with docker-compose.yml and select the rukksh service to run a single container.
+services:
+  rukksh:
+    profiles: [fullstack]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.fullstack
+      additional_contexts:
+        backend-image: service:backend
+        frontend-image: service:frontend
+    image: rukksh:latest
+    restart: unless-stopped
+    init: true
+    shm_size: '256mb'
+    security_opt:
+      - seccomp=./backend/browser-seccomp.json
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      RUKKSH_DB_PATH: "${RUKKSH_DB_PATH:-/data/rukksh.db}"
+      RUKKSH_ARTICLE_DIR: /data/article
+      RUKKSH_PORT: "18081"
+    ports:
+      - "${RUKKSH_HOST_PORT:-18081}:18081"
+    volumes:
+      - rukksh-data:/data

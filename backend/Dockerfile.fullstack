@@ -1,0 +1,6 @@
+# Compose supplies the frontend and backend images as named build contexts.
+FROM frontend-image AS frontend-assets
+FROM backend-image
+
+COPY --from=frontend-assets /usr/share/nginx/html/ /app/web/
+ENV SPRING_WEB_RESOURCES_STATIC_LOCATIONS=file:/app/web/

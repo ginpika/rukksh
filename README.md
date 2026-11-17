@@ -32,25 +32,40 @@ A self-hosted workspace for AI conversations, personal knowledge, and project wo
 
 ## Quick start
 
-Install **Git, Docker, and Docker Compose 2.24.0 or later**. Build and start both services from the repository root.
+With Docker installed, start Rukksh in one container. The `rukksh-data` volume keeps SQLite and application files across upgrades. Sign in to `ghcr.io` first if the image requires authentication.
 
 ```sh
-git clone https://github.com/ginpika/open-slime.git
-cd open-slime
-docker compose up -d --build
+docker run -d --name rukksh --init --restart unless-stopped --shm-size 256m \
+  -p 18081:18081 -v rukksh-data:/data ghcr.io/ginpika/rukksh:latest
 ```
 
 Open [http://localhost:18081](http://localhost:18081). In **设置 → 大模型** (Settings → Models), add an endpoint with its API format, base URL, model ID, and API key if required. Test the connection and set the model as the default for new conversations.
 
-Nginx serves the web app and proxies `/api/` to the Spring Boot backend over the Compose network. The `rukksh-data` volume stores the SQLite database and application files under `/data`. Set `RUKKSH_HOST_PORT` in the root `.env` to change the web port. For optional deployment settings, copy [the backend environment example](./backend/.env.example) to `backend/.env`. The default deployment allows access without signing in. Set `SSO_SERVER_URL` to enable HostID sign-in.
+Pass deployment settings such as `SSO_SERVER_URL` with `--env-file` or `-e`. For the sandboxed Chromium features, pass `--security-opt seccomp=./backend/browser-seccomp.json` from a checkout, or use the single-container source deployment below, which loads that profile automatically.
+
+### Build from source
+
+Install **Git, Docker, and Docker Compose 2.24.0 or later**. Run one of the following commands from the repository root for your chosen deployment.
+
+```sh
+git clone https://github.com/ginpika/rukksh.git
+cd rukksh
+# Single container
+docker compose -f docker-compose.yml -f docker-compose.fullstack.yml up -d --build rukksh
+
+# Separate frontend and backend
+docker compose up -d --build
+```
+
+Both Compose commands use the same default port and volume. Set `RUKKSH_HOST_PORT` in the root `.env` to change the web port. For optional deployment settings, copy [the backend environment example](./backend/.env.example) to `backend/.env`.
 
 <a id="prebuilt"></a>
 
 ## Prebuilt images
 
-GitHub Actions builds and smoke-tests both services on Linux AMD64 and ARM64. Pull requests run the checks. Pushes to `main` or `master`, `v*` tags, and manual runs publish `rukksh-frontend` and `rukksh-backend` to GitHub Container Registry. Both images receive a `sha-<full commit SHA>` tag. The current default-branch revision also receives `latest`, and version releases receive a tag such as `v1.2.3`.
+GitHub Actions builds and smoke-tests `rukksh`, `rukksh-frontend`, and `rukksh-backend` on Linux AMD64 and ARM64. Pull requests run the checks. Pushes to `main` or `master`, `v*` tags, and manual runs publish all three images to GitHub Container Registry with a `sha-<full commit SHA>` tag. The current default-branch revision also receives `latest`, and version releases receive a tag such as `v1.2.3`.
 
-After the publication job succeeds, copy `RUKKSH_IMAGE_TAG` from its summary. Run these commands from the repository checkout for that revision. If your packages are private, sign in to `ghcr.io` with an account that can read them.
+To pin a single-container deployment, replace `latest` in the quick start command with the published SHA or release tag. To deploy the two prebuilt containers, copy `RUKKSH_IMAGE_TAG` from the publication job summary and run these commands from the repository checkout for that revision.
 
 ```sh
 export RUKKSH_IMAGE_TAG='sha-<full commit SHA>'
@@ -62,7 +77,7 @@ The [GHCR Compose override](./docker-compose.ghcr.yml) selects both prebuilt ima
 
 ## Backups and upgrades
 
-Stop the app and back up the entire `/data` volume before upgrading. Keep the same Compose project and volume when restarting. For a source build, pull the updated code and run `docker compose up -d --build` again. For prebuilt images, check out the new revision, update `RUKKSH_IMAGE_TAG`, and repeat the pull and startup commands above. See the [migration notes](./BRANDING.md#5-已有安装升级到-rukksh) if you are upgrading an installation under the former Minis name.
+Stop the app and back up the entire `/data` volume before upgrading or switching deployment methods. Keep the same volume when restarting. For `docker run`, pull the new image, remove the stopped container with `docker rm rukksh`, and repeat the quick start command with the existing volume. For Compose, rerun the appropriate build command or update `RUKKSH_IMAGE_TAG` and pull the prebuilt images. See the [migration notes](./BRANDING.md#5-已有安装升级到-rukksh) if you are upgrading an installation under the former Minis name.
 
 ## Local development
 
