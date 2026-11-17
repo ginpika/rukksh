@@ -8,7 +8,7 @@
 
 自托管的 AI 工作台，把对话、个人知识和项目放在一起。
 
-[![Docker 构建与验证](https://github.com/ginpika/open-slime/actions/workflows/docker-build.yml/badge.svg)](https://github.com/ginpika/open-slime/actions/workflows/docker-build.yml)
+[![Docker 构建与验证](https://github.com/ginpika/rukksh/actions/workflows/docker-build.yml/badge.svg)](https://github.com/ginpika/rukksh/actions/workflows/docker-build.yml)
 [![Docker AMD64 / ARM64](https://img.shields.io/badge/Docker-AMD64%20%2F%20ARM64-2496ED?logo=docker&logoColor=white)](#prebuilt)
 
 [English](./README.md) · **简体中文**
@@ -52,7 +52,7 @@ Nginx 托管网页，并通过 Compose 网络将 `/api/` 转发给 Spring Boot �
 
 ## 预构建镜像
 
-GitHub Actions 在 Linux AMD64 和 ARM64 上构建并验证前后端。Pull Request 运行检查。推送到 `main` 或 `master`、推送 `v*` 标签、手动运行工作流时，会向 GitHub Container Registry 发布 `open-slime-frontend` 和 `open-slime-backend`。两个镜像都带有 `sha-<完整提交 SHA>` 标签。默认分支的当前提交还会更新 `latest`，版本发布会添加 `v1.2.3` 这样的标签。
+GitHub Actions 在 Linux AMD64 和 ARM64 上构建并验证前后端。Pull Request 运行检查。推送到 `main` 或 `master`、推送 `v*` 标签、手动运行工作流时，会向 GitHub Container Registry 发布 `rukksh-frontend` 和 `rukksh-backend`。两个镜像都带有 `sha-<完整提交 SHA>` 标签。默认分支的当前提交还会更新 `latest`，版本发布会添加 `v1.2.3` 这样的标签。
 
 发布成功后，从发布任务摘要复制 `RUKKSH_IMAGE_TAG`，在对应提交的仓库目录运行以下命令。私有包需要用具备读取权限的账号登录 `ghcr.io`。
 

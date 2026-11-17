@@ -8,7 +8,7 @@
 
 A self-hosted workspace for AI conversations, personal knowledge, and project work.
 
-[![Docker build and verify](https://github.com/ginpika/open-slime/actions/workflows/docker-build.yml/badge.svg)](https://github.com/ginpika/open-slime/actions/workflows/docker-build.yml)
+[![Docker build and verify](https://github.com/ginpika/rukksh/actions/workflows/docker-build.yml/badge.svg)](https://github.com/ginpika/rukksh/actions/workflows/docker-build.yml)
 [![Docker AMD64 / ARM64](https://img.shields.io/badge/Docker-AMD64%20%2F%20ARM64-2496ED?logo=docker&logoColor=white)](#prebuilt)
 
 **English** · [简体中文](./README-zh-CN.md)
@@ -48,7 +48,7 @@ Nginx serves the web app and proxies `/api/` to the Spring Boot backend over the
 
 ## Prebuilt images
 
-GitHub Actions builds and smoke-tests both services on Linux AMD64 and ARM64. Pull requests run the checks. Pushes to `main` or `master`, `v*` tags, and manual runs publish `open-slime-frontend` and `open-slime-backend` to GitHub Container Registry. Both images receive a `sha-<full commit SHA>` tag. The current default-branch revision also receives `latest`, and version releases receive a tag such as `v1.2.3`.
+GitHub Actions builds and smoke-tests both services on Linux AMD64 and ARM64. Pull requests run the checks. Pushes to `main` or `master`, `v*` tags, and manual runs publish `rukksh-frontend` and `rukksh-backend` to GitHub Container Registry. Both images receive a `sha-<full commit SHA>` tag. The current default-branch revision also receives `latest`, and version releases receive a tag such as `v1.2.3`.
 
 After the publication job succeeds, copy `RUKKSH_IMAGE_TAG` from its summary. Run these commands from the repository checkout for that revision. If your packages are private, sign in to `ghcr.io` with an account that can read them.
 
