@@ -34,6 +34,15 @@ export function isDesktopShell(): boolean {
   return typeof window !== 'undefined' && TAURI_FLAG in window
 }
 
+/** Ask the desktop shell to open a web URL using the OS default browser. */
+export async function openExternalUrl(href: string): Promise<void> {
+  const invoke = window.__TAURI__?.core?.invoke
+  if (!invoke) throw new Error('桌面浏览器接口不可用')
+  const url = new URL(href)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('仅支持 HTTP 和 HTTPS 链接')
+  await invoke('plugin:shell|open', { path: url.href })
+}
+
 /**
  * 统一请求出口：桌面本机模式带上 X-Rukksh-Token，其余与原生 fetch 完全一致。
  *

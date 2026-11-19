@@ -87,12 +87,24 @@ final class ChatSteering implements ModelLoop.Steering {
         for (int i = messages.size() - 1; i >= 0; i--) {
             if (messages.get(i) instanceof ObjectNode message
                     && "user".equals(message.path("role").asText())
-                    && initialInput.equals(message.path("content").textValue())) {
+                    && initialInput.equals(primaryText(message.path("content")).textValue())) {
                 initialUserMessage = message;
                 lastUserMessage = message;
                 addReference(references, message, initialMessageId);
                 break;
             }
+        }
+    }
+
+    private static JsonNode primaryText(JsonNode content) {
+        return content.isArray() ? content.path(0).path("text") : content;
+    }
+
+    private static void setPrimaryText(ObjectNode message, String text) {
+        if (message.path("content").path(0) instanceof ObjectNode firstPart) {
+            firstPart.put("text", text);
+        } else {
+            message.put("content", text);
         }
     }
 
@@ -158,7 +170,7 @@ final class ChatSteering implements ModelLoop.Steering {
             addReference(references, initialUserMessage, initialMessageId);
             lastUserMessage = initialUserMessage;
         }
-        initialUserMessage.put("content", INITIAL_PREFIX + initialInput);
+        setPrimaryText(initialUserMessage, INITIAL_PREFIX + initialInput);
         supplementGuidanceInstalled = true;
     }
 
@@ -171,7 +183,11 @@ final class ChatSteering implements ModelLoop.Steering {
                 addReference(refs, assistant, input.messageId());
                 previousUser = null;
             } else if (previousUser != null && messages.get(messages.size() - 1) == previousUser) {
-                previousUser.put("content", previousUser.path("content").asText() + "\n\n" + input.content());
+                if (previousUser.path("content") instanceof ArrayNode parts) {
+                    parts.addObject().put("type", "text").put("text", input.content());
+                } else {
+                    previousUser.put("content", previousUser.path("content").asText() + "\n\n" + input.content());
+                }
             } else {
                 previousUser = messages.addObject().put("role", "user").put("content", input.content());
             }
@@ -286,10 +302,11 @@ final class ChatSteering implements ModelLoop.Steering {
                 continue;
             }
             JsonNode content = message.path("content");
-            if (!content.isTextual() || content.asText().isBlank()) {
+            String role = message.path("role").asText();
+            if (!(content.isArray() && "user".equals(role)) && (!content.isTextual() || content.asText().isBlank())) {
                 continue;
             }
-            switch (message.path("role").asText()) {
+            switch (role) {
                 case "system" -> {
                     if (contextPlan == null || contextPlan.requiredForInterim(message)) {
                         prompt.append(content.asText()).append("\n\n");
@@ -297,9 +314,11 @@ final class ChatSteering implements ModelLoop.Steering {
                 }
                 case "user", "assistant" -> {
                     if (message == initialUserMessage) { initialUserIndex = messages.size(); }
-                    String text = message == initialUserMessage && !supplementGuidanceInstalled
-                            ? INITIAL_PREFIX + initialInput : content.asText();
-                    var copy = messages.addObject().put("role", message.path("role").asText()).put("content", text);
+                    var copy = messages.addObject().put("role", role);
+                    copy.set("content", content.deepCopy());
+                    if (message == initialUserMessage && !supplementGuidanceInstalled) {
+                        setPrimaryText(copy, INITIAL_PREFIX + initialInput);
+                    }
                     var ids = references.get(message);
                     if (ids == null && contextPlan != null) { ids = contextPlan.references(message); }
                     if (ids != null && !ids.isEmpty()) { refs.put(copy, ids); }

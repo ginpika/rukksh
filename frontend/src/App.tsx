@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { LogOut } from 'lucide-react'
 import { loginUrlOf, logout, me, type SsoUser } from './api/client'
 import { isDesktopShell, backToLauncher, openDesktopHome } from './api/desktop'
 import AgentHome from './pages/agent/AgentHome'
@@ -61,6 +62,8 @@ const ROLE_LABELS: Record<string, string> = {
   user: '普通用户',
 }
 
+type UserMenuVariant = 'plain' | 'chip' | 'sidebar'
+
 /** 用户菜单里的一行只读信息：左标签右值（值可换行，长 id / 邮箱不截断） */
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -95,11 +98,13 @@ function UserMenu({
   withName?: boolean
   /**
    * chip = 桌面框架标题栏里的身份胶囊（外观与引导页 .user-chip 同源，见 desktopFrame.css）；
-   * plain = 外壳自己的用户按钮（跟随主题）
+   * plain = 外壳自己的用户按钮（跟随主题）；sidebar = 对话首页侧边栏
    */
-  variant?: 'plain' | 'chip'
+  variant?: UserMenuVariant
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelId = useId()
 
   useEffect(() => {
     if (!open) return
@@ -107,7 +112,7 @@ function UserMenu({
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) onOpenChange(false)
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onOpenChange(false)
+      if (!e.defaultPrevented && e.key === 'Escape') onOpenChange(false)
     }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
@@ -121,7 +126,8 @@ function UserMenu({
   const roleLabel = user.role ? (ROLE_LABELS[user.role] ?? user.role) : ''
   const initial = name ? name[0].toUpperCase() : '?'
   const chip = variant === 'chip'
-  const Avatar = ({ size }: { size: string }) =>
+  const sidebar = variant === 'sidebar'
+  const renderAvatar = (size: string) =>
     user.avatarUrl ? (
       <img src={user.avatarUrl} alt={name} className={`${size} shrink-0 rounded-full object-cover`} />
     ) : (
@@ -133,26 +139,39 @@ function UserMenu({
     )
 
   return (
-    <div ref={boxRef} className="relative min-w-0">
+    <div
+      ref={boxRef}
+      className="relative min-w-0"
+      onKeyDown={sidebar && open ? (event) => {
+        if (event.key !== 'Escape') return
+        event.preventDefault()
+        onOpenChange(false)
+        triggerRef.current?.focus()
+      } : undefined}
+    >
       <button
+        ref={triggerRef}
         type="button"
         aria-label="用户"
         aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
         title={name}
         onClick={() => onOpenChange(!open)}
         className={
-          chip
-            ? 'df-chip'
-            : withName
-              ? `flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition hover:bg-fg/5 ${
-                  open ? 'bg-fg/10' : ''
-                }`
-              : `ui-btn ui-btn--icon h-[30px] w-[30px] overflow-hidden rounded-full border border-line transition hover:border-line-strong ${
-                  open ? 'border-line-strong' : ''
-                }`
+          sidebar
+            ? 'sl-agents__account-button'
+            : chip
+              ? 'df-chip'
+              : withName
+                ? `flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left transition hover:bg-fg/5 ${
+                    open ? 'bg-fg/10' : ''
+                  }`
+                : `ui-btn ui-btn--icon h-[30px] w-[30px] overflow-hidden rounded-full border border-line transition hover:border-line-strong ${
+                    open ? 'border-line-strong' : ''
+                  }`
         }
       >
-        <Avatar size={chip ? 'df-chip__avatar' : withName ? 'h-7 w-7' : 'h-full w-full'} />
+        {renderAvatar(chip ? 'df-chip__avatar' : withName ? 'h-7 w-7' : 'h-full w-full')}
         {(withName || chip) && (
           <span
             className={
@@ -167,32 +186,33 @@ function UserMenu({
       </button>
       {open && (
         <div
-          className={`ui-card ui-surface menu-pop z-[60] ${
+          id={panelId}
+          className={sidebar ? 'sl-agents__account-panel' : `ui-card ui-surface menu-pop z-[60] ${
             placement === 'up'
               ? 'absolute inset-x-0 bottom-[calc(100%+10px)]'
               : 'absolute right-0 top-[calc(100%+10px)] w-64'
           }`}
         >
-          <div className="ui-card__in p-4 text-left">
-            <div className="flex items-center gap-3">
-              <Avatar size="h-11 w-11" />
+          <div className={sidebar ? 'text-left' : 'ui-card__in p-4 text-left'}>
+            <div className={sidebar ? 'sl-agents__account-identity' : 'flex items-center gap-3'}>
+              {renderAvatar(sidebar ? 'h-8 w-8' : 'h-11 w-11')}
               <div className="min-w-0 flex-1">
-                <p className="ui-heading truncate text-base">{name}</p>
+                <p className={sidebar ? 'truncate text-sm font-semibold' : 'ui-heading truncate text-base'}>{name}</p>
                 {user.username && (
                   <p className="truncate text-xs text-faint">@{user.username}</p>
                 )}
               </div>
               {roleLabel && (
                 <span
-                  className="shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-bold"
-                  style={{ background: 'var(--c-accent-soft)', color: 'var(--c-accent)' }}
+                  className={sidebar ? 'sl-agents__account-role' : 'shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-bold'}
+                  style={sidebar ? undefined : { background: 'var(--c-accent-soft)', color: 'var(--c-accent)' }}
                 >
                   {roleLabel}
                 </span>
               )}
             </div>
 
-            <dl className="mt-3 space-y-1 border-t border-line pt-3 text-xs">
+            <dl className={sidebar ? 'sl-agents__account-details' : 'mt-3 space-y-1 border-t border-line pt-3 text-xs'}>
               {user.email && <InfoRow label="邮箱" value={user.email} />}
               {user.id && <InfoRow label="用户 ID" value={user.id} />}
             </dl>
@@ -204,8 +224,9 @@ function UserMenu({
                   onOpenChange(false)
                   onLogout()
                 }}
-                className={btnOutline('mt-3 w-full')}
+                className={sidebar ? 'sl-agents__account-logout' : btnOutline('mt-3 w-full')}
               >
+                {sidebar && <LogOut size={15} aria-hidden="true" />}
                 登出
               </button>
             )}
@@ -311,7 +332,7 @@ function App() {
       <ShellIcon name="home" />
     </button>
   )
-  const renderUser = (slot: { placement: 'up' | 'down'; withName: boolean }, variant?: 'chip') =>
+  const renderUser = (slot: { placement: 'up' | 'down'; withName: boolean }, variant?: UserMenuVariant) =>
     user ? (
       <UserMenu
         user={user}
@@ -328,7 +349,7 @@ function App() {
   let standalone: ReactNode = null
   switch (route) {
     case '/':
-      standalone = <AgentHome connErr={connErr} userSlot={renderUser({ placement: 'up', withName: false })} />
+      standalone = <AgentHome connErr={connErr} userSlot={renderUser({ placement: 'up', withName: false }, 'sidebar')} />
       break
     case '/dashboard':
       standalone = <Dashboard />

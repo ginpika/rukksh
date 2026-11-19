@@ -25,7 +25,7 @@ public class AgentSeeder {
     private static final Logger log = LoggerFactory.getLogger(AgentSeeder.class);
 
     /** 内置 Agent 的默认展示名（人可在页面上改） */
-    private static final String BUILTIN_NAME = "助手";
+    private static final String BUILTIN_NAME = "rukksh";
 
     private final AgentStore store;
 

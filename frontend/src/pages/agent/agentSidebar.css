@@ -23,14 +23,11 @@
 .sl-agents__head-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .sl-agents__round { width: 36px; height: 36px; border: 1px solid var(--sl-line); border-radius: 50%; background: var(--sl-panel); }
 .sl-agents__round:hover, .sl-agents__round[aria-expanded='true'] { color: var(--sl-fg); background: var(--sl-hover); border-color: var(--sl-line-strong); }
-.sl-agents__search { display: flex; flex: none; align-items: center; gap: 7px; min-height: 36px; margin: 0 16px 8px; padding: 4px 7px 4px 10px; border: 1px solid var(--sl-line-strong); border-radius: 8px; background: var(--sl-panel); color: var(--sl-muted); }
-.sl-agents__search:focus-within { border-color: var(--sl-focus-line); }
-.sl-agents__search > svg { flex: none; }
-.sl-agents__search input { width: 100%; min-width: 0; padding: 2px 0; border: 0; outline: none; background: transparent; color: var(--sl-fg); font-size: 13px; }
-.rukksh-surface .sl-agents__search input:focus { outline: none; box-shadow: none; }
-.sl-agents__search button { display: flex; flex: none; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--sl-muted); }
-.sl-agents__search button:hover { background: var(--sl-hover); color: var(--sl-fg); }
-.rukksh-surface .sl-agents__search button:focus-visible { border-color: var(--sl-focus-line); outline: none; box-shadow: none; color: var(--sl-fg); }
+.rukksh-surface .sl-agents__round[aria-haspopup='dialog']:focus-visible {
+  outline: none;
+  color: var(--sl-fg);
+  background: var(--sl-hover);
+}
 
 /* Main card: y=70, 96x92, 56px avatar. The list starts at y=180. */
 .sl-agents__primary-wrap { display: flex; flex: none; justify-content: center; padding: 10px 16px 18px; }
@@ -44,9 +41,8 @@
 .sl-agents__primary-name { display: block; width: 100%; overflow: hidden; font-size: 13px; font-weight: 400; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .sl-agents__primary-status { position: absolute; top: calc(100% + 2px); left: -20px; right: -20px; color: var(--sl-muted); font-size: 10px; line-height: 14px; }
 
-/* Rows: 58px pitch, avatar x=20, text x=66; both text lines are 14px. */
-.sl-agents__list { display: flex; flex: 1; flex-direction: column; gap: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 0 16px 16px; overscroll-behavior-y: contain; }
-.sl-agents__peer { display: flex; flex: none; align-items: center; gap: 10px; width: 100%; height: 58px; padding: 9px 4px; border: 0; border-radius: 8px; background: transparent; color: var(--sl-fg); text-align: left; transition: background 140ms ease; }
+.sl-agents__list { display: flex; flex: 1; flex-direction: column; gap: 6px; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 2px 16px 16px; overscroll-behavior-y: contain; }
+.sl-agents__peer { display: flex; flex: none; align-items: center; gap: 10px; width: 100%; height: 58px; padding: 9px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--sl-fg); text-align: left; transition: background 140ms ease; }
 .sl-agents__peer:hover { background: var(--sl-hover); }
 .sl-agents__peer.is-active { background: var(--sl-active); }
 .sl-agents__peer-picture { position: relative; display: inline-flex; flex: none; width: 36px; height: 36px; }
@@ -65,10 +61,79 @@
 
 /* One bottom row: 36px account + 8px gap + 204px Dashboard pill. */
 .sl-agents__footer { display: flex; flex: none; align-items: center; gap: 8px; padding: 8px 16px max(20px, env(safe-area-inset-bottom)); }
-.sl-agents__account { position: relative; flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; background: var(--sl-panel); }
-.sl-agents__account > div { width: 36px; height: 36px; }
-.sl-agents__account > div > button { width: 36px; height: 36px; border: 1px solid var(--sl-line); border-radius: 50%; }
-.sl-agents__account .menu-pop { left: 0; right: auto; width: 248px; max-width: calc(100vw - 40px); max-height: min(430px, 75dvh); overflow: auto; }
+.sl-agents__account { flex: 0 0 36px; width: 36px; height: 36px; }
+.sl-agents__account-button {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--sl-line);
+  border-radius: 50%;
+  background: var(--sl-panel);
+  color: var(--sl-fg);
+  font-size: 13px;
+}
+.sl-agents__account-button:hover,
+.sl-agents__account-button[aria-expanded='true'] {
+  border-color: var(--sl-line-strong);
+  background: var(--sl-hover);
+}
+.sl-agents__account-panel {
+  position: absolute;
+  z-index: 1;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 248px;
+  max-width: calc(100vw - 64px);
+  max-height: min(360px, 75dvh);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--sl-line);
+  border-radius: 8px;
+  background: var(--sl-panel);
+  color: var(--sl-fg);
+}
+.sl-agents__account-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+.sl-agents__account-role {
+  max-width: 45%;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--sl-line);
+  border-radius: 12px;
+  color: var(--sl-muted);
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sl-agents__account-details {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--sl-line);
+  font-size: 12px;
+}
+.sl-agents__account-logout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 8px);
+  margin: 0 4px 4px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sl-fg);
+  font-size: 13px;
+  text-align: left;
+}
+.sl-agents__account-logout > svg { flex: none; color: var(--sl-muted); }
+.sl-agents__account-logout:hover { background: var(--sl-hover); }
 .sl-agents__dashboard { display: flex; flex: 1; min-width: 0; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 12px; border: 1px solid var(--sl-line); border-radius: 18px; background: var(--sl-panel); color: var(--sl-fg); font-size: 13px; font-weight: 400; text-decoration: none; transition: background 140ms ease; }
 .sl-agents__dashboard > svg { flex: none; color: var(--sl-muted); }
 .sl-agents__dashboard:hover { background: var(--sl-hover); }
@@ -76,5 +141,4 @@
 @media (max-width: 760px) {
   /* Mobile uses the same card/row scale as the reference, rather than enlarged variants. */
   .sl-agents__head { padding-top: max(12px, env(safe-area-inset-top)); }
-  .sl-agents__search input { font-size: 16px; }
 }

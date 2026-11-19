@@ -40,6 +40,7 @@ class ContextBuilderTest {
               tool_rounds TEXT,
               kind TEXT,
               meta TEXT,
+              attachments TEXT,
               created_at INTEGER NOT NULL)""";
 
     /** 与 schema.sql 的 chat_turn 同构（历史读侧会查它：显式配对 + 任务段归属） */

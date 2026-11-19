@@ -45,12 +45,16 @@ export function mergeAgentMessageReceipts(history: ChatMsg[], rows: SessionMessa
 }
 
 export function mergeLiveChat(history: ChatMsg[], live: LiveChat): ChatMsg[] {
+  if (live.userAttachments?.length && live.userMessageId == null) return history
   const first = live.userMessageId == null ? -1 : history.findIndex(message => message.id === live.userMessageId)
   if (first >= 0 && history.slice(first + 1).some(message => startsTurn(message) || (!live.running && finishesTurn(message)))) {
     return history
   }
 
-  const messages: ChatMsg[] = [{ id: live.userMessageId ?? undefined, role: 'user', content: live.userText }]
+  const messages: ChatMsg[] = [{
+    id: live.userMessageId ?? undefined, role: 'user', content: live.userText,
+    ...(live.userAttachments?.length ? { attachments: live.userAttachments } : {}),
+  }]
   messages.push(...live.steers.map(({ messageId, input }): ChatMsg => ({ id: messageId, role: 'user', content: input, kind: 'steer' })))
   messages.push(...live.interims.map(({ messageId, content }): ChatMsg => ({ id: messageId, role: 'assistant', content, kind: 'steer_reply' })))
   return [...mergeById(history, messages), {

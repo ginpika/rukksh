@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口的能力白名单。本机与远程实例共用主窗口：macOS 使用原生窗口装饰与叠加标题栏并同步主题色，非 macOS 平台使用自绘标题栏，因此对它们开放窗口控制命令。HostID 登录窗口使用系统标题栏，无需 IPC 权限。",
+  "description": "主窗口的能力白名单。本机与远程实例共用主窗口：macOS 使用原生窗口装饰与叠加标题栏并同步主题色，非 macOS 平台使用自绘标题栏，因此对它们开放窗口控制命令。搜索结果中的 HTTP(S) 链接可交由系统浏览器打开。HostID 登录窗口使用系统标题栏，无需 IPC 权限。",
   "windows": ["main"],
   "remote": {
     "urls": ["http://127.0.0.1:*", "http://localhost:*", "https://*"]
@@ -13,6 +13,7 @@
     "core:window:allow-close",
     "core:window:allow-set-theme",
     "core:window:allow-start-dragging",
-    "core:window:allow-start-resize-dragging"
+    "core:window:allow-start-resize-dragging",
+    "shell:allow-open"
   ]
 }

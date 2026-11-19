@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { LayoutGrid, Plus, Search, Star, X } from 'lucide-react'
 import type { MaPeer } from '../../api/client'
 import { isCodingAgent } from '../../api/agentRuntime'
@@ -17,7 +17,9 @@ type Props = {
   error: boolean
   disabled: boolean
   narrow: boolean
+  searchOpen: boolean
   userSlot?: ReactNode
+  onOpenSearch: () => void
   onSelectAgent: (id: string | null) => void
   onReload: () => void
   onClose: () => void
@@ -29,22 +31,9 @@ function previewText(preview: AgentPreview | undefined, peer?: MaPeer | null): s
 }
 
 /** The sidebar represents people to talk to; individual conversations stay in their history. */
-export default function AgentSidebar({ mainAgent, agents, selectedAgentId, previews, loading, error, disabled, narrow, userSlot, onSelectAgent, onReload, onClose }: Props) {
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const searchButtonRef = useRef<HTMLButtonElement>(null)
-  const closeSearch = () => {
-    setQuery('')
-    setSearchOpen(false)
-    searchButtonRef.current?.focus({ preventScroll: true })
-  }
+export default function AgentSidebar({ mainAgent, agents, selectedAgentId, previews, loading, error, disabled, narrow, searchOpen, userSlot, onOpenSearch, onSelectAgent, onReload, onClose }: Props) {
   const mainName = mainAgent?.name || BRAND.name
   const mainPreview = previews.main
-  const visibleAgents = useMemo(() => {
-    const value = query.trim().toLocaleLowerCase()
-    return value ? agents.filter(agent => [agent.name, agent.role, agent.note, previews[agent.id]?.text]
-      .some(text => text?.toLocaleLowerCase().includes(value))) : agents
-  }, [agents, previews, query])
 
   return <>
     <div className="sl-agents__head" data-tauri-drag-region>
@@ -54,22 +43,11 @@ export default function AgentSidebar({ mainAgent, agents, selectedAgentId, previ
         </button>
       )}
       <div className="sl-agents__head-actions">
-        <button ref={searchButtonRef} type="button" className="sl-agents__round" aria-label="搜索 Agent" title="搜索 Agent" aria-expanded={searchOpen} aria-controls={searchOpen ? 'rukksh-agent-search' : undefined}
-          onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}><Search size={18} /></button>
+        <button type="button" className="sl-agents__round" aria-label="搜索" title="搜索" aria-haspopup="dialog" aria-expanded={searchOpen} aria-controls={searchOpen ? 'rukksh-home-search' : undefined}
+          onClick={event => { event.currentTarget.focus({ preventScroll: true }); onOpenSearch() }}><Search size={18} /></button>
         <a className="sl-agents__round" href="#/multi-agent/new" aria-label="新增 Agent" title="新增 Agent"><Plus size={21} /></a>
       </div>
     </div>
-
-    {searchOpen && <div className="sl-agents__search" id="rukksh-agent-search" onKeyDown={event => {
-      if (event.key !== 'Escape' || event.nativeEvent.isComposing || event.keyCode === 229) return
-      event.preventDefault()
-      event.stopPropagation()
-      closeSearch()
-    }}>
-      <Search size={15} aria-hidden="true" />
-      <input autoFocus value={query} onChange={event => setQuery(event.target.value)} aria-label="搜索 Agent" placeholder="搜索 Agent…" />
-      <button type="button" aria-label="关闭搜索" onClick={closeSearch}><X size={15} /></button>
-    </div>}
 
     <div className="sl-agents__primary-wrap">
       <button type="button" className={`sl-agents__primary${selectedAgentId === null ? ' is-active' : ''}`} disabled={disabled}
@@ -87,7 +65,7 @@ export default function AgentSidebar({ mainAgent, agents, selectedAgentId, previ
     <nav className="sl-agents__list scrollbar-slim" aria-label="其他 Agent">
       {error && <div className="sl-agents__notice" role="status">暂时无法更新 Agent 列表<button type="button" onClick={onReload}>重试</button></div>}
       {loading && !agents.length ? <p className="sl-agents__empty" role="status">正在加载 Agent…</p>
-        : visibleAgents.map(agent => {
+        : agents.map(agent => {
           const preview = previews[agent.id]
           const text = previewText(preview, agent)
           return <button key={agent.id} type="button" disabled={disabled} className={`sl-agents__peer${selectedAgentId === agent.id ? ' is-active' : ''}`}
@@ -102,7 +80,7 @@ export default function AgentSidebar({ mainAgent, agents, selectedAgentId, previ
             </span>
           </button>
         })}
-      {!loading && !visibleAgents.length && <p className="sl-agents__empty">{query.trim() ? '没有找到相关 Agent' : <>其他 Agent 会出现在这里。<a href="#/multi-agent/new">添加一位</a></>}</p>}
+      {!loading && !agents.length && <p className="sl-agents__empty">其他 Agent 会出现在这里。<a href="#/multi-agent/new">添加一位</a></p>}
     </nav>
 
     <div className="sl-agents__footer">

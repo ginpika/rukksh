@@ -165,8 +165,14 @@ public class ChatTurnRunner implements ChatExecution {
 
     public ChatDtos.ChatReply chatStream(String hubId, String input, String modelId, String promptId,
                                          String reasoningEffort, ChatStream sink) {
+        return chatStream(hubId, input, modelId, promptId, reasoningEffort, sink, List.of());
+    }
+
+    public ChatDtos.ChatReply chatStream(String hubId, String input, String modelId, String promptId,
+                                         String reasoningEffort, ChatStream sink,
+                                         List<ChatAttachments.Content> attachments) {
         return runChat(this, hubId, input, modelId, promptId, reasoningEffort, sink,
-                sink == null ? null : sink.actorId());
+                sink == null ? null : sink.actorId(), attachments);
     }
 
     public ChatDtos.ChatReply chatStream(ChatExecution exec, String hubId, String input,
@@ -233,6 +239,12 @@ public class ChatTurnRunner implements ChatExecution {
     private ChatDtos.ChatReply runChat(ChatExecution exec, String hubId, String input,
                                        String modelId, String promptId, String reasoningEffort, ChatStream sink,
                                        String actorId) {
+        return runChat(exec, hubId, input, modelId, promptId, reasoningEffort, sink, actorId, List.of());
+    }
+
+    private ChatDtos.ChatReply runChat(ChatExecution exec, String hubId, String input,
+                                       String modelId, String promptId, String reasoningEffort, ChatStream sink,
+                                       String actorId, List<ChatAttachments.Content> attachments) {
         HubRow row = exec.resolveOrCreate(hubId);
         String requestedModel=modelId;
         if(exec==this && (modelId==null || modelId.isBlank())){modelId=chatContext.modelIdFor(row.agentId(),modelId);}
@@ -241,6 +253,9 @@ public class ChatTurnRunner implements ChatExecution {
             throw new IllegalStateException(
                     "LLM 未配置：请在设置页添加模型，或在 .env 填写 "
                             + "LLM_BASE_URL / LLM_API_KEY / LLM_CHAT_MODEL");
+        }
+        if (!ChatAttachments.supportsImages(target.model()) && attachments.stream().anyMatch(ChatAttachments.Content::image)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前模型不支持图片，请切换到支持图片的模型");
         }
         String effort = reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.strip();
         if (effort != null && !ModelReasoning.efforts(target.model(), target.apiFormat()).contains(effort)) {
@@ -258,7 +273,7 @@ public class ChatTurnRunner implements ChatExecution {
         AtomicBoolean stopFlag = sink == null ? null : registerStop(row.id());
         try {
             return runChatInner(exec, row, target, input, modelId, requestedModel, promptId, effort,
-                    sink, stopFlag, steerable, actorId);
+                    sink, stopFlag, steerable, actorId, attachments);
         } finally {
             if (steerable) {
                 ChatSteering steering = activeSteering.remove(row.id());
@@ -287,7 +302,7 @@ public class ChatTurnRunner implements ChatExecution {
     private ChatDtos.ChatReply runChatInner(ChatExecution exec, HubRow row, ModelTarget target,
                                             String input, String modelId, String requestedModel, String promptId,
                                             String reasoningEffort, ChatStream sink, AtomicBoolean stopFlag,
-                                            boolean steerable, String actorId) {
+                                            boolean steerable, String actorId, List<ChatAttachments.Content> attachments) {
         /* 记住本次使用的模型/提示词（会话级「…」菜单配置），下次进入该会话自动回显 */
         exec.rememberConfig(row, requestedModel, promptId);
 
@@ -308,8 +323,15 @@ public class ChatTurnRunner implements ChatExecution {
                 ? chatTasks.begin(row.id(), taskAgentId, abbreviate(input), input) : 0L;
         // The key travels with the messages when branching, where their database IDs are reassigned.
         String turnKey = steerable ? ChatMessageStore.STEER_TURN_PREFIX + UUID.randomUUID() : null;
-        long userMsgId = steerable ? recordChatMessage(row, "user", input, null, null, null, turnKey)
-                : exec.recordUserInput(row, input);
+        long userMsgId;
+        if (!attachments.isEmpty()) {
+            userMsgId = messages.insert(row.id(), "user", input, null, null, null, null, turnKey,
+                    om.valueToTree(attachments).toString());
+            recordMemoryMessage(row, userMsgId, "user", input);
+        } else {
+            userMsgId = steerable ? recordChatMessage(row, "user", input, null, null, null, turnKey)
+                    : exec.recordUserInput(row, input);
+        }
         /* 这一轮的 Turn 落一行：提问与它的回答显式配对，并挂上刚开的会话任务（执行信封）。
            只对「提问 → 回答」成对的流写——圆桌的一次发言没有一条提问消息当触发端
            （人的话由 RoundtableTopicService 落，成员的发言是一段一段的），故它不记

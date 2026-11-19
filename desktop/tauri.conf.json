@@ -13,6 +13,11 @@
       "csp": null
     }
   },
+  "plugins": {
+    "shell": {
+      "open": "https?://\\S+"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

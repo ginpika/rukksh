@@ -1,6 +1,7 @@
 package cc.ginpika.rukksh.web.controller;
 
 import cc.ginpika.rukksh.agent.chat.ChatTurnRunner;
+import cc.ginpika.rukksh.agent.chat.ChatAttachments;
 import cc.ginpika.rukksh.agent.chat.ChatContextManifests;
 import cc.ginpika.rukksh.agent.chat.ChatContextService;
 import cc.ginpika.rukksh.agent.chat.ChatScenes;
@@ -16,6 +17,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -23,8 +26,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,9 +37,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
@@ -99,24 +106,55 @@ public class ChatController {
      */
     @PostMapping(value = "/api/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestBody ChatDtos.ChatRequest req, jakarta.servlet.http.HttpServletRequest http) {
-        String owner = codingOwner(http);
         String input = req.input() == null ? "" : req.input().trim();
         if (input.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "input 为空");
         }
+        return streamChat(req, input, List.of(), http);
+    }
+
+    @PostMapping(value = "/api/chat/stream/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatWithAttachments(@RequestPart("request") ChatDtos.ChatRequest req,
+            @RequestPart("files") List<MultipartFile> files, HttpServletRequest http) {
+        List<ChatAttachments.Content> attachments;
+        try {
+            attachments = ChatAttachmentUpload.read(files);
+        } catch (IllegalArgumentException error) {
+            throw new RejectedAttachment(error.getMessage());
+        }
+        String input = blank(req.input()) ? "请查看附件。" : req.input().trim();
+        return streamChat(req, input, attachments, http);
+    }
+
+    @ExceptionHandler(RejectedAttachment.class)
+    public ResponseEntity<Map<String, String>> invalidAttachment(RejectedAttachment error) {
+        return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("error", error.getMessage()));
+    }
+
+    private static final class RejectedAttachment extends RuntimeException {
+        RejectedAttachment(String message) { super(message); }
+    }
+
+    private SseEmitter streamChat(ChatDtos.ChatRequest req, String input,
+            List<ChatAttachments.Content> attachments, HttpServletRequest http) {
+        String owner = codingOwner(http);
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
         LiveChatStream stream = new LiveChatStream(emitter, input, actorId(http));
         streamExecutor.execute(() -> {
             try (var actor = cc.ginpika.rukksh.ai.core.UserScope.bind(owner)) {
-                ChatDtos.ChatReply reply = turns.chatStream(
-                        blank(req.sessionId()) ? null : req.sessionId(), input,
-                        req.modelId(), req.promptId(), req.reasoningEffort(), stream);
+                String sessionId = blank(req.sessionId()) ? null : req.sessionId();
+                ChatDtos.ChatReply reply = attachments.isEmpty()
+                        ? turns.chatStream(sessionId, input, req.modelId(), req.promptId(), req.reasoningEffort(), stream)
+                        : turns.chatStream(sessionId, input, req.modelId(), req.promptId(), req.reasoningEffort(), stream, attachments);
                 stream.finish(reply);
             } catch (ChatStream.ChatCancelledException e) {
                 /* 用户主动停止且无任何正文产出：在途状态落定（有正文的部分回答已由 service 落库），静默收尾不推 error */
                 stream.finish(null);
             } catch (Exception e) {
-                String msg = e.getMessage() == null ? e.toString() : e.getMessage();
+                String msg = e instanceof ResponseStatusException error && error.getReason() != null
+                        ? error.getReason() : e.getMessage() == null ? e.toString() : e.getMessage();
                 /* 出错即落日志（含堆栈），便于回溯「请求被打断」的具体成因 */
                 log.warn("流式会话失败：sessionId={} error={}", req.sessionId(), msg, e);
                 stream.fail(msg);
@@ -323,6 +361,34 @@ public class ChatController {
             return sessions.messages(id);
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, e.getMessage(), e);
+        }
+    }
+
+    @GetMapping("/api/sessions/{id}/messages/{messageId}/attachments/{index}")
+    public ResponseEntity<byte[]> attachment(@PathVariable String id, @PathVariable long messageId,
+                                             @PathVariable int index) {
+        var file = sessions.attachment(id, messageId, index);
+        MediaType type = switch (file.mediaType()) {
+            case "image/png" -> MediaType.IMAGE_PNG;
+            case "image/jpeg" -> MediaType.IMAGE_JPEG;
+            case "image/gif" -> MediaType.IMAGE_GIF;
+            case "text/plain" -> new MediaType(MediaType.TEXT_PLAIN, StandardCharsets.UTF_8);
+            default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND, "附件格式不可预览");
+        };
+        byte[] body = file.image() ? attachmentImageBytes(file) : file.value().getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(type)
+                .header("X-Content-Type-Options", "nosniff").body(body);
+    }
+
+    private static byte[] attachmentImageBytes(ChatAttachments.Content file) {
+        String prefix = "data:" + file.mediaType() + ";base64,";
+        if (!file.value().startsWith(prefix)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "图片附件不可用");
+        }
+        try {
+            return Base64.getDecoder().decode(file.value().substring(prefix.length()));
+        } catch (IllegalArgumentException error) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "图片附件不可用");
         }
     }
 

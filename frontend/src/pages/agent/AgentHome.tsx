@@ -1,7 +1,7 @@
 /** The everyday Rukksh surface. Existing specialist tools live in Dashboard. */
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, BookOpen, Check, ChevronDown, Copy, History, MessageSquare, PanelLeftOpen, PenLine, Plus, Search, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { ArrowDown, Check, ChevronDown, Copy, History, MessageSquare, PanelLeftOpen, Paperclip, PenLine, Plus, Search, ShieldCheck, X } from 'lucide-react'
 import { ApiError, createSession, getSettings, listMaPeers, listSessions, sessionMessages, sessionPreviews, updateSessionConfig, type MaPeer, type ReasoningEffort, type SessionItem, type SessionMessage, type SettingsView } from '../../api/client'
 import { CORE_AGENT_ID, isCodingAgent, sortAgentPeers } from '../../api/agentRuntime'
 import { AppIcon } from '../../components/AppIcon'
@@ -10,6 +10,7 @@ import ChatMarkdown from '../../components/ChatMarkdown'
 import UserQuestionCard from '../../components/UserQuestionCard'
 import { RukkshAppearanceButton } from '../../components/RukkshAppearance'
 import { useRememberedState } from '../../components/windowState'
+import { chatAttachmentAccept, chatAttachmentFormats, chatAttachmentInfo, chatAttachmentMaxFiles, chatAttachmentSelectionError } from '../../components/chatAttachments'
 import { registerChatOpener } from '../../components/ChatNotifier'
 import { subscribeSessionEvents } from '../../components/sessionEvents'
 import { AGENT_MESSAGE_SENT, backfillSettledReply, isBackgroundReply, mergeAgentMessageReceipts, mergeLiveChat } from '../../components/settledChat'
@@ -17,14 +18,18 @@ import { questionTurn } from '../../components/userQuestion'
 import { attachLive, clearLive, getLive, setActiveChatSession, startChat, steerActiveChat, stopChat, useLiveChat, type ChatMsg, type LiveChat } from '../../components/chatLive'
 import { BRAND } from '../../branding'
 import AgentSidebar, { type AgentPreview } from './AgentSidebar'
+import ChatAttachmentPreviews, { AttachmentLabel } from './ChatAttachmentPreviews'
 import ComposerActivity from './ComposerActivity'
 import ComposerModelPicker from './ComposerModelPicker'
+import HomeSearch from './HomeSearch'
 import { useDictation } from './useDictation'
 import { useWelcomeSlogan } from './useWelcomeSlogan'
 import './agent.css'
 
 const LAST_SESSION_KEY = 'rukksh.agent.lastSession'
 type ComposerDrafts = Record<string, string>
+type AttachmentDrafts = Record<string, File[]>
+const NO_FILES: File[] = []
 const sessionDraftKey = (id: string) => `session:${id}`
 const newDraftKey = (agentId: string | null) => `new:${agentId ?? CORE_AGENT_ID}`
 
@@ -36,15 +41,19 @@ function writeComposerDraft(drafts: ComposerDrafts, key: string, value: string):
   return next
 }
 
+function writeAttachmentDraft(drafts: AttachmentDrafts, key: string, files: File[]): AttachmentDrafts {
+  if (drafts[key] === files || (!drafts[key] && !files.length)) return drafts
+  const next = { ...drafts }
+  if (files.length) next[key] = files
+  else delete next[key]
+  return next
+}
+
 type ViewMsg = ChatMsg & { at?: string | null }
 type ComposerPreference = { modelId: string; effort?: ReasoningEffort }
-const SUGGESTIONS = [
-  { icon: Sparkles, label: '理清思路', text: '我有一个想法，想和你一起理一理。' },
-  { icon: BookOpen, label: '整理资料', text: '帮我总结知识库里最近的文档，提炼重点。' },
-  { icon: PenLine, label: '写点东西', text: '我想写点东西，帮我一起打磨。' },
-]
 function toViewMsg(row: SessionMessage): ViewMsg {
   return { id: row.id, role: row.role === 'user' ? 'user' : 'assistant', content: row.content,
+    attachments: row.attachments,
     reasoning: row.reasoning ?? undefined, trace: row.trace ?? undefined, kind: row.kind ?? undefined,
     subagent: row.subagent ?? undefined, at: row.createdAt }
 }
@@ -93,8 +102,10 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [drafts, setDrafts] = useRememberedState<ComposerDrafts>('agent:composer-drafts', {})
+  const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDrafts>({})
   const draftKey = sessionId ? sessionDraftKey(sessionId) : newDraftKey(selectedAgentId)
   const text = drafts[draftKey] ?? ''
+  const files = attachmentDrafts[draftKey] ?? NO_FILES
   const setText = useCallback((action: SetStateAction<string>) => {
     setDrafts(current => {
       const value = typeof action === 'function' ? action(current[draftKey] ?? '') : action
@@ -103,6 +114,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   }, [draftKey, setDrafts])
   const [query, setQuery] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   /** 手机端点开的气泡：全屏阅读层的数据（null=未打开）；桌面布局不启用。 */
   const [reader, setReader] = useState<{ message: ViewMsg; index: number } | null>(null)
   const readerRef = useRef<HTMLElement>(null)
@@ -128,6 +140,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   const [awayFromBottom, setAwayFromBottom] = useState(false)
   const live = useLiveChat(sessionId)
   const busy = live?.running ?? false
+  const uploadingAttachments = busy && !!live?.userAttachments?.length && live.userMessageId == null
   const currentRef = useRef<string | null>(null)
   const selectedAgentRef = useRef(selectedAgentId)
   const sessionsRef = useRef<SessionItem[]>([])
@@ -147,7 +160,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   const composerPreferences = useRef(new Map<string, ComposerPreference>())
   const preferenceRef = useRef<ComposerPreference>({ modelId: '' })
   preferenceRef.current = { modelId, effort: reasoningEffort }
-  const moreRef = useRef<HTMLDetailsElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const dictationOwner = useRef<string | null>(null)
   const dictation = useDictation({
     onText: transcript => {
@@ -170,17 +183,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   }
   useEffect(() => {
     dictation.stop()
-    if (moreRef.current) moreRef.current.open = false
   }, [sessionId, selectedAgentId, dictation.stop])
-  useEffect(() => {
-    const closeMore = (event: PointerEvent) => {
-      if (moreRef.current && !moreRef.current.contains(event.target as Node)) moreRef.current.open = false
-    }
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && moreRef.current) moreRef.current.open = false }
-    document.addEventListener('pointerdown', closeMore)
-    document.addEventListener('keydown', escape)
-    return () => { document.removeEventListener('pointerdown', closeMore); document.removeEventListener('keydown', escape) }
-  }, [])
 
   const rememberPreferences = useCallback(() => {
     composerPreferences.current.set(currentRef.current ?? `new:${selectedAgentRef.current ?? CORE_AGENT_ID}`, preferenceRef.current)
@@ -248,6 +251,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !(event.target instanceof Node) || !readerRef.current?.contains(event.target)) return
       if (event.key === 'Escape') {
         event.preventDefault()
         closeReader()
@@ -442,7 +446,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
     const aside = sideRef.current
     aside?.querySelector<HTMLElement>('button, a')?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return
+      if (event.defaultPrevented || (event.target instanceof Element && event.target.closest('dialog[open]'))) return
       if (event.key === 'Escape') {
         event.preventDefault()
         closeSidebar()
@@ -466,12 +470,13 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
     if (settings && (modelId || inheritedModelId) && reasoningEffort && !effectiveModel?.reasoningEfforts?.includes(reasoningEffort)) setReasoningEffort(undefined)
   }, [settings, effectiveModel, reasoningEffort, modelId, inheritedModelId])
 
-  const sendText = useCallback(async (raw: string) => {
+  const sendText = useCallback(async (raw: string, pendingFiles = NO_FILES) => {
     const value = raw.trim()
-    if (!value || creatingRef.current || loading || messageError) return
+    const withAttachments = pendingFiles.length > 0
+    if ((!value && !withAttachments) || creatingRef.current || loading || messageError) return
     let id = currentRef.current
     const active = getLive(id)
-    if (active?.running && (active.stopping || active.userMessageId == null)) return
+    if (active?.running && (withAttachments || active.stopping || active.userMessageId == null)) return
     creatingRef.current = true; setCreating(true)
     followBottom.current = true; setAwayFromBottom(false)
     const agentId = selectedAgentRef.current
@@ -499,14 +504,27 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
       }
       historyVersion.current++
       composerPreferences.current.set(id, { modelId, effort: supportedEffort })
-      startChat({ sessionId: id, text: value, modelId: modelId || undefined, reasoningEffort: supportedEffort, onSettled: reloadSessions })
       const destination = sessionDraftKey(id)
       setDrafts(current => {
         const latest = current[draftKey] ?? ''
-        const remaining = latest === raw ? '' : latest
+        const remaining = !withAttachments && latest === raw ? '' : latest
         return destination === draftKey
           ? writeComposerDraft(current, draftKey, remaining)
           : writeComposerDraft(writeComposerDraft(current, draftKey, ''), destination, remaining)
+      })
+      if (withAttachments && destination !== draftKey) {
+        setAttachmentDrafts(current =>
+          writeAttachmentDraft(writeAttachmentDraft(current, draftKey, NO_FILES), destination, pendingFiles))
+      }
+      startChat({
+        sessionId: id, text: value || '请查看附件。', modelId: modelId || undefined,
+        reasoningEffort: supportedEffort, onSettled: reloadSessions,
+        files: withAttachments ? pendingFiles : undefined,
+        onAccepted: withAttachments ? () => {
+          setAttachmentDrafts(current => writeAttachmentDraft(current, destination,
+            (current[destination] ?? NO_FILES).filter(file => !pendingFiles.includes(file))))
+          setDrafts(current => (current[destination] ?? '') === raw ? writeComposerDraft(current, destination, '') : current)
+        } : undefined,
       })
       reloadSessions()
     } catch (error) {
@@ -519,6 +537,14 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
       }
     } finally { creatingRef.current = false; setCreating(false) }
   }, [loading, messageError, reloadSessions, modelId, supportedEffort, draftKey, setDrafts, setText])
+
+  const addFiles = (selection: FileList | null) => {
+    if (!selection?.length || busy || creatingRef.current) return
+    const next = [...files, ...selection]
+    const error = chatAttachmentSelectionError(next)
+    if (error) { setToast(error); return }
+    setAttachmentDrafts(current => writeAttachmentDraft(current, draftKey, next))
+  }
 
   const view = useMemo(() => live ? mergeLiveChat(msgs, live) : msgs, [live, msgs])
   const empty = !loading && !messageError && view.length === 0
@@ -547,7 +573,8 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   const currentAgent = selectedAgentId ? peers.find(peer => peer.id === selectedAgentId) : mainAgent
   const peersById = useMemo(() => new Map(peers.map(peer => [peer.id, peer])), [peers])
   const agentName = currentAgent?.name || (selectedAgentId ? 'Agent' : BRAND.name)
-  const composerPlaceholder = dictation.listening ? '正在听你说…' : busy ? '继续提问或调整当前任务…' : `和 ${agentName} 一起工作`
+  const composerPlaceholder = dictation.listening ? '正在听你说…' : uploadingAttachments ? '正在接收附件…'
+    : busy ? '继续提问或调整当前任务…' : `和 ${agentName} 一起工作`
   const agentAvatar = currentAgent?.avatar || (!selectedAgentId ? '/icon-64x64.png' : null)
   const avatarBadge = <span className="sl-chat__agent-avatar" aria-hidden="true">
     {agentAvatar ? <img src={agentAvatar} alt="" /> : agentName.trim()[0]?.toUpperCase()}
@@ -598,7 +625,8 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
       <aside className="sl-chat__side" id="rukksh-history" ref={sideRef} inert={!sidebarOpen || reader !== null} aria-label="Agent 导航" role={narrow && sidebarOpen ? 'dialog' : undefined} aria-modal={narrow && sidebarOpen ? true : undefined}>
         <AgentSidebar mainAgent={mainAgent} agents={peers.filter(peer => peer.id !== CORE_AGENT_ID)}
           selectedAgentId={selectedAgentId} previews={agentPreviews} loading={peersLoading} error={peersError}
-          disabled={creating} narrow={narrow} userSlot={userSlot} onSelectAgent={selectAgent}
+          disabled={creating} narrow={narrow} searchOpen={searchOpen} userSlot={userSlot} onSelectAgent={selectAgent}
+          onOpenSearch={() => { setHistoryOpen(false); setSearchOpen(true) }}
           onReload={reloadPeers} onClose={closeSidebar} />
       </aside>
 
@@ -627,96 +655,105 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
           </div>
         </div>}
         {connErr && <div className="sl-chat__banner" role="status">暂时连接不上服务，请检查后端是否已启动。</div>}
-        <div className="sl-chat__scroll scrollbar-slim" ref={scrollRef} onScroll={() => {
-          const element = scrollRef.current
-          if (!element) return
-          const away = element.scrollHeight - element.scrollTop - element.clientHeight > 100
-          followBottom.current = !away; setAwayFromBottom(away)
-        }} aria-busy={loading}>
-          {loading ? <div className="sl-chat__loading" role="status"><span className="sl-chat__thinking"><i /><i /><i /></span>正在打开对话</div>
-            : messageError ? <div className="sl-chat__loading" role="status">暂时无法打开这段对话。<button type="button" onClick={() => sessionId && openSession(sessionId)}>重新加载</button></div>
-            : empty ? <div className="sl-chat__welcome">
-              <h1>{slogan.replaceAll('{agent}', agentName)}</h1>
-            </div>
-            : <div className="sl-chat__thread" role="log" aria-label="对话消息">
-              {view.map((message, index) => {
-                if (message.kind === AGENT_MESSAGE_SENT) {
-                  return sessionId ? <AgentMessageReceipt key={message.id} sessionId={sessionId} content={message.content} peers={peersById} /> : null
-                }
-                const turn = questionTurn(message)
-                /* 手机端：点气泡直接进全屏阅读。流式中的回复先不开放，避免点开时内容还在长；
-                   气泡里的链接 / 按钮 / 输入控件和文本选择由 canExpandBubble 让行。 */
-                const expandable = narrow && Boolean(message.content) && !message.streaming
-                const expand = expandable
-                  ? (event: ReactMouseEvent<HTMLElement>) => {
-                      if (canExpandBubble(event)) openReader(message, index, event.currentTarget)
-                    }
-                  : undefined
-                return <article key={message.id ?? `live-${index}`} className={`sl-chat__turn sl-chat__turn--${message.role}`} aria-label={message.role === 'user' ? '你的消息' : `${agentName} 的回复`}>
-                  {message.role === 'user' ? <div className={`sl-chat__bubble${expandable ? ' is-expandable' : ''}`} onClick={expand} title={expandable ? '点按全屏查看' : undefined} tabIndex={expandable ? -1 : undefined}>{message.content}</div> : <>
-                    <div className={`sl-chat__answer${expandable ? ' is-expandable' : ''}`} onClick={expand} title={expandable ? '点按全屏查看' : undefined} tabIndex={expandable ? -1 : undefined}>
-                      {turn ? <>{turn.before && <ChatMarkdown content={turn.before} />}<UserQuestionCard key={JSON.stringify(turn.question)} question={turn.question} active={!busy && !creating && !loading && !live?.error && index === latestTurn} onAnswer={sendText} />{turn.after && <ChatMarkdown content={turn.after} />}</>
-                        : message.streaming ? message.content ? <div className="sl-chat__stream">{message.content}</div> : <span className="sl-chat__thinking" aria-hidden="true"><i /><i /><i /></span>
-                        : <ChatMarkdown content={message.content} />}
-                    </div>
-                    {message.content && !message.streaming && <div className="sl-chat__message-actions"><button type="button" className="sl-chat__icon" aria-label={copied === index ? '已复制回复' : '复制回复'} title={copied === index ? '已复制' : '复制回复'} onClick={() => void copy(message.content, index)}>{copied === index ? <Check size={14} /> : <Copy size={14} />}</button></div>}
-                  </>}
-                </article>
-              })}
-            </div>}
-        </div>
-        {awayFromBottom && !empty && <button type="button" className="sl-chat__jump" aria-label="回到最新消息" onClick={scrollToBottom}><ArrowDown size={16} /><span>最新消息</span></button>}
-        <div className="sl-chat__composearea">
-          <ComposerActivity key={sessionId} agentName={agentName} avatar={avatarBadge} live={live} />
-          <form className={`sl-chat__composer${busy ? ' is-busy' : ''}`} onSubmit={event => { event.preventDefault(); void sendText(text) }}>
-            <textarea ref={taRef} rows={1} value={text} onChange={event => setText(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229 && !narrow) {
-                  event.preventDefault(); void sendText(text)
-                }
-              }} placeholder={composerPlaceholder} aria-label={`给 ${agentName} 发消息`} disabled={loading || messageError} />
-            <div className="sl-chat__composerbar">
-              <div className="sl-chat__compose-left">
-                <details ref={moreRef} className="sl-chat__compose-more">
-                  <summary aria-label="更多操作" title="更多操作"><Plus size={18} /></summary>
-                  <div className="sl-chat__compose-menu">
-                    <button type="button" disabled={creating} onClick={() => { if (moreRef.current) moreRef.current.open = false; newChat() }}><PenLine size={15} />新对话</button>
-                    <a href="#/import"><BookOpen size={15} />导入资料</a>
-                    <a href="#/snapshots"><Plus size={15} />保存网页</a>
-                  </div>
-                </details>
-                <a className="sl-chat__permissions" href={`#/multi-agent/${encodeURIComponent(selectedAgentId ?? CORE_AGENT_ID)}`} title="配置当前 Agent 的工具权限"><ShieldCheck size={15} /><span>工具权限</span></a>
+        <div className="sl-chat__body scrollbar-slim">
+          {empty ? <div className="sl-chat__welcome">
+            <h1>{slogan.replaceAll('{agent}', agentName)}</h1>
+          </div> : <div className="sl-chat__scroll scrollbar-slim" ref={scrollRef} onScroll={() => {
+            const element = scrollRef.current
+            if (!element) return
+            const away = element.scrollHeight - element.scrollTop - element.clientHeight > 100
+            followBottom.current = !away; setAwayFromBottom(away)
+          }} aria-busy={loading}>
+            {loading ? <div className="sl-chat__loading" role="status"><span className="sl-chat__thinking"><i /><i /><i /></span>正在打开对话</div>
+              : messageError ? <div className="sl-chat__loading" role="status">暂时无法打开这段对话。<button type="button" onClick={() => sessionId && openSession(sessionId)}>重新加载</button></div>
+              : <div className="sl-chat__thread" role="log" aria-label="对话消息">
+                {view.map((message, index) => {
+                  if (message.kind === AGENT_MESSAGE_SENT) {
+                    return sessionId ? <AgentMessageReceipt key={message.id} sessionId={sessionId} content={message.content} peers={peersById} /> : null
+                  }
+                  const turn = questionTurn(message)
+                  /* 手机端：点气泡直接进全屏阅读。流式中的回复先不开放，避免点开时内容还在长；
+                     气泡里的链接 / 按钮 / 输入控件和文本选择由 canExpandBubble 让行。 */
+                  const expandable = narrow && Boolean(message.content) && !message.streaming
+                  const expand = expandable
+                    ? (event: ReactMouseEvent<HTMLElement>) => {
+                        if (canExpandBubble(event)) openReader(message, index, event.currentTarget)
+                      }
+                    : undefined
+                  return <article key={message.id ?? `live-${index}`} className={`sl-chat__turn sl-chat__turn--${message.role}`} aria-label={message.role === 'user' ? '你的消息' : `${agentName} 的回复`}>
+                    {message.role === 'user' ? <div className={`sl-chat__bubble${expandable ? ' is-expandable' : ''}`} onClick={expand} title={expandable ? '点按全屏查看' : undefined} tabIndex={expandable ? -1 : undefined}>
+                      <ChatAttachmentPreviews attachments={message.attachments} sessionId={sessionId} messageId={message.id} />{message.content}
+                    </div> : <>
+                      <div className={`sl-chat__answer${expandable ? ' is-expandable' : ''}`} onClick={expand} title={expandable ? '点按全屏查看' : undefined} tabIndex={expandable ? -1 : undefined}>
+                        {turn ? <>{turn.before && <ChatMarkdown content={turn.before} />}<UserQuestionCard key={JSON.stringify(turn.question)} question={turn.question} active={!busy && !creating && !loading && !live?.error && index === latestTurn} onAnswer={sendText} />{turn.after && <ChatMarkdown content={turn.after} />}</>
+                          : message.streaming ? message.content ? <div className="sl-chat__stream">{message.content}</div> : <span className="sl-chat__thinking" aria-hidden="true"><i /><i /><i /></span>
+                          : <ChatMarkdown content={message.content} />}
+                      </div>
+                      {message.content && !message.streaming && <div className="sl-chat__message-actions"><button type="button" className="sl-chat__icon" aria-label={copied === index ? '已复制回复' : '复制回复'} title={copied === index ? '已复制' : '复制回复'} onClick={() => void copy(message.content, index)}>{copied === index ? <Check size={14} /> : <Copy size={14} />}</button></div>}
+                    </>}
+                  </article>
+                })}
+              </div>}
+          </div>}
+          {awayFromBottom && !empty && <button type="button" className="sl-chat__jump" aria-label="回到最新消息" onClick={scrollToBottom}><ArrowDown size={16} /><span>最新消息</span></button>}
+          <div className="sl-chat__composearea">
+            <ComposerActivity key={sessionId} agentName={agentName} avatar={avatarBadge} live={live} />
+            <form className={`sl-chat__composer${busy ? ' is-busy' : ''}`} onSubmit={event => { event.preventDefault(); void sendText(text, files) }}>
+              {files.length > 0 && <ul className="sl-chat__attachments" aria-label="待发送附件">
+                {files.map((file, index) => <li className="sl-chat__attachment" key={index}>
+                  <AttachmentLabel attachment={chatAttachmentInfo(file)} />
+                  <button type="button" aria-label={`移除附件 ${file.name}`} title="移除附件" disabled={creating || uploadingAttachments}
+                    onClick={() => setAttachmentDrafts(current => writeAttachmentDraft(current, draftKey,
+                      (current[draftKey] ?? NO_FILES).filter((_, i) => i !== index)))}><X size={14} /></button>
+                </li>)}
+              </ul>}
+              <textarea ref={taRef} rows={1} value={text} onChange={event => setText(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229 && !narrow) {
+                    event.preventDefault(); void sendText(text, files)
+                  }
+                }} placeholder={composerPlaceholder} aria-label={`给 ${agentName} 发消息`} disabled={loading || messageError} />
+              <div className="sl-chat__composerbar">
+                <div className="sl-chat__compose-left">
+                  <input ref={fileRef} type="file" accept={chatAttachmentAccept} multiple hidden
+                    onChange={event => { addFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
+                  <button type="button" className="sl-chat__attach" aria-label="添加附件"
+                    title={`添加附件（${chatAttachmentFormats}）`} disabled={busy || creating || loading || messageError || files.length >= chatAttachmentMaxFiles}
+                    onClick={() => fileRef.current?.click()}><Paperclip size={17} aria-hidden="true" /></button>
+                  <a className="sl-chat__permissions" href={`#/multi-agent/${encodeURIComponent(selectedAgentId ?? CORE_AGENT_ID)}`} title="配置当前 Agent 的工具权限"><ShieldCheck size={15} /><span>工具权限</span></a>
+                </div>
+                <div className={`sl-chat__compose-right${dictation.supported ? '' : ' without-dictation'}`}>
+                <ComposerModelPicker models={settings?.models.map(model => ({ id: model.id, name: model.name, model: model.model, efforts: model.reasoningEfforts })) ?? []}
+                  value={modelId} inheritedModelId={inheritedModelId} inheritedLabel={settings?.models.find(model => model.id === inheritedModelId)?.model || '跟随 Agent'}
+                  effort={supportedEffort} onModelChange={value => { setModelId(value); setReasoningEffort(undefined) }} onEffortChange={setReasoningEffort}
+                  disabled={busy || creating || loading} loading={settingsLoading} error={settingsError} onRetry={reloadSettings} />
+                {dictation.supported && <button type="button" className={`sl-chat__dictate${dictation.listening ? ' is-listening' : ''}`} title={dictation.listening ? '结束听写' : '语音输入'} aria-label={dictation.listening ? '结束听写' : '语音输入'} aria-pressed={dictation.listening} disabled={creating || loading || messageError} onClick={toggleDictation}><AppIcon name="microphone" /></button>}
+                {busy && !uploadingAttachments && <button
+                  type="button"
+                  className="sl-chat__send is-stop"
+                  title={live?.stopping ? '正在停止回复' : '停止回复'}
+                  aria-label={live?.stopping ? '正在停止回复' : '停止回复'}
+                  disabled={live?.stopping || live?.userMessageId == null}
+                  onClick={() => sessionId && stopChat(sessionId)}
+                ><AppIcon name="stop" size={14} /></button>}
+                {!busy && !text.trim() && !files.length && dictation.supported
+                  ? <button type="button" className={`sl-chat__send${dictation.listening ? ' is-listening' : ''}`} title={dictation.listening ? '结束听写' : '语音输入'} aria-label={dictation.listening ? '结束听写' : '语音输入'} disabled={creating || loading || messageError} onClick={toggleDictation}><AppIcon name={dictation.listening ? 'stop' : 'dictation'} size={dictation.listening ? 12 : 16} /></button>
+                  : <button
+                    type="submit"
+                    className="sl-chat__send"
+                    title={busy ? '发送到当前任务' : '发送消息'}
+                    aria-label="发送消息"
+                    disabled={(!text.trim() && !files.length) || creating || loading || messageError || (busy && (files.length > 0 || live?.stopping || live?.userMessageId == null))}
+                  ><AppIcon name="arrow-up" /></button>}
+                </div>
               </div>
-              <div className={`sl-chat__compose-right${dictation.supported ? '' : ' without-dictation'}`}>
-              <ComposerModelPicker models={settings?.models.map(model => ({ id: model.id, name: model.name, model: model.model, efforts: model.reasoningEfforts })) ?? []}
-                value={modelId} inheritedModelId={inheritedModelId} inheritedLabel={settings?.models.find(model => model.id === inheritedModelId)?.model || '跟随 Agent'}
-                effort={supportedEffort} onModelChange={value => { setModelId(value); setReasoningEffort(undefined) }} onEffortChange={setReasoningEffort}
-                disabled={busy || creating || loading} loading={settingsLoading} error={settingsError} onRetry={reloadSettings} />
-              {dictation.supported && <button type="button" className={`sl-chat__dictate${dictation.listening ? ' is-listening' : ''}`} title={dictation.listening ? '结束听写' : '语音输入'} aria-label={dictation.listening ? '结束听写' : '语音输入'} aria-pressed={dictation.listening} disabled={creating || loading || messageError} onClick={toggleDictation}><AppIcon name="microphone" /></button>}
-              {busy && <button
-                type="button"
-                className="sl-chat__send is-stop"
-                title={live?.stopping ? '正在停止回复' : '停止回复'}
-                aria-label={live?.stopping ? '正在停止回复' : '停止回复'}
-                disabled={live?.stopping || live?.userMessageId == null}
-                onClick={() => sessionId && stopChat(sessionId)}
-              ><AppIcon name="stop" size={14} /></button>}
-              {!busy && !text.trim() && dictation.supported
-                ? <button type="button" className={`sl-chat__send${dictation.listening ? ' is-stop' : ''}`} title={dictation.listening ? '结束听写' : '语音输入'} aria-label={dictation.listening ? '结束听写' : '语音输入'} disabled={creating || loading || messageError} onClick={toggleDictation}><AppIcon name={dictation.listening ? 'stop' : 'dictation'} size={dictation.listening ? 12 : 16} /></button>
-                : <button
-                  type="submit"
-                  className="sl-chat__send"
-                  title={busy ? '发送到当前任务' : '发送消息'}
-                  aria-label="发送消息"
-                  disabled={!text.trim() || creating || loading || messageError || (busy && (live?.stopping || live?.userMessageId == null))}
-                ><AppIcon name="arrow-up" /></button>}
-              </div>
-            </div>
-          </form>
-          {empty && <div className="sl-chat__suggestions">{SUGGESTIONS.map(({ label, text: suggestion, icon: Icon }) => <button type="button" key={label} disabled={!!text.trim()} onClick={() => { setText(current => current.trim() ? current : suggestion); taRef.current?.focus() }}><Icon size={15} />{label}</button>)}</div>}
+            </form>
+          </div>
         </div>
         {toast && <div className="sl-chat__toast" role="status">{toast}<button type="button" aria-label="关闭提示" onClick={() => setToast(null)}><X size={14} /></button></div>}
       </main>
+
+      {searchOpen && <HomeSearch onClose={() => setSearchOpen(false)} />}
 
       {/* 手机端气泡的全屏阅读层：铺满视口、独立滚动，关闭后焦点回到被点开的那只气泡。
           挂到 body 上，避免被会话页的 overflow 与层叠上下文裁掉。 */}
@@ -755,7 +792,8 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
           <div className="sl-chat__reader-scroll scrollbar-slim">
             <div className={`sl-chat__reader-body${reader.message.role === 'user' ? ' is-user' : ''}`}>
               {reader.message.role === 'user'
-                ? <p className="sl-chat__reader-text">{reader.message.content}</p>
+                ? <><ChatAttachmentPreviews attachments={reader.message.attachments} sessionId={sessionId} messageId={reader.message.id} />
+                  <p className="sl-chat__reader-text">{reader.message.content}</p></>
                 : <div className="sl-chat__reader-markdown"><ChatMarkdown content={reader.message.content} /></div>}
             </div>
           </div>

@@ -56,6 +56,7 @@ public class SchemaColumnPatches {
             new ColumnPatch("memory_item_embedding", "item_version", "INTEGER"),
             new ColumnPatch("memory_snapshot", "content_json", "TEXT"),
             new ColumnPatch("chat_message", "event_kind", "TEXT"),
+            new ColumnPatch("chat_message", "attachments", "TEXT"),
             new ColumnPatch("hub_session", "agent_id", "TEXT"),
             new ColumnPatch("hub_session", "project_id", "TEXT"),
             new ColumnPatch("hub_session", "context_scope_revision", "INTEGER"),

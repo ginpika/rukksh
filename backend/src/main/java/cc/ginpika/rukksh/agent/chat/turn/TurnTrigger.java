@@ -10,7 +10,11 @@ package cc.ginpika.rukksh.agent.chat.turn;
  * @param text      触发文本（用户提问原文；非用户触发且无原文时为 null）
  * @param messageId 触发落库的那条消息行 id（用户提问用；无对应行时为 null）
  */
-public record TurnTrigger(Source source, String text, Long messageId) {
+public record TurnTrigger(Source source, String text, Long messageId, String attachments) {
+
+    public TurnTrigger(Source source, String text, Long messageId) {
+        this(source, text, messageId, null);
+    }
 
     /** 触发源 */
     public enum Source {

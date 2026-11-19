@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type MouseEvent, type ReactNode } from 'react'
 import type { SearchHit, SearchResponse } from '../api/client'
+import { isDesktopShell, openExternalUrl } from '../api/desktop'
 import { Card } from './Card'
 import { usePageKit } from '../kit'
 
@@ -47,12 +48,15 @@ function fileName(ref: string): string {
   return base.includes('.') ? ref : `${ref}.md`
 }
 
-type Props = { hit: SearchHit; web?: never } | { hit?: never; web: SearchResponse['web']['results'][number] }
+type Props = { compact?: boolean } & (
+  { hit: SearchHit; web?: never } | { hit?: never; web: SearchResponse['web']['results'][number] }
+)
 
 /** Internal and DeepSeek hits share the same presentation; their links and source metadata stay distinct. */
-export default function ResultCard({ hit, web }: Props) {
+export default function ResultCard({ hit, web, compact = false }: Props) {
   const kit = usePageKit()
   const [expandedText, setExpandedText] = useState<string | null>(null)
+  const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const isEntity = hit?.kind === 'entity'
   const isChunk = hit?.kind === 'chunk'
   const statusTone = hit?.status ? STATUS_TONES[hit.status] : undefined
@@ -67,13 +71,23 @@ export default function ResultCard({ hit, web }: Props) {
   const source = web ? web.siteName || '网页' : isEntity ? '图谱实体' : isChunk ? '知识片段'
     : hit?.kind === 'snapshot' ? '网页快照' : hit?.kind === 'doc' ? '内部文档' : '本地知识库'
   const location = web ? web.url : isEntity ? `知识图谱 / ${title}` : fileName(hit?.sourceRef ?? '') || '本地知识库'
-  const description = (web ? web.snippet || web.summary : hit?.snippet ?? '').replace(/\s+/g, ' ').trim()
+  const description = (web ? web.snippet || web.summary || '' : hit?.snippet ?? '').replace(/\s+/g, ' ').trim()
   const chars = Array.from(description)
   const expanded = expandedText === description
-  const excerpt = chars.length > 200 && !expanded ? chars.slice(0, 200).join('') + '…' : description
+  const excerptLimit = compact ? 110 : 200
+  const canExpand = chars.length > excerptLimit
+  const excerpt = canExpand && !expanded ? chars.slice(0, excerptLimit).join('') + '…' : description
   const matched = hit?.matched ?? []
-  return (
-    <Card as="article" interactive className="search-result w-full min-w-0">
+
+  function openLink(event: MouseEvent<HTMLAnchorElement>) {
+    if (!href || !isDesktopShell() || event.button > 1) return
+    event.preventDefault()
+    setFailedUrl(null)
+    void openExternalUrl(href).catch(() => setFailedUrl(href))
+  }
+
+  const content = (
+    <>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
         <span>{source}</span>
         {web?.date && <time>{web.date}</time>}
@@ -81,13 +95,17 @@ export default function ResultCard({ hit, web }: Props) {
         {isChunk && statusTone && (
           <kit.Badge tone={statusTone.tone}>{statusTone.label}</kit.Badge>
         )}
+        {compact && !isEntity && hit?.kind !== 'snapshot' && location !== source
+          && <span className="break-all">{location}</span>}
       </div>
-      <h3 className="mt-2 break-words text-xl font-bold leading-snug">
+      <h3 className="search-result__title mt-2 break-words text-xl font-bold leading-snug">
         {href ? (
           <a
             href={href}
             target={external ? '_blank' : undefined}
             rel={external ? 'noreferrer' : undefined}
+            onClick={external ? openLink : undefined}
+            onAuxClick={external ? openLink : undefined}
             className="text-fg hover:text-accent hover:underline"
           >
             <Mark text={title} terms={matched} />
@@ -98,13 +116,16 @@ export default function ResultCard({ hit, web }: Props) {
           </span>
         )}
       </h3>
-      <p className="mt-1 break-all text-xs text-muted">{location}</p>
-      {description && <p className="mt-2 text-base leading-relaxed text-muted [overflow-wrap:anywhere]">
+      {failedUrl && failedUrl === href && <p className="text-sm text-danger" role="alert">无法打开默认浏览器。可重试或复制链接。</p>}
+      {!compact && <p className="mt-1 break-all text-xs text-muted">{location}</p>}
+      {description && <p className="search-result__excerpt mt-2 text-base leading-relaxed text-muted [overflow-wrap:anywhere]">
         <Mark text={excerpt} terms={matched} />
       </p>}
-      {chars.length > 200 && <button type="button" aria-expanded={expanded}
+      {canExpand && <button type="button" aria-expanded={expanded}
         className="mt-1 text-base text-muted underline hover:text-accent sm:text-sm"
         onClick={() => setExpandedText(expanded ? null : description)}>{expanded ? '收起摘要' : '展开摘要'}</button>}
-    </Card>
+    </>
   )
+  return compact ? <article className="search-result search-result--compact">{content}</article>
+    : <Card as="article" interactive className="search-result w-full min-w-0">{content}</Card>
 }

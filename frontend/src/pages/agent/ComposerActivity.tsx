@@ -5,6 +5,7 @@ import type { LiveChat } from '../../components/chatLive'
 type ActivityCopy = readonly [plain: string, playful: string]
 
 const THINKING: ActivityCopy = ['正在思考', '脑内会议进行中']
+const UPLOADING: ActivityCopy = ['正在接收附件', '正在接收附件']
 const ANSWERING: ActivityCopy = ['正在回复', '在把脑内草稿写成回复']
 const STOPPING: ActivityCopy = ['正在停止当前任务', '在收拾工作台']
 const DEFAULT_TOOL: ActivityCopy = ['正在使用工具', '翻出了工具箱']
@@ -46,6 +47,7 @@ function toolCopy({ name, target }: ChatToolActivity): ActivityCopy {
 
 function currentActivity(live: LiveChat | null): { key: string; copy: ActivityCopy } | null {
   if (!live?.running) return null
+  if (live.userAttachments?.length && live.userMessageId == null) return { key: live.sessionId + ':uploading', copy: UPLOADING }
   if (live.stopping) return { key: `${live.sessionId}:stopping`, copy: STOPPING }
 
   const tool = live.activeTools[0]

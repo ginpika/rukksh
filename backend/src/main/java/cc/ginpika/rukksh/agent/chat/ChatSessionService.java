@@ -189,8 +189,16 @@ public class ChatSessionService {
                 .map(m -> new ChatDtos.MessageRow(m.id(), m.role(), m.content(), m.reasoning(),
                         ChatTraceCodec.readTrace(om, m.trace()), m.kind(),
                         ChatProtocol.readSubagentBrief(om, m.kind(), m.meta()),
-                        iso(m.createdAt())))
+                        iso(m.createdAt()), ChatAttachments.info(ChatAttachments.read(om, m.attachments()))))
                 .toList();
+    }
+
+    public ChatAttachments.Content attachment(String hubId, long messageId, int index) {
+        var attachments = ChatAttachments.read(om, messages.userAttachments(hubId, messageId));
+        if (index < 0 || index >= attachments.size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "附件不存在");
+        }
+        return attachments.get(index);
     }
 
     /**

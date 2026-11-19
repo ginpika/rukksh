@@ -12,6 +12,14 @@ const live = { sessionId: 's', userText: 'question', userMessageId: 10, content:
 const history = () => [{ id: 10, role: 'user', content: 'question' }, { role: 'assistant', content: 'answer', streaming: false }]
 const row = (id, role, content, extra = {}) => ({ id, role, content, reasoning: null, trace: null, kind: null, subagent: null, createdAt: null, ...extra })
 
+test('attachment uploads show in the transcript only after the server accepts the message', () => {
+  const userAttachments = [{ name: 'report.pdf', image: false }]
+  const before = history()
+  const rejected = { ...live, userMessageId: null, userAttachments, error: 'Invalid attachment' }
+  assert.equal(mergeLiveChat(before, rejected), before)
+  assert.deepEqual(mergeLiveChat([], { ...live, userAttachments })[0].attachments, userAttachments)
+})
+
 test('completed reply receives its persisted ID immediately without leaving the conversation', () => {
   const messages = history()
   assert.equal(messages[1].id, undefined)

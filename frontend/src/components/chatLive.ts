@@ -6,6 +6,7 @@ import {
   sessionLiveStream,
   steerChat,
   stopChat as apiStopChat,
+  type ChatAttachmentInfo,
   type ChatStreamReset,
   type ChatToolActivity,
   type ChatToolActivityEvent,
@@ -16,6 +17,7 @@ import {
   type TraceSegment,
   type ReasoningEffort,
 } from '../api/client'
+import { chatAttachmentInfo } from './chatAttachments'
 
 /**
  * 会话生成的「运行时」：把一次「发送 → 流式生成 → 落定」的全过程从页面组件搬进应用级模块仓。
@@ -32,6 +34,7 @@ export type ChatMsg = {
   id?: number
   role: 'user' | 'assistant'
   content: string
+  attachments?: ChatAttachmentInfo[]
   reasoning?: string
   trace?: TraceSegment[]
   kind?: string
@@ -47,6 +50,7 @@ export type LiveChat = {
   /** 本次提问的原文与落库行 id（id 供「回退到这条提问之前」定位删除区间） */
   userText: string
   userMessageId: number | null
+  userAttachments?: ChatAttachmentInfo[]
   steers: SteerMessage[]
   interims: InterimReply[]
   /** 正在生成的回答正文 / 思维链 / 结构化分段 */
@@ -254,6 +258,8 @@ export type StartArgs = {
   modelId?: string
   promptId?: string
   reasoningEffort?: ReasoningEffort
+  files?: File[]
+  onAccepted?: () => void
   /** 生成落定（成功 / 用户停止 / 失败）后回调：页面据此刷新会话列表（标题、排序） */
   onSettled?: (sessionId: string) => void
 }
@@ -269,6 +275,7 @@ export function startChat(o: StartArgs): void {
     sessionId: o.sessionId,
     userText: o.text,
     userMessageId: null,
+    userAttachments: o.files?.map(chatAttachmentInfo),
     steers: [],
     interims: [],
     content: '',
@@ -291,12 +298,16 @@ export function startChat(o: StartArgs): void {
         {
           ...buffer.handlers,
           /* user 消息已落库：回填其行 id，供「回退到这条提问之前」定位删除区间 */
-          onMeta: (meta) => patch(o.sessionId, (cur) => ({ ...cur, userMessageId: meta.messageId })),
+          onMeta: (meta) => {
+            patch(o.sessionId, (cur) => ({ ...cur, userMessageId: meta.messageId }))
+            o.onAccepted?.()
+          },
           onReasoning: reasoning => buffer.handlers.onDelta({ reasoning }),
           onContent: content => buffer.handlers.onDelta({ content }),
         },
         undefined,
         o.reasoningEffort,
+        o.files,
       )
       /* 用落库正本覆盖流式累积（与历史回放一致），并结束流式态 */
       buffer.flushNow()

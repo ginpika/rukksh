@@ -51,7 +51,7 @@ class CodingAgentMergeTest {
             var migration = new SchemaMigrations(jdbc, tx, "jdbc:sqlite::memory:");
             migration.apply(); migration.apply();
 
-            assertEquals(7, jdbc.queryForObject("SELECT version FROM _schema", Integer.class));
+            assertEquals(8, jdbc.queryForObject("SELECT version FROM _schema", Integer.class));
             assertEquals(1, agents.peers().size());
             assertTrue(agents.peer(BuiltinAgents.CODING).isEmpty());
             assertEquals("old-model", jdbc.queryForObject("SELECT model_id FROM agent WHERE id=?", String.class, BuiltinAgents.CODING));

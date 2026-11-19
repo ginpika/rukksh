@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cc.ginpika.rukksh.agent.chat.ChatLiveStore;
+import cc.ginpika.rukksh.agent.chat.ChatAttachments;
 import cc.ginpika.rukksh.agent.chat.dto.ChatDtos;
 import cc.ginpika.rukksh.agent.chat.store.ChatMessageStore;
 import cc.ginpika.rukksh.agent.context.ContextRequest;
@@ -42,6 +43,7 @@ class HistoryTest {
               tool_rounds TEXT,
               kind TEXT,
               meta TEXT,
+              attachments TEXT,
               created_at INTEGER NOT NULL)""";
 
     /** 与 schema.sql 的 chat_turn 同构（Turn 正本：显式配对 + 执行信封挂点 + 任务段归属） */
@@ -116,6 +118,27 @@ class HistoryTest {
         assertEquals("回答二", rows.get(3).path("content").asText());
         /* 默认协议不注入思考与工具往返 */
         assertTrue(rows.get(1).get("reasoning_content") == null);
+    }
+
+    @Test
+    void replayIncludesDocumentTextAndImagePartsWithoutChangingTheUserText() {
+        JdbcTemplate jdbc = db();
+        ChatMessageStore store = new ChatMessageStore(jdbc);
+        String stored = OM.valueToTree(List.of(
+                new ChatAttachments.Content("notes.txt", "text/plain", "全文"),
+                new ChatAttachments.Content("photo.png", "image/png", "data:image/png;base64,fixture"))).toString();
+        store.insert("s1", "user", "帮我看看", null, null, null, null, null, stored);
+        store.insert("s1", "assistant", "看到了", null, null, null, null, null);
+        History history = history(store, jdbc);
+        var parts = history.messages(new ContextRequest("deepseek-flash", "sys", "s1", false, "", BIG_BUDGET, null))
+                .getFirst().path("content");
+        assertEquals("帮我看看", parts.get(0).path("text").asText());
+        assertTrue(parts.get(1).path("text").asText().contains("全文"));
+        assertEquals("data:image/png;base64,fixture", parts.get(3).path("image_url").path("url").asText());
+
+        var textOnly = history.messages(new ContextRequest("deepseek-v4-pro", "sys", "s1", false, "", BIG_BUDGET, null));
+        assertFalse(textOnly.getFirst().toString().contains("image_url"));
+        assertTrue(textOnly.getFirst().toString().contains("photo.png"));
     }
 
     @Test

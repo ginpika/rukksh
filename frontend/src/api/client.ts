@@ -119,10 +119,11 @@ export type SearchResponse = {
 }
 
 /** rag=true：RAG 检索模式（测试暗门）——全量召回且只返回 chunk 命中 */
-export function search(query: string, rag = false): Promise<SearchResponse> {
+export function search(query: string, rag = false, signal?: AbortSignal): Promise<SearchResponse> {
   return requestJson<SearchResponse>('/api/search', {
     method: 'POST',
     body: JSON.stringify(rag ? { query, rag: true } : { query }),
+    signal,
   })
 }
 
@@ -180,6 +181,15 @@ export type SubagentBrief = {
   execId: number | null
 }
 
+export type ChatAttachmentInfo = { name: string; image: boolean }
+
+export async function getChatAttachment(sessionId: string, messageId: number, index: number, signal: AbortSignal): Promise<Blob> {
+  const path = '/api/sessions/' + encodeURIComponent(sessionId) + '/messages/' + messageId + '/attachments/' + index
+  const response = await apiFetch(path, { credentials: 'same-origin', signal })
+  if (!response.ok) throw new ApiError(response.status, await response.text().catch(() => ''))
+  return response.blob()
+}
+
 export type SessionMessage = {
   id: number
   role: string
@@ -193,6 +203,7 @@ export type SessionMessage = {
   /** 子代理结论气泡的元信息；普通对话为 null */
   subagent: SubagentBrief | null
   createdAt: string | null
+  attachments?: ChatAttachmentInfo[]
 }
 
 export type NewSession = { id: string; projectId: string | null }
@@ -250,16 +261,32 @@ export async function chatStream(
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
   reasoningEffort?: ReasoningEffort,
+  files?: File[],
 ): Promise<ChatReply> {
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-  const res = await apiFetch('/api/chat/stream', {
+  const request = JSON.stringify({ sessionId, input, modelId, promptId, reasoningEffort })
+  const form = files?.length ? new FormData() : null
+  if (form) {
+    form.append('request', new Blob([request], { type: 'application/json' }))
+    files?.forEach(file => form.append('files', file))
+  }
+  const res = await apiFetch(form ? '/api/chat/stream/attachments' : '/api/chat/stream', {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, input, modelId, promptId, reasoningEffort }),
+    headers: form ? undefined : { 'Content-Type': 'application/json' },
+    body: form ?? request,
     signal,
   })
-  if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''))
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    if (form && res.status === 413) throw new Error('附件超过服务器允许的大小')
+    if (form && res.status === 400) {
+      let message: unknown
+      try { message = JSON.parse(body)?.error } catch { /* Fall back to the HTTP error. */ }
+      if (typeof message === 'string' && message !== 'Bad Request') throw new Error(message)
+    }
+    throw new ApiError(res.status, body)
+  }
   if (!res.body) throw new ApiError(res.status, '响应无流式内容')
 
   const reader = res.body.getReader()

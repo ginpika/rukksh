@@ -1,5 +1,6 @@
 package cc.ginpika.rukksh.config;
 
+import cc.ginpika.rukksh.ai.core.BuiltinAgents;
 import jakarta.annotation.PostConstruct;
 import java.io.File;
 import java.nio.file.Files;
@@ -43,7 +44,7 @@ public class SchemaMigrations {
 
     private static final Logger log = LoggerFactory.getLogger(SchemaMigrations.class);
 
-    private static final int TARGET = 7;
+    private static final int TARGET = 8;
 
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
@@ -117,6 +118,11 @@ public class SchemaMigrations {
                 WHERE kind = 'subagent' AND CASE WHEN json_valid(payload)
                     THEN json_type(payload, '$._minis_context') = 'object' ELSE 0 END
                 """));
+        m.put(8, () -> jdbc.update("""
+                UPDATE agent SET name = 'rukksh', updated_at = ?
+                WHERE id = ? AND name = '助手'
+                  AND NOT EXISTS (SELECT 1 FROM agent WHERE name = 'rukksh' AND id <> ?)
+                """, System.currentTimeMillis(), BuiltinAgents.CORE, BuiltinAgents.CODING));
         return m;
     }
 

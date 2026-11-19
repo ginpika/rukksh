@@ -26,7 +26,11 @@ public class ChatMessageStore {
 
     public record MessageRow(Long id, String sessionId, String role, String content, String reasoning,
                              String trace, String toolRounds, String kind, String meta,
-                             Long createdAt) {
+                             Long createdAt, String attachments) {
+        public MessageRow(Long id, String sessionId, String role, String content, String reasoning,
+                          String trace, String toolRounds, String kind, String meta, Long createdAt) {
+            this(id, sessionId, role, content, reasoning, trace, toolRounds, kind, meta, createdAt, null);
+        }
     }
 
     /** 跨会话的一条消息（带会话名，供潜意识注入器回溯「最近对人说过什么」） */
@@ -47,11 +51,16 @@ public class ChatMessageStore {
      *  仅 assistant 有；kind/meta 标识子代理投递或同轮补充消息。流式对话也可用 meta 关联同一轮的首尾。 */
     public long insert(String sessionId, String role, String content, String reasoning, String trace,
                        String toolRounds, String kind, String meta) {
+        return insert(sessionId, role, content, reasoning, trace, toolRounds, kind, meta, null);
+    }
+
+    public long insert(String sessionId, String role, String content, String reasoning, String trace,
+                       String toolRounds, String kind, String meta, String attachments) {
         GeneratedKeyHolder key = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
                     "INSERT INTO chat_message(session_id, role, content, reasoning, trace, tool_rounds, "
-                            + "kind, meta, created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                            + "kind, meta, created_at, attachments) VALUES(?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, sessionId);
             ps.setString(2, role);
@@ -62,6 +71,7 @@ public class ChatMessageStore {
             ps.setString(7, kind);
             ps.setString(8, meta);
             ps.setLong(9, System.currentTimeMillis());
+            ps.setString(10, attachments);
             return ps;
         }, key);
         Number id = key.getKey();
@@ -71,8 +81,15 @@ public class ChatMessageStore {
     public List<MessageRow> listBySession(String sessionId) {
         return jdbc.query(
                 "SELECT id, session_id, role, content, reasoning, trace, tool_rounds, kind, meta, "
-                        + "created_at FROM chat_message WHERE session_id = ? ORDER BY id",
+                        + "created_at, attachments FROM chat_message WHERE session_id = ? ORDER BY id",
                 ChatMessageStore::map, sessionId);
+    }
+
+    public String userAttachments(String sessionId, long messageId) {
+        List<String> rows = jdbc.query(
+                "SELECT attachments FROM chat_message WHERE session_id = ? AND id = ? AND role = 'user'",
+                (rs, n) -> rs.getString(1), sessionId, messageId);
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
     /** 批次合成只读取已投递报告的元信息。 */
@@ -147,7 +164,7 @@ public class ChatMessageStore {
     public int copyUpTo(String fromSession, String toSession, long upToId) {
         List<CopyRow> rows = jdbc.query(
                 "SELECT id, role, content, reasoning, trace, tool_rounds, kind, meta, topic_id, "
-                        + "peer_id, peer_name, context, event_seq, event_kind, created_at "
+                        + "peer_id, peer_name, context, event_seq, event_kind, created_at, attachments "
                         + "FROM chat_message WHERE session_id = ? AND id <= ? "
                         + "AND (kind IS NULL OR kind <> ?) AND (event_kind IS NULL OR event_kind <> ?) ORDER BY id",
                 (rs, n) -> new CopyRow(rs.getLong("id"), rs.getString("role"), rs.getString("content"),
@@ -155,7 +172,7 @@ public class ChatMessageStore {
                         rs.getString("kind"), rs.getString("meta"), rs.getString("topic_id"),
                         rs.getString("peer_id"), rs.getString("peer_name"), rs.getString("context"),
                         (Long) rs.getObject("event_seq"), rs.getString("event_kind"),
-                        rs.getLong("created_at")),
+                        rs.getLong("created_at"), rs.getString("attachments")),
                 fromSession, upToId, KIND_AGENT_MESSAGE_SENT, KIND_AGENT_MESSAGE_SENT);
         if (rows.isEmpty()) {
             return 0;
@@ -236,7 +253,7 @@ public class ChatMessageStore {
             PreparedStatement ps = con.prepareStatement(
                     "INSERT INTO chat_message(session_id, role, content, reasoning, trace, tool_rounds, "
                             + "kind, meta, topic_id, peer_id, peer_name, context, event_seq, event_kind, "
-                            + "created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            + "created_at, attachments) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, toSession);
             ps.setString(2, row.role());
@@ -257,6 +274,7 @@ public class ChatMessageStore {
             }
             ps.setString(14, row.eventKind());
             ps.setLong(15, row.createdAt());
+            ps.setString(16, row.attachments());
             return ps;
         }, key);
         Number id = key.getKey();
@@ -267,7 +285,7 @@ public class ChatMessageStore {
     private record CopyRow(long id, String role, String content, String reasoning, String trace,
                            String toolRounds, String kind, String meta, String topicId, String peerId,
                            String peerName, String context, Long eventSeq, String eventKind,
-                           long createdAt) {
+                           long createdAt, String attachments) {
     }
 
     /** 删除 fromId（含）及其后的消息：会话回退到这条之前，返回删除行数 */
@@ -307,6 +325,7 @@ public class ChatMessageStore {
                 rs.getString("tool_rounds"),
                 rs.getString("kind"),
                 rs.getString("meta"),
-                (Long) rs.getObject("created_at"));
+                (Long) rs.getObject("created_at"),
+                rs.getString("attachments"));
     }
 }

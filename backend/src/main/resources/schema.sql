@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS chat_message (
   context       TEXT,
   event_seq     INTEGER,
   event_kind    TEXT,
+  attachments   TEXT,
   created_at    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_msg_session ON chat_message(session_id, id);

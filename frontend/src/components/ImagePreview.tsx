@@ -6,14 +6,15 @@ import './imagePreview.css'
 const ImageLightbox = lazy(() => import('./ImageLightbox'))
 
 /** 通用图片缩略图入口；认证与资源加载由调用方负责，查看器仅在首次打开时加载。 */
-export default function ImagePreview({ src, alt = '', loading, className }: {
+export default function ImagePreview({ src, alt = '', loading, className, onError }: {
   src?: string
   alt?: string
   loading?: 'eager' | 'lazy'
   className?: string
+  onError?: () => void
 }) {
   const [preview, setPreview] = useState<{ slide: SlideImage; open: boolean } | null>(null)
-  if (!src) return <img src={src} alt={alt} loading={loading} className={className} />
+  if (!src) return <img src={src} alt={alt} loading={loading} className={className} onError={onError} />
   return <span className="image-preview">
     <button type="button" className="image-preview-trigger" aria-label={'预览' + (alt || '图片')} aria-haspopup="dialog"
       onClick={event => {
@@ -22,7 +23,7 @@ export default function ImagePreview({ src, alt = '', loading, className }: {
         const image = event.currentTarget.querySelector('img')
         setPreview({ open: true, slide: { src, alt: alt || '图片', width: image?.naturalWidth || undefined, height: image?.naturalHeight || undefined } })
       }}>
-      <img src={src} alt={alt} loading={loading} className={className} />
+      <img src={src} alt={alt} loading={loading} className={className} onError={onError} />
     </button>
     {preview?.slide.src === src && <Suspense fallback={<span role="status" aria-label="正在加载图片预览" className="image-preview-loading">
       <span className="image-preview-spinner"><AppIcon name="loading" size={24} /></span>

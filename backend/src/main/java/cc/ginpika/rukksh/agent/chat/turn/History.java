@@ -1,5 +1,6 @@
 package cc.ginpika.rukksh.agent.chat.turn;
 
+import cc.ginpika.rukksh.agent.chat.ChatAttachments;
 import cc.ginpika.rukksh.agent.chat.ChatLiveStore;
 import cc.ginpika.rukksh.agent.chat.ChatTrace;
 import cc.ginpika.rukksh.agent.chat.ChatTraceCodec;
@@ -137,7 +138,7 @@ public class History implements ContextProvider {
             return null;
         }
         TurnTrigger trigger = triggerRow != null
-                ? TurnTrigger.user(triggerRow.content(), triggerRow.id())
+                ? userTrigger(triggerRow)
                 : new TurnTrigger(TurnTrigger.of(t.triggerSource()), null, null);
         List<Turn.Interjection> inputs = triggerRow == null ? List.of()
                 : interjections.getOrDefault(triggerRow.meta(), List.of());
@@ -148,6 +149,10 @@ public class History implements ContextProvider {
                     null, List.of(), List.of());
         }
         return new Turn(sessionId, trigger, reply, false, inputs);
+    }
+
+    private static TurnTrigger userTrigger(MessageRow row) {
+        return new TurnTrigger(TurnTrigger.Source.USER_INPUT, row.content(), row.id(), row.attachments());
     }
 
     private static Map<String, List<Turn.Interjection>> interjections(List<MessageRow> rows) {
@@ -190,7 +195,7 @@ public class History implements ContextProvider {
             if ("user".equals(m.role())) {
                 pendingIndex = turns.size();
                 pendingKey = steerKey(m);
-                turns.add(new Turn(sessionId, TurnTrigger.user(m.content(), m.id()), null, false,
+                turns.add(new Turn(sessionId, userTrigger(m), null, false,
                         interjections.getOrDefault(pendingKey, List.of())));
             } else if ("assistant".equals(m.role())) {
                 if (ChatMessageStore.KIND_AGENT_MESSAGE.equals(m.kind()) || isSubagentReport(m)) {
@@ -310,14 +315,17 @@ public class History implements ContextProvider {
      */
     private List<TurnMessages> grouped(ContextRequest req, boolean clip, Replay replay) {
         List<TurnMessages> grouped = new ArrayList<>();
-        for (Turn t : turns(req.sessionId(), replay)) {
+        int images = ChatAttachments.supportsImages(req.model()) ? ChatAttachments.MAX_IMAGES : 0;
+        for (Turn t : turns(req.sessionId(), replay).reversed()) {
+            var files = ChatAttachments.read(om, t.trigger().attachments());
             List<JsonNode> out = new ArrayList<>();
-            emit(out, t, req.contextTrace(), clip);
+            emit(out, t, req.contextTrace(), clip, files, images);
+            images = Math.max(0, images - (int) files.stream().filter(ChatAttachments.Content::image).count());
             if (!out.isEmpty()) {
                 grouped.add(new TurnMessages(t, out));
             }
         }
-        return grouped;
+        return grouped.reversed();
     }
 
     /** 总估算是否还在预算内 */
@@ -384,9 +392,10 @@ public class History implements ContextProvider {
      * @param clip 是否截断超长的思考 / 工具结果——逼近窗口、且丢轮次不够时才为真；
      *             平时原样回放，不做任何降级
      */
-    private void emit(List<JsonNode> out, Turn turn, boolean contextTrace, boolean clip) {
+    private void emit(List<JsonNode> out, Turn turn, boolean contextTrace, boolean clip,
+                      List<ChatAttachments.Content> files, int images) {
         if (turn.trigger().source() == TurnTrigger.Source.USER_INPUT) {
-            out.add(om.createObjectNode().put("role", "user").put("content", turn.trigger().text()));
+            out.add(ChatAttachments.userMessage(om, turn.trigger().text(), files, images));
         }
         if (turn.inFlight()) {
             // The live loop injects accepted inputs itself, including ones that arrived during context assembly.

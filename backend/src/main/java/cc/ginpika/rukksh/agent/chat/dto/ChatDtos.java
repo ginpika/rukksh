@@ -15,6 +15,8 @@ public final class ChatDtos {
         }
     }
 
+    public record AttachmentInfo(String name, boolean image) {}
+
     /** messageId 可绑定到用户发起停止时看到的在途 turn。 */
     public record StopRequest(String sessionId, Long messageId) {
         public StopRequest(String sessionId) {
@@ -127,7 +129,7 @@ public final class ChatDtos {
      *  （子代理气泡的完整结论也在此，前端点开弹窗看它），subagent 为气泡元信息（普通对话为 null） */
     public record MessageRow(Long id, String role, String content, String reasoning,
                              List<TraceSegment> trace, String kind, SubagentBrief subagent,
-                             String createdAt) {
+                             String createdAt, List<AttachmentInfo> attachments) {
     }
 
     /** POST /api/sessions 返回（v6：带上项目绑定，前端据此显示项目标签） */

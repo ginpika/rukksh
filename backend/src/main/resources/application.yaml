@@ -6,6 +6,10 @@ server:
 
 spring:
   # 应用名（spring.application.name）由 RukkshApplication 从根目录 branding.json 注入，不在此写死
+  servlet:
+    multipart:
+      max-file-size: 4MB
+      max-request-size: 5MB
   datasource:
     url: jdbc:sqlite:${RUKKSH_DB_PATH:${rukksh.default-db-path:../data/rukksh.db}}   # 生产用绝对路径或挂载卷
     driver-class-name: org.sqlite.JDBC
