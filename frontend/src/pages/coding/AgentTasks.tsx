@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { codingError, codingProjects, codingRuns, type CodingProject, type CodingRun } from '../../api/coding'
-import { Button } from '../../components/ui'
+import { AppIcon } from '../../components/AppIcon'
 import CodingRoleSettings from './CodingRoleSettings'
 
 const statuses: Record<string, string> = { QUEUED: '等待开始', PREPARING: '准备项目', RUNNING: '执行中', VERIFYING: '验证中', REVIEWABLE: '等待审阅', PAUSED: '已暂停', INTERRUPTED: '已中断', FAILED: '失败', CANCELLED: '已停止', CANCELLING: '正在停止', ACCEPTING: '应用中', COMPLETED: '已应用' }
@@ -32,17 +32,25 @@ export default function AgentTasks() {
     const timer = window.setInterval(() => void load(false), 3000)
     return () => window.clearInterval(timer)
   }, [active, error, load])
-  return <section aria-label="默认 Agent 的编程项目与任务" className="flex flex-col gap-4">
+  return <div className="ad-stack">
+    <section className="ad-section">
+      <div className="ad-section-head">
+        <h3>我的编码任务</h3>
+        <button type="button" className="ad-btn" disabled={loading} onClick={() => void load()}>
+          <AppIcon name="refresh" size={14} />刷新任务
+        </button>
+      </div>
+      {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+      {loading ? <p role="status" className="ad-empty">正在读取编码任务…</p> : !runs.length ? (
+        <p className="ad-empty">暂无编码任务。可以在编程工作台开始，或在对话中交给默认 Agent 处理。</p>
+      ) : <div className="flex flex-col gap-2">{runs.map(run => {
+        const project = projects.find(item => item.id === run.repositoryId)
+        return <a key={run.id} href={`#/coding?project=${encodeURIComponent(run.repositoryId)}&run=${encodeURIComponent(run.id)}`} className="ad-record flex min-w-0 items-start gap-3 px-3 py-3">
+          <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{run.prompt}</strong><span className="mt-1 block text-xs text-muted">{project?.name || '仓库任务'} · {run.mode} · #{run.taskId}</span></span><span className="shrink-0 text-xs text-muted">{statuses[run.status] || run.status} ↗</span>
+        </a>
+      })}</div>}
+      <p className="ad-hint">编程任务使用默认 Agent 的身份和模型。编程规程可在「提示词 → Skills · 状态化提示词」中编辑。</p>
+    </section>
     <CodingRoleSettings />
-    <p className="text-sm leading-relaxed text-muted">编程 IDE 使用默认 Agent 的身份和模型，并仅在项目任务中加载编程 Skill。可在「提示词 & 上下文工程 → Skills · 状态化提示词」中编辑规程。新任务保存配置快照，已有任务沿用检查点。每个项目沿用所选工作空间，修改审阅后再应用。</p>
-    <div className="flex flex-wrap items-center gap-2"><a href="#/coding" className="ui-btn ui-btn--primary ui-btn--sm">进入编程工作台 ↗</a><Button size="sm" disabled={loading} onClick={() => void load()}>刷新编码任务</Button></div>
-    {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
-    <h3 className="ui-heading text-sm">我的编码任务</h3>
-    {loading ? <p role="status" className="text-sm text-muted">正在读取编码任务…</p> : !runs.length ? <p className="text-sm text-muted">还没有编码任务。在编程工作台新建或打开项目后即可开始，也可以在对话中交给默认 Agent 处理。</p> : <div className="flex flex-col gap-2">{runs.map(run => {
-      const project = projects.find(item => item.id === run.repositoryId)
-      return <a key={run.id} href={`#/coding?project=${encodeURIComponent(run.repositoryId)}&run=${encodeURIComponent(run.id)}`} className="flex min-w-0 items-start gap-3 rounded-lg border border-line px-3 py-3 hover:bg-fg/5">
-        <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{run.prompt}</strong><span className="mt-1 block text-xs text-muted">{project?.name || '仓库任务'} · {run.mode} · #{run.taskId}</span></span><span className="shrink-0 text-xs text-muted">{statuses[run.status] || run.status} ↗</span>
-      </a>
-    })}</div>}
-  </section>
+  </div>
 }

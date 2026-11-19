@@ -1,7 +1,7 @@
 /** The everyday Rukksh surface. Existing specialist tools live in Dashboard. */
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowDown, Check, ChevronDown, Copy, History, MessageSquare, PanelLeftOpen, Paperclip, PenLine, Plus, Search, ShieldCheck, X } from 'lucide-react'
+import { ArrowDown, Check, ChevronDown, Copy, History, MessageSquare, PanelLeftOpen, Paperclip, PenLine, Plus, Search, X } from 'lucide-react'
 import { ApiError, createSession, getSettings, listMaPeers, listSessions, sessionMessages, sessionPreviews, updateSessionConfig, type MaPeer, type ReasoningEffort, type SessionItem, type SessionMessage, type SettingsView } from '../../api/client'
 import { CORE_AGENT_ID, isCodingAgent, sortAgentPeers } from '../../api/agentRuntime'
 import { AppIcon } from '../../components/AppIcon'
@@ -720,7 +720,9 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
                   <button type="button" className="sl-chat__attach" aria-label="添加附件"
                     title={`添加附件（${chatAttachmentFormats}）`} disabled={busy || creating || loading || messageError || files.length >= chatAttachmentMaxFiles}
                     onClick={() => fileRef.current?.click()}><Paperclip size={17} aria-hidden="true" /></button>
-                  <a className="sl-chat__permissions" href={`#/multi-agent/${encodeURIComponent(selectedAgentId ?? CORE_AGENT_ID)}`} title="配置当前 Agent 的工具权限"><ShieldCheck size={15} /><span>工具权限</span></a>
+                  <a className="sl-chat__agent-settings" href={`#/multi-agent/${encodeURIComponent(selectedAgentId ?? CORE_AGENT_ID)}`} title="打开当前智能体设置" aria-label="智能体设置">
+                    <AppIcon name="settings" size={15} /><span>智能体设置</span>
+                  </a>
                 </div>
                 <div className={`sl-chat__compose-right${dictation.supported ? '' : ' without-dictation'}`}>
                 <ComposerModelPicker models={settings?.models.map(model => ({ id: model.id, name: model.name, model: model.model, efforts: model.reasoningEfforts })) ?? []}

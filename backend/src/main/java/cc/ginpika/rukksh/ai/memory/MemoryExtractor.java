@@ -64,6 +64,7 @@ public class MemoryExtractor {
             - 用户画像必须有真实用户原话证据；项目事实与决策是待确认候选；方法经验默认私有。临时猜测不应变成确认事实。
             - evidence_quote 必须逐字引用用户消息，不能引用助手、工具、角色对白或系统推断；找不到时留空。
             - 寒暄、纯提问、无信息量的往来一律不产出（返回空数组 []）。
+            - title 和 body 直接写可独立理解的事实、偏好、决定、方法或待办，明确实际主体。省略助手的自述、推理过程、提炼过程和收录理由；只有这些内容时不产出条目。
             - 可附 relations 数组，每项为 {"subject":"实体名","predicate":"关系","object":"实体名"}；仅表达本条正文明确支持的关系，不能补造推断。
             - 每条格式：{"scope":"profile|directive|project|fact|decision|method|open_issue|episode","title":"不超过12字的标题","body":"一句完整的中文陈述","confidence":0.0~1.0,"valid_until":null,"evidence_quote":"用户原话，不能引用助手"}
             - scope 判定：偏好 / 身份 / 长期约束→profile；对「以后要不要提起某事」的指令→directive；

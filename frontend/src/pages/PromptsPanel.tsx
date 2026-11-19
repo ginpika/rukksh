@@ -350,6 +350,7 @@ function EllipsisMenu({
 function SlotBar({
   slot,
   tone,
+  embedded,
   reorderable,
   grabbing,
   dropTarget,
@@ -365,6 +366,7 @@ function SlotBar({
 }: {
   slot: PromptSlot
   tone?: string
+  embedded?: boolean
   reorderable: boolean
   grabbing: boolean
   dropTarget: boolean
@@ -421,12 +423,12 @@ function SlotBar({
       {/* 2. 标题与信息：名称 + 类型 + 生效版本 */}
       <div className="prompt-slot__meta flex min-w-0 flex-1 items-center gap-2">
         <span className="truncate text-sm font-semibold text-fg">{slot.name}</span>
-        <kit.Badge>提示词</kit.Badge>
+        {!embedded && <kit.Badge>提示词</kit.Badge>}
         <span className="truncate text-xs text-muted">{cur.from}</span>
       </div>
 
       {/* 3. 查看提示词 */}
-      <button type="button" className={`prompt-slot__view ${miniBtn}`} disabled={busy} onClick={onView}>
+      <button type="button" className={`prompt-slot__view ${embedded ? 'ad-btn' : miniBtn}`} disabled={busy} onClick={onView}>
         查看提示词
       </button>
 
@@ -460,7 +462,7 @@ function SlotBar({
 
 /* ---------------- 长条：代码控制的运行时素材 ---------------- */
 
-function RuntimeBar({ name, description }: { name: string; description: string }) {
+function RuntimeBar({ name, description, embedded }: { name: string; description: string; embedded?: boolean }) {
   const kit = usePageKit()
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -471,8 +473,8 @@ function RuntimeBar({ name, description }: { name: string; description: string }
 
       <div className="prompt-slot__meta flex min-w-0 flex-1 items-center gap-2">
         <span className="truncate text-sm font-medium text-muted">{name}</span>
-        <kit.Badge>运行时</kit.Badge>
-        <span className="truncate text-xs text-hint">代码控制，运行时填充</span>
+        {!embedded && <kit.Badge>运行时</kit.Badge>}
+        <span className="truncate text-xs text-muted">{embedded ? '运行时自动填充' : '代码控制，运行时填充'}</span>
       </div>
 
       <EllipsisMenu
@@ -499,17 +501,19 @@ function CategoryTab({
   active,
   onClick,
   children,
+  embedded,
 }: {
   active: boolean
   onClick: () => void
   children: ReactNode
+  embedded?: boolean
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={active ? btnPrimary() : btnQuiet()}
+      className={embedded ? undefined : active ? btnPrimary() : btnQuiet()}
     >
       {children}
     </button>
@@ -532,7 +536,7 @@ type PromptApi = {
 /**
  * 全局（系统 · 开发者选项）：维护文档→图谱流水线在用的那一套提示词。
  */
-export default function PromptsPanel({ peerId }: { peerId?: string } = {}) {
+export default function PromptsPanel({ peerId, embedded = false }: { peerId?: string; embedded?: boolean } = {}) {
   const kit = usePageKit()
   const [data, setData] = useRememberedState<PromptsView | null>(`prompts:${peerId ?? 'system'}:data`, null)
   const [error, setError] = useState<string | null>(null)
@@ -641,11 +645,12 @@ export default function PromptsPanel({ peerId }: { peerId?: string } = {}) {
     )
   }
   if (!data) {
-    return <p className="text-sm text-hint">载入提示词…</p>
+    return <p className={embedded ? 'ad-empty' : 'text-sm text-hint'} role="status">载入提示词…</p>
   }
 
   /* 当前大类：选中的标签 → 首个（写操作后 data 会被整体替换，标签选择按 key 保持） */
   const category = data.categories.find((c) => c.key === catKey) ?? data.categories[0]
+  if (!category) return <p className={embedded ? 'ad-empty' : 'text-sm text-muted'}>暂无提示词配置。</p>
   /* 全部提示词位：弹窗按 key 从这里派生最新快照 */
   const allParts = data.categories.flatMap((c) => c.contexts).flatMap((c) => c.parts)
   const viewerSlot = viewerKey ? (allParts.find((p) => p.key === viewerKey) ?? null) : null
@@ -711,8 +716,8 @@ export default function PromptsPanel({ peerId }: { peerId?: string } = {}) {
   }
 
   return (
-    <div className="flex max-w-[900px] flex-col gap-5">
-      <header className="flex flex-col gap-1.5">
+    <div className={embedded ? 'ad-stack' : 'flex max-w-[900px] flex-col gap-5'}>
+      {!embedded && <header className="flex flex-col gap-1.5">
         {peerId ? (
           <>
             <h2 className="ui-heading text-sm">提示词 &amp; 上下文工程</h2>
@@ -726,35 +731,37 @@ export default function PromptsPanel({ peerId }: { peerId?: string } = {}) {
             <p className="text-muted">编辑文档分析和图谱入库所用的提示词。</p>
           </>
         )}
-      </header>
+      </header>}
 
       {/* 大类标签：提示词页是「系统级提示词 / 开发者选项」，智能体内部页是「系统级提示词 / 圆桌」 */}
       {data.categories.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className={embedded ? 'ad-segments' : 'flex flex-wrap gap-1.5'} role="group" aria-label="提示词分类">
           {data.categories.map((c) => (
-            <CategoryTab key={c.key} active={category.key === c.key} onClick={() => setCatKey(c.key)}>
+            <CategoryTab key={c.key} active={category.key === c.key} onClick={() => setCatKey(c.key)} embedded={embedded}>
               {c.name}
             </CategoryTab>
           ))}
         </div>
       )}
 
-      <div className="flex flex-col gap-6">
-        {peerId && <p className="text-xs leading-relaxed text-faint">{category.description}</p>}
+      <div className={embedded ? 'ad-stack' : 'flex flex-col gap-6'}>
+        {peerId && category.description && <p className={embedded ? 'ad-hint' : 'text-xs leading-relaxed text-faint'}>{category.description}</p>}
+        {embedded && category.contexts.length === 0 && <p className="ad-empty">此分类暂无上下文。</p>}
 
         {category.contexts.map((ctx) => (
-          <section key={ctx.key} className="flex flex-col gap-2.5">
+          <section key={ctx.key} className={embedded ? 'ad-section' : 'flex flex-col gap-2.5'}>
             {/* 一个大类下多个上下文时才需要小标题；只有一个时描述已足够说明 */}
-            {category.contexts.length > 1 && (
+            {(embedded || category.contexts.length > 1) && (
               <h3 className={peerId ? 'ui-heading text-base' : undefined}>{ctx.name}</h3>
             )}
-            <p className="text-xs leading-relaxed text-faint">{ctx.description}</p>
+            {ctx.description && <p className={embedded ? 'ad-hint' : 'text-xs leading-relaxed text-faint'}>{ctx.description}</p>}
 
             {ctx.parts.map((slot, i) => (
               <SlotBar
                 key={slot.key}
                 slot={slot}
-                tone={peerId ? PART_TONES[i] ?? PART_TONES[PART_TONES.length - 1] : undefined}
+                tone={peerId && !embedded ? PART_TONES[i] ?? PART_TONES[PART_TONES.length - 1] : undefined}
+                embedded={embedded}
                 reorderable={ctx.parts.length > 1}
                 grabbing={dragKey === slot.key}
                 dropTarget={overKey === slot.key}
@@ -776,12 +783,14 @@ export default function PromptsPanel({ peerId }: { peerId?: string } = {}) {
             ))}
 
             {ctx.runtime.map((rt) => (
-              <RuntimeBar key={rt.key} name={rt.name} description={rt.description} />
+              <RuntimeBar key={rt.key} name={rt.name} description={rt.description} embedded={embedded} />
             ))}
           </section>
         ))}
 
-        <kit.Note>虚线灰块是代码控制的运行时素材，位置由 API 协议固定，不可拖拽。</kit.Note>
+        {embedded ? (
+          category.contexts.some(ctx => ctx.runtime.length > 0) && <p className="ad-hint">虚线卡片会在运行时自动填充，顺序由代码固定。</p>
+        ) : <kit.Note>虚线灰块是代码控制的运行时素材，位置由 API 协议固定，不可拖拽。</kit.Note>}
       </div>
 
       {viewerSlot && (

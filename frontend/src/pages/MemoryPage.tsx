@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   listMaPeers,
@@ -12,52 +12,63 @@ import {
   type Project,
   type SessionItem,
 } from '../api/client'
-import { memorySnapshots, type SnapshotSummary } from '../api/memoryObservation'
+import { AppIcon } from '../components/AppIcon'
 import type { GalaxyCluster } from './memory/MemoryGalaxy'
 import MemoryInspector from './memory/MemoryInspector'
 import { errorText, expiring, status, time } from './memory/model'
 import './memory/memory.css'
+import './memory/memoryGalaxy.css'
 
-/* Three.js 星云单独成 chunk，避免拖慢其他页面首屏。 */
 const MemoryGalaxy = lazy(() => import('./memory/MemoryGalaxy'))
 
 const MAX_PER_CLUSTER = 40
-/* 读取开始重置加载状态；快速重试时旧请求结果不会覆盖新结果。 */
-/* oxlint-disable react/set-state-in-effect */
+const PAGE_SIZE = 20
+const DAY = 86_400_000
+const dateLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
 
+type MemoryData = { items: MemoryItem[]; peers: MaPeer[]; fetchedAt: number }
+type DetailData = { shares?: MemoryShare[]; projects?: Project[]; sessions?: SessionItem[] }
+
+/* oxlint-disable react/set-state-in-effect */
 export default function MemoryPage() {
-  const [items, setItems] = useState<MemoryItem[]>([])
-  const [peers, setPeers] = useState<MaPeer[]>([])
+  const [data, setData] = useState<MemoryData | null>(null)
+  const [details, setDetails] = useState<DetailData>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tick, setTick] = useState(0)
   const [search, setSearch] = useState('')
-  const [query, setQuery] = useState('')
   const [focus, setFocus] = useState<string | null>(null)
   const [attentionOnly, setAttentionOnly] = useState(false)
-  const [selected, setSelected] = useState<MemoryItem | null>(null)
+  const [page, setPage] = useState(1)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const searchField = useRef<HTMLInputElement>(null)
+  const list = useRef<HTMLDivElement>(null)
 
-  const [shares, setShares] = useState<MemoryShare[]>([])
-  const [sharesOk, setSharesOk] = useState(false)
-  const [projects, setProjects] = useState<Project[]>([])
-  const [sessions, setSessions] = useState<SessionItem[]>([])
-  const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([])
-  const [extrasLoaded, setExtrasLoaded] = useState(false)
+  const selected = data?.items.find(item => item.id === selectedId)
+  const hasSelection = selected != null
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setQuery(search.trim()), 200)
-    return () => window.clearTimeout(timer)
-  }, [search])
+    const reset = () => {
+      setData(null)
+      setDetails({})
+      setSelectedId(null)
+      setFocus(null)
+      setAttentionOnly(false)
+      setSearch('')
+      setPage(1)
+      setTick(value => value + 1)
+    }
+    window.addEventListener('rukksh:memory-reset', reset)
+    return () => window.removeEventListener('rukksh:memory-reset', reset)
+  }, [])
 
   useEffect(() => {
     let live = true
     setLoading(true)
     setError('')
     Promise.all([memoryItems(), listMaPeers()])
-      .then(([nextItems, nextPeers]) => {
-        if (!live) return
-        setItems(nextItems)
-        setPeers(nextPeers)
+      .then(([items, peers]) => {
+        if (live) setData({ items, peers, fetchedAt: Date.now() })
       })
       .catch((e: unknown) => {
         if (live) setError(errorText(e))
@@ -65,210 +76,239 @@ export default function MemoryPage() {
       .finally(() => {
         if (live) setLoading(false)
       })
-    return () => {
-      live = false
-    }
+    return () => { live = false }
   }, [tick])
 
-  /* 详情抽屉需要授权、项目、会话和快照；只在第一次打开时补读，首页保持轻量。 */
   useEffect(() => {
-    if (!selected || extrasLoaded) return
+    if (!hasSelection) return
     let live = true
-    Promise.allSettled([memoryShared(), listProjects(), listSessions(), memorySnapshots()]).then(result => {
-      if (!live) return
-      if (result[0].status === 'fulfilled') {
-        setShares(result[0].value)
-        setSharesOk(true)
-      }
-      if (result[1].status === 'fulfilled') setProjects(result[1].value)
-      if (result[2].status === 'fulfilled') setSessions(result[2].value)
-      if (result[3].status === 'fulfilled') setSnapshots(result[3].value)
-      setExtrasLoaded(true)
-    })
-    return () => {
-      live = false
-    }
-  }, [selected, extrasLoaded])
-
-  const agentNames = useMemo(() => {
-    const map = new Map(peers.map(peer => [peer.id, peer.name] as const))
-    if (!map.has('builtin')) map.set('builtin', '内置 Agent')
-    for (const item of items) {
-      const id = item.agentId
-      if (id && !map.has(id)) map.set(id, `未登记 Agent · ${id}`)
-    }
-    return map
-  }, [peers, items])
-
-  const peerById = useMemo(() => new Map(peers.map(peer => [peer.id, peer] as const)), [peers])
-  const peerOrder = useMemo(() => new Map(peers.map((peer, index) => [peer.id, index] as const)), [peers])
-
-  /* 共享记忆暂不进入星云、搜索和计数；后续单独设计。 */
-  const active = useMemo(() => items.filter(item => status(item) === '有效' && item.agentId != null), [items])
-
-  const clusters = useMemo<GalaxyCluster[]>(() => {
-    const grouped = new Map<string, MemoryItem[]>()
-    for (const item of active) {
-      const id = item.agentId ?? 'shared'
-      const list = grouped.get(id)
-      if (list) list.push(item)
-      else grouped.set(id, [item])
-    }
-    const result: GalaxyCluster[] = []
-    for (const [id, list] of grouped) {
-      const isAgent = id !== 'shared'
-      result.push({
-        id,
-        name: isAgent ? agentNames.get(id) ?? id : '共享记忆',
-        avatar: isAgent ? peerById.get(id)?.avatar ?? null : null,
-        isAgent,
-        order: isAgent ? peerOrder.get(id) ?? peers.length + result.length : Number.MAX_SAFE_INTEGER,
-        items: [...list].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_PER_CLUSTER),
+    Promise.allSettled([memoryShared(), listProjects(), listSessions()]).then(([shares, projects, sessions]) => {
+      if (live) setDetails({
+        shares: shares.status === 'fulfilled' ? shares.value : undefined,
+        projects: projects.status === 'fulfilled' ? projects.value : undefined,
+        sessions: sessions.status === 'fulfilled' ? sessions.value : undefined,
       })
-    }
-    /* 还没记住任何东西的 Agent 也保留一颗空核心。 */
-    for (const peer of peers) {
-      if (!grouped.has(peer.id)) {
-        result.push({ id: peer.id, name: peer.name, avatar: peer.avatar, isAgent: true, order: peerOrder.get(peer.id) ?? peers.length, items: [] })
+    })
+    return () => { live = false }
+  }, [hasSelection, tick])
+
+  const { clusters, agentNames, active, dueIds, recent } = useMemo(() => {
+    const agentNames = new Map(data?.peers.map(peer => [peer.id, peer.name]))
+    if (!agentNames.has('builtin')) agentNames.set('builtin', '内置 Agent')
+    const grouped = new Map<string, MemoryItem[]>(data?.peers.map(peer => [peer.id, []]))
+    const dueIds = new Set<number>()
+    const active: MemoryItem[] = []
+    let recent = 0
+    if (data) {
+      const now = data.fetchedAt
+      for (const item of data.items) {
+        if (!item.agentId || status(item, now) !== '有效') continue
+        const id = item.agentId
+        if (!agentNames.has(id)) agentNames.set(id, `未登记 Agent · ${id}`)
+        const group = grouped.get(id)
+        if (group) group.push(item)
+        else grouped.set(id, [item])
+        active.push(item)
+        if (expiring(item, now)) dueIds.add(item.id)
+        if (item.createdAt >= now - 7 * DAY) recent++
       }
     }
-    /* 创建顺序决定谁进中心轨道；共享记忆不是 Agent，固定排在最后。 */
-    return result.sort((a, b) => {
-      if (a.isAgent !== b.isAgent) return a.isAgent ? -1 : 1
-      return (a.order ?? 0) - (b.order ?? 0)
-    })
-  }, [active, agentNames, peers, peerById, peerOrder])
+    const newestFirst = (a: MemoryItem, b: MemoryItem) => b.createdAt - a.createdAt || b.id - a.id
+    active.sort(newestFirst)
+    const avatars = new Map(data?.peers.map(peer => [peer.id, peer.avatar]))
+    const clusters: GalaxyCluster[] = Array.from(grouped, ([id, items], order) => ({
+      id,
+      name: agentNames.get(id) ?? id,
+      avatar: avatars.get(id),
+      order,
+      items: items.sort(newestFirst).slice(0, MAX_PER_CLUSTER),
+    }))
+    return { clusters, agentNames, active, dueIds, recent }
+  }, [data])
 
-  const [now] = useState(() => Date.now())
-  const weekAgo = now - 7 * 86_400_000
-  const recent = active.filter(item => item.createdAt >= weekAgo).length
-  const attention = useMemo(() => active.filter(item => expiring(item)), [active])
-  const results = useMemo(() => {
-    if (!query) return []
-    const q = query.toLowerCase()
-    return active
-      .filter(item => `${item.title ?? ''} ${item.body} ${agentNames.get(item.agentId ?? '') ?? ''}`.toLowerCase().includes(q))
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, 8)
-  }, [active, agentNames, query])
+  const focusedCluster = clusters.find(cluster => cluster.id === focus)
+  const focusId = focusedCluster?.id ?? null
+  const query = search.trim().toLowerCase()
+  const scoped = useMemo(() => active.filter(item => (
+    (!focusId || item.agentId === focusId)
+    && (!query || `${item.title ?? ''} ${item.body} ${agentNames.get(item.agentId ?? '') ?? ''}`.toLowerCase().includes(query))
+  )), [active, focusId, query, agentNames])
+  const due = useMemo(() => scoped.filter(item => dueIds.has(item.id)), [scoped, dueIds])
+  const results = attentionOnly ? due : scoped
+  const filtersOn = Boolean(focusId || query || attentionOnly)
+  const matchingIds = useMemo(() => filtersOn ? new Set(results.map(item => item.id)) : null, [filtersOn, results])
+  const plotted = useMemo(() => clusters.reduce((total, cluster) => (
+    total + (matchingIds ? cluster.items.filter(item => matchingIds.has(item.id)).length : cluster.items.length)
+  ), 0), [clusters, matchingIds])
+  const pages = Math.max(1, Math.ceil(results.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pages)
+  const visible = results.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
-  const projectNames = useMemo(() => new Map(projects.map(project => [project.id, project.name] as const)), [projects])
-  const sessionNames = useMemo(() => new Map(sessions.map(session => [session.id, session.title || session.id] as const)), [sessions])
-  const focusName = focus ? clusters.find(cluster => cluster.id === focus)?.name ?? focus : ''
+  function goToPage(value: number) {
+    setPage(value)
+    list.current?.scrollTo(0, 0)
+  }
+
+  function changeFocus(id: string | null) {
+    setFocus(id)
+    goToPage(1)
+  }
+
+  function clearFilters() {
+    setSearch('')
+    setAttentionOnly(false)
+    changeFocus(null)
+    searchField.current?.focus()
+  }
+
+  const refresh = () => setTick(value => value + 1)
 
   return (
     <div className="mem-galaxy-page">
-      <div className="mem-galaxy-top">
-        <p className="mem-galaxy-counts">
-          {loading
-            ? '正在读取记忆…'
-            : error
-              ? '记忆读取失败'
-              : `已记住 ${active.length} 条${recent ? ` · 本周 +${recent}` : ''} · ${clusters.length} 个星系`}
-        </p>
+      <header className="mem-galaxy-header">
+        <div className="mem-galaxy-heading">
+          <h2>记忆星云</h2>
+          <dl className="mem-galaxy-stats">
+            <div><dt>Agent 星系</dt><dd>{data ? clusters.length.toLocaleString() : '—'}</dd></div>
+            <div><dt>有效记忆</dt><dd>{data ? active.length.toLocaleString() : '—'}</dd></div>
+            <div><dt>近 7 天新增</dt><dd>{data ? recent.toLocaleString() : '—'}</dd></div>
+          </dl>
+        </div>
         <a className="mem-galaxy-ops" href="#/memory/ops">
-          运行时观察 →
+          <AppIcon name="sliders" size={15} />运行时观察<AppIcon name="arrow-right" size={14} />
         </a>
-      </div>
-
-      <div className="mem-galaxy-search">
-        <input
-          type="search"
-          value={search}
-          placeholder="搜索你记住的内容…"
-          aria-label="搜索记忆"
-          onChange={event => setSearch(event.target.value)}
-        />
-      </div>
+      </header>
 
       {error && (
-        <div className="mem-error" role="alert">
-          <p>{error}</p>
-          <button type="button" className="mem-galaxy-retry" onClick={() => setTick(v => v + 1)}>
-            重新读取
-          </button>
+        <div className="mem-galaxy-error" role="alert">
+          <AppIcon name="alert" />
+          <div><strong>{data ? '更新失败，正在显示上次读取的数据' : '记忆读取失败'}</strong><p>{error}</p></div>
+          <button type="button" onClick={refresh}>重试</button>
         </div>
       )}
 
-      {!loading && !error && attention.length > 0 && (
-        <button type="button" className="mem-galaxy-alert" onClick={() => setAttentionOnly(v => !v)} aria-pressed={attentionOnly}>
-          <strong>{attention.length} 条记忆将在 7 天内停止自动使用</strong>
-          <span>{attentionOnly ? '显示全部' : '只看这些'} →</span>
-        </button>
-      )}
-
-      {focus && (
-        <button type="button" className="mem-galaxy-chip" onClick={() => setFocus(null)}>
-          只看「{focusName}」 · 返回全部星系
-        </button>
-      )}
-
-      {query && (
-        <section className="mem-galaxy-results" aria-label="搜索结果">
-          <div className="mem-galaxy-results-head">
-            <strong>搜索「{query}」</strong>
-            <span>{results.length ? `${results.length} 条` : '没有匹配'}</span>
+      <div className="mem-galaxy-layout">
+        <section className="mem-galaxy-map" aria-label="星云图">
+          <div className="mem-galaxy-map-heading">
+            <span className="mem-galaxy-map-mark"><AppIcon name="center" size={19} /></span>
+            <div>
+              <strong title={focusedCluster?.name}>{focusedCluster?.name ?? '全部星系'}</strong>
+              <span>{data ? `图中 ${plotted.toLocaleString()} 条${plotted < results.length ? ` / ${results.length.toLocaleString()} 条` : ''}` : loading ? '读取中' : '数据不可用'}</span>
+            </div>
           </div>
-          {results.map(item => (
-            <button type="button" key={item.id} className="mem-galaxy-result" onClick={() => setSelected(item)}>
-              <strong>{item.title || item.body.slice(0, 40)}</strong>
-              <span>
-                {item.agentId ? agentNames.get(item.agentId) ?? item.agentId : '共享'} · 记住于 {time(item.createdAt)}
-              </span>
-            </button>
-          ))}
-        </section>
-      )}
-
-      <Suspense fallback={<div className="mem-galaxy-stage" aria-busy="true" />}>
-        <MemoryGalaxy
-          clusters={clusters}
-          query={query}
-          focus={focus}
-          attentionOnly={attentionOnly}
-          onFocus={setFocus}
-          onOpen={setSelected}
-        />
-      </Suspense>
-
-      <p className="mem-galaxy-hint">
-        真实 3D 场景：黑洞会按深度遮挡背后的 Agent。中心轨道最多 5 位 Agent 同速公转，其余 Agent 像星星一样停在四周的 3D 坐标；记忆点绕各自 Agent 公转。悬停记忆点或按住时暂停运动，拖动可旋转视角，滚轮缩放。越亮越新，越靠中心越重要，点击记忆圆点查看悬浮摘要与完整详情，点击 Agent 头像只看这位 Agent。
-      </p>
-
-      {!loading && !error && active.length === 0 && (
-        <div className="mem-galaxy-empty">
-          <h3>还没有长期记忆</h3>
-          <p>
-            和 Agent 多聊几次，记忆会慢慢亮起来；也可以去
-            <a href="#/memory/ops">运行时观察</a>
-            手动添加。
-          </p>
-        </div>
-      )}
-
-      {selected &&
-        createPortal(
-          <div
-            className="mem-observatory rukksh-surface mem-detail-overlay"
-            onClick={event => {
-              if (event.target === event.currentTarget) setSelected(null)
-            }}
-          >
-            <MemoryInspector
-              key={selected.id}
-              item={selected}
-              shares={shares}
-              sharesAvailable={sharesOk}
-              selectedCount={extrasLoaded ? snapshots.filter(snapshot => snapshot.itemIds.includes(selected.id)).length : null}
-              agentNames={agentNames}
-              projectNames={projectNames}
-              sessionNames={sessionNames}
-              changed={() => setTick(v => v + 1)}
-              close={() => setSelected(null)}
+          <Suspense fallback={<div className="mem-galaxy-stage mem-galaxy-stage-message" role="status">正在加载星云图…</div>}>
+            <MemoryGalaxy
+              clusters={clusters}
+              matchingIds={matchingIds}
+              dueIds={dueIds}
+              focus={focusId}
+              onFocus={changeFocus}
+              onOpen={item => setSelectedId(item.id)}
             />
-          </div>,
-          document.body,
-        )}
+          </Suspense>
+          <ul className="mem-galaxy-legend" aria-label="图例">
+            <li><i className="mem-legend-agent" />Agent</li>
+            <li><i className="mem-legend-memory" />记忆</li>
+            <li><i className="mem-legend-due" />即将到期</li>
+          </ul>
+        </section>
+
+        <section className="mem-galaxy-index" aria-labelledby="memory-index-heading" aria-busy={loading}>
+          <header className="mem-galaxy-index-header">
+            <div className="mem-galaxy-index-title">
+              <h3 id="memory-index-heading">记忆条目</h3>
+              {data && <span className="sr-only" role="status">{results.length.toLocaleString()} 条</span>}
+            </div>
+            <div className="mem-galaxy-search">
+              <AppIcon name="search" />
+              <input
+                ref={searchField}
+                type="search"
+                value={search}
+                placeholder="搜索标题、正文或 Agent"
+                aria-label="搜索记忆"
+                onChange={event => { setSearch(event.target.value); goToPage(1) }}
+              />
+              {search && <button type="button" aria-label="清除搜索" onClick={() => { setSearch(''); goToPage(1); searchField.current?.focus() }}><AppIcon name="close" size={15} /></button>}
+            </div>
+            <div className="mem-galaxy-scope">
+              <AppIcon name="agent" />
+              <select aria-label="筛选 Agent" value={focusId ?? ''} onChange={event => changeFocus(event.target.value || null)}>
+                <option value="">全部 Agent</option>
+                {clusters.map(cluster => <option key={cluster.id} value={cluster.id}>{cluster.name}</option>)}
+              </select>
+              <AppIcon name="chevron-down" size={15} />
+            </div>
+            <div className="mem-galaxy-filters" role="group" aria-label="到期筛选">
+              <button type="button" aria-pressed={!attentionOnly} onClick={() => { setAttentionOnly(false); goToPage(1) }}>全部{data && <span>{scoped.length}</span>}</button>
+              <button type="button" aria-pressed={attentionOnly} onClick={() => { setAttentionOnly(true); goToPage(1) }}>7 天内到期{data && <span>{due.length}</span>}</button>
+            </div>
+          </header>
+
+          <div ref={list} className="mem-galaxy-index-body scrollbar-slim">
+            {visible.length > 0 ? (
+              <ul className="mem-galaxy-index-list">
+                {visible.map(item => (
+                  <li key={item.id}>
+                    <button type="button" className="mem-galaxy-result" onClick={() => setSelectedId(item.id)}>
+                      <span className="mem-galaxy-row-content">
+                        <strong>{item.title || item.body || '未命名记忆'}</strong>
+                        {item.title && item.body && <span className="mem-galaxy-excerpt">{item.body}</span>}
+                        <span className="mem-galaxy-row-meta">
+                          <span className="mem-galaxy-owner">{agentNames.get(item.agentId ?? '')}</span>
+                          <time dateTime={new Date(item.createdAt).toISOString()} title={time(item.createdAt)}>{dateLabel.format(item.createdAt)}</time>
+                          {item.pinned && <span>已固定</span>}
+                          {dueIds.has(item.id) && <span className="mem-galaxy-due">即将到期</span>}
+                        </span>
+                      </span>
+                      <AppIcon name="chevron-right" size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="mem-galaxy-index-empty" role="status">
+                <AppIcon name={loading ? 'loading' : error && !data ? 'alert' : filtersOn ? 'search' : 'file'} size={23} />
+                <strong>{loading ? '正在读取记忆…' : error && !data ? '记忆暂不可用' : filtersOn ? '没有匹配的记忆' : '暂无有效记忆'}</strong>
+                {!loading && data && (filtersOn
+                  ? <button type="button" onClick={clearFilters}>清除筛选</button>
+                  : <a href="#/memory/ops">管理记忆<AppIcon name="arrow-right" size={14} /></a>)}
+              </div>
+            )}
+          </div>
+
+          {pages > 1 && (
+            <nav className="mem-galaxy-pagination" aria-label="记忆分页">
+              <span>第 {currentPage} / {pages} 页</span>
+              <button type="button" disabled={currentPage === 1} onClick={() => goToPage(currentPage - 1)} aria-label="上一页"><AppIcon name="chevron-left" /></button>
+              <button type="button" disabled={currentPage === pages} onClick={() => goToPage(currentPage + 1)} aria-label="下一页"><AppIcon name="chevron-right" /></button>
+            </nav>
+          )}
+        </section>
+      </div>
+
+      {selected && createPortal(
+        <div
+          className="mem-observatory rukksh-surface mem-detail-overlay mem-galaxy-detail"
+          onClick={event => {
+            if (event.target === event.currentTarget) setSelectedId(null)
+          }}
+        >
+          <MemoryInspector
+            key={selected.id}
+            item={selected}
+            shares={details.shares ?? []}
+            sharesAvailable={details.shares != null}
+            showDiagnostics={false}
+            agentNames={agentNames}
+            projectNames={new Map(details.projects?.map(project => [project.id, project.name]))}
+            sessionNames={new Map(details.sessions?.map(session => [session.id, session.title || session.id]))}
+            changed={refresh}
+            close={() => setSelectedId(null)}
+          />
+        </div>,
+        document.body,
+      )}
     </div>
   )
 }

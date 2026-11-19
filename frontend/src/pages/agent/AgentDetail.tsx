@@ -1,12 +1,4 @@
-/**
- * 智能体详情（新版 UI）：/multi-agent/:id
- *
- * 与成员名册、Dashboard 使用同一套 Rukksh 视觉语言：极简页头、细描边分区、
- * 单色强调、紧凑的 13–15px 排版。页面壳、资料编辑与能力配置整体重写；
- * 提示词、后台、语音、编程任务等既有功能面板按原样嵌入，避免功能回退。
- */
-
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react'
 import {
   ApiError,
   createMaPeer,
@@ -15,16 +7,14 @@ import {
   deletePeerAnchor,
   getPeerAnchor,
   getSettings,
-  getTerminal,
   listMaPeers,
   updateMaPeer,
   type MaPeer,
   type MaPeerAnchor,
   type ModelView,
-  type TerminalTarget,
 } from '../../api/client'
 import { CODING_AGENT_ID, CORE_AGENT_ID } from '../../api/agentRuntime'
-import { AppIcon } from '../../components/AppIcon'
+import { AppIcon, type AppIconName } from '../../components/AppIcon'
 import GraphMini from '../../components/GraphMini'
 import PageBoundary from '../../components/PageBoundary'
 import PeerAvatar from '../../components/PeerAvatar'
@@ -42,17 +32,113 @@ const NEW_ID = 'new'
 /** 角色标签的默认色：新建成员、或没挑过颜色时用它（中性灰，不抢眼） */
 const DEFAULT_ROLE_COLOR = '#6b7280'
 
-type RightTab = 'cap' | SubView | 'anchor' | 'prompt' | 'tts' | 'coding'
+type MainTab = 'prompt' | 'tts' | 'runtime' | 'anchor' | 'coding'
+type RightTab = Exclude<MainTab, 'runtime'> | SubView
+type TabItem<T extends string> = { key: T; label: string; icon?: AppIconName }
+type PanelInfo = { icon: AppIconName; title: string; description: string }
 
-const BASE_TABS: { key: RightTab; label: string }[] = [
-  { key: 'prompt', label: '提示词' },
-  { key: 'cap', label: '能力' },
-  { key: 'tts', label: '语音' },
-  ...SUB_TABS,
-  { key: 'anchor', label: '图谱锚点' },
+const PANELS: Record<RightTab, PanelInfo> = {
+  prompt: { icon: 'doc', title: '提示词与上下文', description: '管理提示词的生效版本，按模型接收的顺序编排上下文。' },
+  tts: { icon: 'dictation', title: '语音配置', description: '选择用于朗读回复的语音档案。使用默认档案时，语音随系统设置更新。' },
+  heartbeat: { icon: 'clock', title: '心跳', description: '设置后台唤醒的频率和提示词，或手动触发一次心跳。' },
+  plans: { icon: 'todo', title: '常驻职责', description: '管理对话中建立的长期职责，查看调度用量和执行记录。' },
+  actions: { icon: 'stats', title: '行动日志', description: '查看心跳、常驻职责和子代理的执行记录。' },
+  rag: { icon: 'search', title: 'RAG 召回', description: '查看检索查询和实际注入上下文的资料。' },
+  anchor: { icon: 'graph', title: '图谱人格锚点', description: '在知识图谱中绑定一个代表该智能体的实体，并查看与它直接相连的关系。' },
+  coding: { icon: 'code', title: '编程任务', description: '查看编程任务的进度，配置用于探索、规划和审阅的内置子 Agent。' },
+}
+
+const BASE_TABS: TabItem<MainTab>[] = [
+  { key: 'prompt', label: '提示词', icon: PANELS.prompt.icon },
+  { key: 'tts', label: '语音', icon: PANELS.tts.icon },
+  { key: 'runtime', label: '后台运行', icon: 'system' },
+  { key: 'anchor', label: '图谱锚点', icon: PANELS.anchor.icon },
 ]
+const CORE_TABS: TabItem<MainTab>[] = [...BASE_TABS, { key: 'coding', label: '编程任务', icon: PANELS.coding.icon }]
 
-const BACKGROUND_TABS: SubView[] = SUB_TABS.map((item) => item.key)
+function isRuntimeTab(tab: RightTab): tab is SubView {
+  return SUB_TABS.some(item => item.key === tab)
+}
+
+function TabList<T extends string>({ id, label, items, active, onChange, secondary }: {
+  id: string
+  label: string
+  items: readonly TabItem<T>[]
+  active: T
+  onChange: (key: T) => void
+  secondary?: boolean
+}) {
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const index = items.findIndex(item => item.key === active)
+    let next: number
+    switch (event.key) {
+      case 'ArrowLeft':
+        next = (index + items.length - 1) % items.length
+        break
+      case 'ArrowRight':
+        next = (index + 1) % items.length
+        break
+      case 'Home':
+        next = 0
+        break
+      case 'End':
+        next = items.length - 1
+        break
+      default: return
+    }
+    event.preventDefault()
+    event.currentTarget.querySelectorAll('button')[next]?.focus()
+    onChange(items[next].key)
+  }
+
+  return (
+    <div className={secondary ? 'ad-segments' : 'ad-tabs'} role="tablist" aria-label={label} onKeyDown={onKeyDown}>
+      {items.map(item => (
+        <button
+          key={item.key}
+          id={`${id}-${item.key}`}
+          type="button"
+          role="tab"
+          aria-selected={active === item.key}
+          aria-controls={`${id}-panel`}
+          tabIndex={active === item.key ? 0 : -1}
+          onClick={() => onChange(item.key)}
+        >
+          {item.icon && <AppIcon name={item.icon} size={16} />}
+          {item.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function PanelHeading({ icon, title, description }: PanelInfo) {
+  return (
+    <header className="ad-panel-head">
+      <span className="ad-panel-head__icon"><AppIcon name={icon} size={21} /></span>
+      <div>
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </div>
+    </header>
+  )
+}
+
+function PanelEmpty({ icon, title, children, action }: {
+  icon: AppIconName
+  title: string
+  children: ReactNode
+  action?: ReactNode
+}) {
+  return (
+    <div className="ad-panel-empty">
+      <AppIcon name={icon} size={23} />
+      <p className="ad-panel-empty__title">{title}</p>
+      <p>{children}</p>
+      {action}
+    </div>
+  )
+}
 
 type Draft = {
   name: string
@@ -61,7 +147,6 @@ type Draft = {
   role: string
   roleColor: string
   avatar: string | null
-  terminals: string[]
 }
 
 function errMsg(error: unknown): string {
@@ -137,47 +222,6 @@ function RoleColorPicker({ value, onChange }: { value: string; onChange: (value:
   )
 }
 
-function PickCard({
-  checked,
-  title,
-  badge,
-  description,
-  locked,
-  lockedReason,
-  onToggle,
-}: {
-  checked: boolean
-  title: string
-  badge?: string
-  description?: string
-  locked?: boolean
-  lockedReason?: string
-  onToggle: () => void
-}) {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
-      aria-disabled={locked || undefined}
-      title={locked ? lockedReason : description}
-      className={`ad-pick${checked ? ' is-on' : ''}${locked ? ' is-locked' : ''}`}
-      onClick={locked ? undefined : onToggle}
-    >
-      <span className="ad-pick__box" aria-hidden="true">
-        {checked && <AppIcon name="check" size={11} />}
-      </span>
-      <span className="ad-pick__body">
-        <span className="ad-pick__title">
-          <span>{title}</span>
-          {badge && <span className="ad-tag">{badge}</span>}
-        </span>
-        {description && <span className="ad-pick__desc">{description}</span>}
-      </span>
-    </button>
-  )
-}
-
 /** 图谱人格锚点：成员与知识图谱锚点实体的绑定 + 该锚点的 1 跳子图 */
 function PeerAnchorPanel({
   peerId,
@@ -190,6 +234,8 @@ function PeerAnchorPanel({
 }) {
   const [view, setView] = useState<MaPeerAnchor | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -199,7 +245,7 @@ function PeerAnchorPanel({
         const result = await getPeerAnchor(peerId)
         if (alive) setView(result)
       } catch (error) {
-        if (alive) notify(errMsg(error), 'err')
+        if (alive) setLoadError(errMsg(error))
       } finally {
         if (alive) setLoading(false)
       }
@@ -207,7 +253,7 @@ function PeerAnchorPanel({
     return () => {
       alive = false
     }
-  }, [peerId, notify])
+  }, [peerId, loadAttempt])
 
   const create = async () => {
     setBusy(true)
@@ -237,49 +283,50 @@ function PeerAnchorPanel({
   const anchor = view?.anchor ?? null
   const graph = view?.graph ?? { nodes: [], edges: [] }
 
-  return (
-    <div className="ad-sections">
-      <div className="ad-section-head">
-        <div className="ad-section-title">
-          <h2>图谱人格锚点</h2>
-          <p className="ad-desc">
-            把这位智能体钉在知识图谱的一个锚点实体上——与系统预置的「用户」锚点同一套机制。
-            模型会把它的人设、知识、立场挂在这个锚点上，这就是它的第一人称坐标。
-          </p>
-        </div>
-        {anchor && (
-          <div className="ad-head-actions">
-            <a className="ad-btn" href={`#/graph?entity=${encodeURIComponent(anchor.id)}`}>在图谱中打开</a>
-            <button type="button" className="ad-btn" disabled={busy} onClick={() => void unbind()}>解除锚点</button>
-          </div>
-        )}
-      </div>
+  if (loading) return <p className="ad-empty" role="status">载入锚点…</p>
 
-      {loading ? (
-        <p className="ad-empty">载入锚点…</p>
-      ) : !anchor ? (
-        <div className="ad-empty ad-empty--action">
-          <p>还没有锚点。建立后会以「{peerName}」为名在图谱里新建一个锚点实体。</p>
-          <button type="button" className="ad-btn ad-btn--primary" disabled={busy} onClick={() => void create()}>
-            {busy ? '建立中…' : '新建图谱人格锚点'}
-          </button>
+  if (loadError) return (
+    <PanelEmpty icon="alert" title="无法读取图谱锚点" action={
+      <button type="button" className="ad-btn" onClick={() => {
+        setLoading(true)
+        setLoadError('')
+        setLoadAttempt(attempt => attempt + 1)
+      }}>重试</button>
+    }>
+      <span role="alert">{loadError}</span>
+    </PanelEmpty>
+  )
+
+  if (!anchor) return (
+    <PanelEmpty icon="graph" title="尚未绑定锚点" action={
+      <button type="button" className="ad-btn ad-btn--primary" disabled={busy} onClick={() => void create()}>
+        <AppIcon name="plus" size={15} />
+        {busy ? '建立中…' : '新建图谱人格锚点'}
+      </button>
+    }>
+      建立后会以「{peerName}」为名在图谱中创建一个锚点实体。
+    </PanelEmpty>
+  )
+
+  return (
+    <section className="ad-section" aria-label="已绑定锚点">
+      <div className="ad-section-head">
+        <div>
+          <h3>{anchor.name}</h3>
+          <p className="ad-hint">{anchor.type} · 相邻实体 {Math.max(graph.nodes.length - 1, 0)} 个 · 关系 {graph.edges.length} 条</p>
         </div>
-      ) : (
-        <div className="ad-anchor">
-          <div className="ad-tags">
-            <span className="ad-tag ad-tag--accent">{anchor.name}</span>
-            <span className="ad-tag">{anchor.type}</span>
-            <span className="ad-hint">一跳邻居 {Math.max(graph.nodes.length - 1, 0)} 个 · 关系 {graph.edges.length} 条</span>
-          </div>
-          <div className="ad-graph">
-            <GraphMini nodes={graph.nodes} edges={graph.edges} emphasized={new Set([anchor.id])} className="h-full w-full" />
-          </div>
-          {graph.edges.length === 0 && (
-            <p className="ad-hint">该锚点还没有任何关系。到图谱页挂上第一条，画像就会长在这里。</p>
-          )}
+        <div className="ad-head-actions">
+          <a className="ad-btn" href={`#/graph?entity=${encodeURIComponent(anchor.id)}`}>
+            在图谱中打开 <AppIcon name="external" size={14} />
+          </a>
+          <button type="button" className="ad-btn" disabled={busy} onClick={() => void unbind()}>解除锚点</button>
         </div>
-      )}
-    </div>
+      </div>
+      <div className="ad-graph">
+        <GraphMini nodes={graph.nodes} edges={graph.edges} emphasized={new Set([anchor.id])} className="h-full w-full" />
+      </div>
+      {graph.edges.length === 0 && <p className="ad-hint">可在图谱中为锚点添加关系。</p>}
+    </section>
   )
 }
 
@@ -291,13 +338,17 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
   const [peer, setPeer] = useState<MaPeer | null>(null)
   const [loading, setLoading] = useState(true)
   const [models, setModels] = useState<ModelView[]>([])
-  const [workspaceOptions, setWorkspaceOptions] = useState<TerminalTarget[]>([])
   const [toast, setToast] = useState<{ msg: string; kind?: 'ok' | 'err' } | null>(null)
 
   const [draft, setDraft, draftState] = useDraftState<Draft | null>(`agent:${peerId}:profile`, null)
   const initializeDraft = draftState.initialize
   const [savingProfile, setSavingProfile] = useRememberedState(`agent:${peerId}:saving`, false)
-  const [tab, setTab] = useRememberedState<RightTab>(`agent:${peerId}:tab`, isNew ? 'cap' : 'prompt')
+  const [selectedTab, setTab] = useRememberedState<RightTab>(`agent:${peerId}:tab`, 'prompt')
+  const [lastRuntime, setLastRuntime] = useRememberedState<SubView>(`agent:${peerId}:runtime`, 'heartbeat')
+  const [profileOpen, setProfileOpen] = useState(false)
+  const tabsId = useId()
+  const runtimeId = useId()
+  const profileId = useId()
   const fileRef = useRef<HTMLInputElement>(null)
   const loadedIdRef = useRef<string | null>(null)
 
@@ -322,27 +373,18 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
     }
   }, [notify])
 
-  const loadCapabilityOptions = useCallback(async () => {
-    try {
-      const terminal = await getTerminal()
-      setWorkspaceOptions(terminal.targets)
-    } catch (error) {
-      notify(errMsg(error), 'err')
-    }
-  }, [notify])
-
   useEffect(() => {
     void (async () => {
-      await Promise.all([reloadPeer(), loadSettings(), loadCapabilityOptions()])
+      await Promise.all([reloadPeer(), loadSettings()])
       setLoading(false)
     })()
-  }, [reloadPeer, loadSettings, loadCapabilityOptions])
+  }, [reloadPeer, loadSettings])
 
   useEffect(() => {
     if (isNew) {
       initializeDraft({
         name: '', modelId: '', note: '', role: '', roleColor: DEFAULT_ROLE_COLOR,
-        avatar: null, terminals: [],
+        avatar: null,
       })
       return
     }
@@ -355,7 +397,6 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
       role: peer.role ?? '',
       roleColor: peer.roleColor ?? DEFAULT_ROLE_COLOR,
       avatar: peer.avatar,
-      terminals: peer.terminals ?? [],
     })
   }, [peer, isNew, initializeDraft])
 
@@ -370,13 +411,6 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
       notify(errMsg(error), 'err')
     }
   }
-
-  const toggleTerminal = (id: string) =>
-    setDraft((current) => {
-      if (!current || coreAgent) return current
-      const values = current.terminals
-      return { ...current, terminals: values.includes(id) ? values.filter((item) => item !== id) : [...values, id] }
-    })
 
   const saveProfile = async () => {
     if (!draft || savingProfile) return
@@ -395,7 +429,6 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
           role: draft.role,
           roleColor: draft.roleColor,
           avatar: draft.avatar ?? '',
-          terminals: coreAgent ? undefined : draft.terminals,
         })
         draftState.accept({ ...draft, name }, draft)
         notify(`「${name}」的资料已保存`, 'ok')
@@ -408,7 +441,6 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
           role: draft.role,
           roleColor: draft.roleColor,
           avatar: draft.avatar ?? undefined,
-          terminals: draft.terminals,
         })
         draftState.accept(null, draft)
         window.location.assign(`#/multi-agent/${encodeURIComponent(created.id)}`)
@@ -449,10 +481,13 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
   const roleValue = draft?.role?.trim() ?? ''
   const roleColor = draft?.roleColor || DEFAULT_ROLE_COLOR
   const modelName = models.find((model) => model.id === draft?.modelId)?.name
-  const tabs = coreAgent ? [...BASE_TABS, { key: 'coding' as const, label: '编程任务' }] : BASE_TABS
+  const tab = Object.hasOwn(PANELS, selectedTab) ? selectedTab : 'prompt'
+  const runtimeTab = isRuntimeTab(tab) ? tab : null
+  const mainTab = isRuntimeTab(tab) ? 'runtime' : tab
+  const heading = PANELS[tab]
 
   return (
-    <div className="ad-page" data-page="agent">
+    <div className={isNew ? 'ad-page ad-page--new' : 'ad-page'} data-page="agent">
       <header className="ad-hero">
         <div className="ad-hero__identity">
           <PeerAvatar name={preview} avatar={draft?.avatar ?? null} size="h-14 w-14" textClass="text-xl" />
@@ -465,14 +500,11 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
                 <span className="ad-role"><i style={{ background: roleColor }} aria-hidden="true" />{roleValue}</span>
               )}
             </div>
-            <p className="ad-hero__meta">
-              模型 · {modelName ?? '跟随默认设置'}
-              {draft?.note?.trim() ? ` · ${draft.note.trim()}` : ''}
-            </p>
+            <p className="ad-hero__meta"><AppIcon name="system" size={14} />{modelName ?? '跟随默认模型'}</p>
           </div>
         </div>
         <div className="ad-hero__actions">
-          {coreAgent && <a className="ad-btn" href="#/coding">编程工作台 ↗</a>}
+          {coreAgent && <a className="ad-btn" href="#/coding">编程工作台 <AppIcon name="external" size={14} /></a>}
           <button
             type="button"
             className="ad-btn ad-btn--primary"
@@ -486,7 +518,7 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
 
       {draftState.dirty && (
         <div className="ad-dirty" role="status">
-          <span>资料有未保存的修改</span>
+          <span>成员资料有未保存的修改</span>
           <button type="button" className="ad-linkbtn" disabled={savingProfile} onClick={draftState.discard}>
             放弃修改
           </button>
@@ -495,176 +527,149 @@ export default function AgentDetail({ peerId: requestedPeerId }: { peerId: strin
 
       <PageBoundary>
         <div className="ad-layout">
-          <aside className="ad-profile" aria-label="成员资料">
-            <div className="ad-avatar">
+          <aside className="ad-profile" aria-label="成员资料" data-open={isNew ? undefined : profileOpen}>
+            <h2 className="ad-profile__heading"><AppIcon name="agent" size={16} />成员资料</h2>
+            {!isNew && (
               <button
                 type="button"
-                className="ad-avatar__button"
-                title="点击上传头像"
-                aria-label="上传或更换头像"
-                onClick={() => fileRef.current?.click()}
+                className="ad-profile__toggle"
+                aria-expanded={profileOpen}
+                aria-controls={profileId}
+                onClick={() => setProfileOpen(open => !open)}
               >
-                <PeerAvatar name={preview} avatar={draft?.avatar ?? null} size="h-20 w-20" textClass="text-[26px]" />
-                <span className="ad-avatar__overlay">更换</span>
+                <AppIcon name="agent" size={16} />成员资料<AppIcon name="chevron-down" size={16} className="ad-profile__chevron" />
               </button>
-              <div className="ad-avatar__actions">
-                <button type="button" className="ad-linkbtn" onClick={() => fileRef.current?.click()}>上传头像</button>
-                {draft?.avatar && (
-                  <button
-                    type="button"
-                    className="ad-linkbtn"
-                    onClick={() => setDraft((current) => (current ? { ...current, avatar: null } : current))}
-                  >
-                    移除
-                  </button>
-                )}
+            )}
+            <div className="ad-profile__body" id={profileId}>
+              <div className="ad-avatar">
+                <button
+                  type="button"
+                  className="ad-avatar__button"
+                  title="点击上传头像"
+                  aria-label="上传或更换头像"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <PeerAvatar name={preview} avatar={draft?.avatar ?? null} size="h-12 w-12" textClass="text-lg" />
+                  <span className="ad-avatar__overlay">更换</span>
+                </button>
+                <div className="ad-avatar__meta">
+                  <div className="ad-avatar__actions">
+                    <button type="button" className="ad-linkbtn" onClick={() => fileRef.current?.click()}>上传头像</button>
+                    {draft?.avatar && (
+                      <button
+                        type="button"
+                        className="ad-linkbtn"
+                        onClick={() => setDraft((current) => (current ? { ...current, avatar: null } : current))}
+                      >
+                        移除
+                      </button>
+                    )}
+                  </div>
+                  <p className="ad-hint">自动裁成方图并压缩</p>
+                </div>
               </div>
-              <p className="ad-hint">PNG / JPG，会自动裁成方图并压缩</p>
-            </div>
 
-            <Field label="名字" hint="发言时被 @ 的名字，圆桌上唯一">
-              <input
-                className="ad-input"
-                aria-label="名字"
-                value={draft?.name ?? ''}
-                placeholder="如：张三"
-                onChange={(event) => setDraft((current) => (current ? { ...current, name: event.target.value } : current))}
-              />
-            </Field>
-
-            <Field label="角色" hint="执行态卡片右上角的小标签；留空则不显示">
-              <span className="ad-inline">
+              <Field label="名字" hint="发言时被 @ 的名字，圆桌上唯一">
                 <input
                   className="ad-input"
-                  aria-label="角色"
-                  value={draft?.role ?? ''}
-                  placeholder="如：产品经理"
-                  onChange={(event) => setDraft((current) => (current ? { ...current, role: event.target.value } : current))}
+                  aria-label="名字"
+                  value={draft?.name ?? ''}
+                  placeholder="如：张三"
+                  onChange={(event) => setDraft((current) => (current ? { ...current, name: event.target.value } : current))}
                 />
-                <RoleColorPicker
-                  value={roleColor}
-                  onChange={(value) => setDraft((current) => (current ? { ...current, roleColor: value } : current))}
-                />
-              </span>
-            </Field>
+              </Field>
 
-            <Field label="模型" hint="不指定则跟随设置页默认">
-              <select
-                className="ad-input"
-                aria-label="模型"
-                value={draft?.modelId ?? ''}
-                onChange={(event) => setDraft((current) => (current ? { ...current, modelId: event.target.value } : current))}
-              >
-                <option value="">跟随设置页默认</option>
-                {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-              </select>
-            </Field>
+              <Field label="角色" hint="执行态卡片右上角的小标签；留空则不显示">
+                <span className="ad-inline">
+                  <input
+                    className="ad-input"
+                    aria-label="角色"
+                    value={draft?.role ?? ''}
+                    placeholder="如：产品经理"
+                    onChange={(event) => setDraft((current) => (current ? { ...current, role: event.target.value } : current))}
+                  />
+                  <RoleColorPicker
+                    value={roleColor}
+                    onChange={(value) => setDraft((current) => (current ? { ...current, roleColor: value } : current))}
+                  />
+                </span>
+              </Field>
 
-            <Field label="备注" hint="写给人看的一句话，不会注入模型">
-              <textarea
-                className="ad-input ad-textarea"
-                aria-label="备注"
-                rows={3}
-                value={draft?.note ?? ''}
-                placeholder="如：负责挑刺的那位"
-                onChange={(event) => setDraft((current) => (current ? { ...current, note: event.target.value } : current))}
-              />
-            </Field>
-
-            {peer && !peer.builtin && (
-              <div className="ad-danger">
-                <button type="button" className="ad-btn ad-btn--danger" onClick={() => void remove()}>移出圆桌</button>
-                <p className="ad-hint">移出后，它自己那套提示词（版本 / 生效项 / 顺序）会一并清除。</p>
-              </div>
-            )}
-          </aside>
-
-          <section className="ad-main" aria-label="成员配置">
-            <div className="ad-tabs" role="group" aria-label="配置分类">
-              {tabs.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  aria-pressed={tab === item.key}
-                  onClick={() => setTab(item.key)}
+              <Field label="模型" hint="不指定则跟随设置页默认">
+                <select
+                  className="ad-input"
+                  aria-label="模型"
+                  value={draft?.modelId ?? ''}
+                  onChange={(event) => setDraft((current) => (current ? { ...current, modelId: event.target.value } : current))}
                 >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+                  <option value="">跟随设置页默认</option>
+                  {models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                </select>
+              </Field>
 
-            <div className="ad-panel">
-              {coreAgent && tab === 'coding' && <AgentTasks />}
+              <Field label="备注" hint="写给人看的一句话，不会注入模型">
+                <textarea
+                  className="ad-input ad-textarea"
+                  aria-label="备注"
+                  rows={3}
+                  value={draft?.note ?? ''}
+                  placeholder="如：负责挑刺的那位"
+                  onChange={(event) => setDraft((current) => (current ? { ...current, note: event.target.value } : current))}
+                />
+              </Field>
 
-              {tab === 'tts' && (peer ? <div className="ad-embed"><TtsPanel agentId={peer.id} /></div> : <p className="ad-empty">请先保存 Agent，再配置语音档案。</p>)}
-
-              {tab === 'cap' && (
-                <div className="ad-sections">
-                  <p className="ad-desc">
-                    {coreAgent
-                      ? '内置 Agent 是系统主控，直接代表软件向你负责，协调其他 Agent 并检查交付。全部能力、工具和工作空间自动开放，无需逐项授权。'
-                      : '所有智能体默认获得全部可用工具（圆桌发言时另有 speak / 状态机工具）。绑定工作空间后它才能执行命令，且只能访问绑定的这几台。'}
-                  </p>
-
-                  <section className="ad-section">
-                    <div className="ad-section-head">
-                      <h2>工作空间</h2>
-                      <span className="ad-count">{workspaceOptions.length} 个</span>
-                    </div>
-                    {workspaceOptions.length === 0 ? (
-                      <p className="ad-empty">还没有工作空间。先到「工作空间」页添加一个运行环境。</p>
-                    ) : (
-                      <div className="ad-grid">
-                        {workspaceOptions.map((target) => (
-                          <PickCard
-                            key={target.id}
-                            checked={coreAgent || (draft?.terminals ?? []).includes(target.id)}
-                            locked={coreAgent}
-                            lockedReason="系统主控自动拥有全部工作空间，无需绑定"
-                            title={target.name}
-                            badge={target.kind === 'local' ? '本机' : target.kind}
-                            description={target.enabled ? undefined : '未启用'}
-                            onToggle={() => toggleTerminal(target.id)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    <p className="ad-hint">
-                      {coreAgent ? '全部工作空间自动纳入访问范围；连接与启用状态在工作空间页管理。' : '勾选即授予 run_command / list_terminals，且只在这几台上执行。'}
-                    </p>
-                  </section>
+              {peer && !peer.builtin && (
+                <div className="ad-danger">
+                  <button type="button" className="ad-btn ad-btn--danger" onClick={() => void remove()}>移出圆桌</button>
+                  <p className="ad-hint">移出后，它自己那套提示词（版本 / 生效项 / 顺序）会一并清除。</p>
                 </div>
               )}
-
-              {BACKGROUND_TABS.includes(tab as SubView) && (
-                peer ? (
-                  <div className="ad-embed">
-                    <AgentBackground peerId={peer.id} peerName={peer.name} models={models} view={tab as SubView} hideTabs />
-                  </div>
-                ) : <p className="ad-empty">先把这位成员加入圆桌，再回来配置它的后台。</p>
-              )}
-
-              {tab === 'anchor' && (
-                peer
-                  ? <PeerAnchorPanel peerId={peer.id} peerName={peer.name} notify={notify} />
-                  : <p className="ad-empty">先把这位成员加入圆桌，再回来建立它的图谱人格锚点。</p>
-              )}
-
-              {tab === 'prompt' && (
-                peer
-                  ? <div className="ad-embed ad-embed--prompt"><PromptsPanel peerId={peer.id} /></div>
-                  : (
-                    <div className="ad-sections">
-                      <p className="ad-desc">
-                        每位智能体自己一套「对话」提示词（身份 / 增强 / 终端 / 子代理），
-                        与首页对话的全局提示词隔离；「圆桌」那一类是全桌共用的协作规程。
-                      </p>
-                      <p className="ad-empty">先把这位成员加入圆桌，再回来为它配置自己的提示词。</p>
-                    </div>
-                  )
-              )}
             </div>
-          </section>
+          </aside>
+
+          {peer && (
+            <section className="ad-main" aria-label="成员配置">
+              <TabList<MainTab>
+                id={tabsId}
+                label="配置分类"
+                items={coreAgent ? CORE_TABS : BASE_TABS}
+                active={mainTab}
+                onChange={key => setTab(key === 'runtime' ? lastRuntime : key)}
+              />
+              <div
+                className="ad-panel"
+                id={`${tabsId}-panel`}
+                role="tabpanel"
+                aria-labelledby={`${tabsId}-${mainTab}`}
+                tabIndex={runtimeTab ? undefined : 0}
+              >
+                {runtimeTab ? (
+                  <>
+                    <TabList<SubView>
+                      id={runtimeId}
+                      label="后台运行"
+                      items={SUB_TABS}
+                      active={runtimeTab}
+                      onChange={key => {
+                        setLastRuntime(key)
+                        setTab(key)
+                      }}
+                      secondary
+                    />
+                    <div className="ad-runtime-panel" id={`${runtimeId}-panel`} role="tabpanel" aria-labelledby={`${runtimeId}-${runtimeTab}`} tabIndex={0}>
+                      <PanelHeading {...heading} />
+                      <AgentBackground peerId={peer.id} peerName={peer.name} models={models} view={runtimeTab} hideTabs />
+                    </div>
+                  </>
+                ) : <PanelHeading {...heading} />}
+
+                {coreAgent && tab === 'coding' && <AgentTasks />}
+                {tab === 'tts' && <TtsPanel agentId={peer.id} embedded />}
+                {tab === 'anchor' && <PeerAnchorPanel peerId={peer.id} peerName={peer.name} notify={notify} />}
+                {tab === 'prompt' && <PromptsPanel peerId={peer.id} embedded />}
+              </div>
+            </section>
+          )}
         </div>
       </PageBoundary>
 

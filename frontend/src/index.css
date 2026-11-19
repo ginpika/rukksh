@@ -141,6 +141,11 @@ button,
 }
 
 @layer base {
+  /* 移除浏览器默认焦点描边，组件可定义自己的焦点样式。 */
+  :where(:focus) {
+    outline: none;
+  }
+
   /*
    * 文本类表单控件的「形状」随主题改变 —— Endfield 下会变成切角输入框。
    * 说明：input / textarea 是替换元素，不支持伪元素描边环，所以这里只接管形状；

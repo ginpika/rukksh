@@ -242,105 +242,12 @@ p.mem-muted { margin: 6px 0 12px; }
   .mem-home-filters > :first-child { grid-column: 1 / -1; }
   .mem-view-nav { grid-template-columns: repeat(auto-fit,minmax(9rem,1fr)); }
 }
-/* 记忆星云：沿用首页 / Dashboard 的 Rukksh 表面语言 */
 .mem-ops-back { color: var(--c-accent); text-decoration: none; }
 .mem-ops-back:hover { text-decoration: underline; }
-.mem-galaxy-page { --mem-warn: #9a6700; display: flex; flex: none; flex-direction: column; width: 100%; max-width: 64rem; margin: 0 auto; padding: 1rem clamp(1rem, 4vw, 1.5rem) clamp(2rem, 8vh, 5rem); }
-:root[data-scheme='dark'] .mem-galaxy-page { --mem-warn: #d29922; }
-.mem-galaxy-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .75rem; margin-bottom: .875rem; }
-.mem-galaxy-counts { color: var(--sl-muted); font-size: .875rem; line-height: 1.6; }
-.mem-galaxy-ops { flex-shrink: 0; padding-bottom: 1px; color: var(--sl-muted); font-size: .8125rem; text-decoration: none; border-bottom: 1px dashed var(--sl-line-strong); }
-.mem-galaxy-ops:hover { color: var(--sl-fg); }
-.mem-galaxy-search { margin-bottom: 1rem; }
-.mem-galaxy-retry { align-self: flex-start; padding: .45rem .8rem; font-size: .8125rem; color: var(--sl-fg); background: var(--sl-panel); border: 1px solid var(--sl-line-strong); border-radius: 7px; }
-.mem-galaxy-retry:hover { background: var(--sl-hover); }
-.mem-galaxy-search input { width: 100%; min-height: 2.5rem; padding: .625rem .875rem; font-size: .875rem; color: var(--sl-fg); background: var(--sl-panel); border: 1px solid var(--sl-line); border-radius: 8px; outline: none; }
-.mem-galaxy-search input::placeholder { color: var(--sl-muted); }
-.mem-galaxy-search input:focus { border-color: var(--sl-accent); }
-.mem-galaxy-stage { position: relative; isolation: isolate; width: 100%; height: min(62vh, 560px); min-height: 320px; overflow: hidden; background: var(--sl-side); border: 1px solid var(--sl-line); border-radius: 12px; cursor: grab; }
-.mem-galaxy-stage:active { cursor: grabbing; }
-.mem-galaxy-alert { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: 1rem; padding: .75rem 1rem; text-align: left; font-size: .875rem; background: var(--sl-panel); border: 1px solid var(--sl-line); border-left: 3px solid var(--mem-warn); border-radius: 8px; }
-.mem-galaxy-alert strong { font-weight: 500; }
-.mem-galaxy-alert span { flex-shrink: 0; color: var(--sl-link); }
-.mem-galaxy-chip { display: inline-flex; align-self: flex-start; align-items: center; gap: .4rem; margin-bottom: .75rem; padding: .35rem .75rem; font-size: .8125rem; color: var(--sl-fg); background: var(--sl-side); border: 1px solid var(--sl-line-strong); border-radius: 999px; }
-.mem-galaxy-hint { margin-top: .75rem; color: var(--sl-muted); font-size: .8125rem; line-height: 1.7; }
-.mem-galaxy-empty { margin-top: 1rem; padding: 2rem; text-align: center; border: 1px dashed var(--sl-line-strong); border-radius: 12px; }
-.mem-galaxy-empty h3 { font-size: 1rem; font-weight: 600; }
-.mem-galaxy-empty p { margin-top: .5rem; color: var(--sl-muted); font-size: .875rem; }
-.mem-galaxy-empty a { color: var(--sl-link); text-decoration: none; }
-.mem-galaxy-empty a:hover { text-decoration: underline; }
-.mem-galaxy-results { margin-top: 1.25rem; }
-.mem-galaxy-results-head { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; margin-bottom: .5rem; font-size: .875rem; }
-.mem-galaxy-results-head span { color: var(--sl-muted); font-size: .8125rem; }
-.mem-galaxy-result { display: block; width: 100%; padding: .75rem .875rem; text-align: left; color: var(--sl-fg); background: var(--sl-panel); border: 1px solid var(--sl-line); border-radius: 8px; }
-.mem-galaxy-result + .mem-galaxy-result { margin-top: .5rem; }
-.mem-galaxy-result:hover { background: var(--sl-side); border-color: var(--sl-line-strong); }
-.mem-galaxy-result strong { display: block; font-size: .875rem; font-weight: 500; }
-.mem-galaxy-result span { display: block; margin-top: .25rem; color: var(--sl-muted); font-size: .8125rem; }
-/* Three.js 画布：黑洞、Agent、记忆点共用同一套深度缓冲。 */
-.mem-galaxy-three { position: absolute; inset: 0; z-index: 0; }
-.mem-galaxy-three canvas { display: block; width: 100%; height: 100%; }
-.mem-galaxy-sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.mem-galaxy-tip {
-  position: absolute;
-  z-index: 30000;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-width: 240px;
-  padding: 8px 10px;
-  border: 1px solid var(--sl-line);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--sl-panel) 94%, transparent);
-  color: var(--sl-fg);
-  box-shadow: 0 10px 28px rgb(0 0 0 / .16);
-  pointer-events: none;
-  backdrop-filter: blur(8px);
-}
-.mem-galaxy-tip strong { overflow: hidden; font-size: .8125rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.mem-galaxy-tip span { color: var(--sl-muted); font-size: .6875rem; }
-.mem-galaxy-pop {
-  --mem-pop-color: var(--sl-accent);
-  position: absolute;
-  z-index: 40000;
-  width: min(340px, calc(100% - 24px));
-  max-height: calc(100% - 24px);
-  padding: 13px 15px 12px;
-  overflow: auto;
-  border: 1px solid var(--sl-line);
-  border-left: 3px solid var(--mem-pop-color);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--sl-panel) 97%, transparent);
-  color: var(--sl-fg);
-  box-shadow: 0 18px 44px rgb(0 0 0 / .22);
-  backdrop-filter: blur(12px);
-  animation: mem-galaxy-pop-in .16s ease-out;
-}
-.mem-galaxy-pop:focus { outline: none; }
-.mem-galaxy-pop-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.mem-galaxy-pop-eyebrow { display: inline-flex; flex: 1; align-items: center; gap: .4rem; min-width: 0; overflow: hidden; color: var(--sl-muted); font-size: .6875rem; letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
-.mem-galaxy-pop-eyebrow i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--mem-pop-color); }
-.mem-galaxy-pop-close { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border: 0; border-radius: 50%; background: transparent; color: var(--sl-muted); font-size: 1rem; line-height: 1; }
-.mem-galaxy-pop-close:hover { background: var(--sl-hover); color: var(--sl-fg); }
-.mem-galaxy-pop h3 { margin: 8px 0 0; font-size: .9375rem; font-weight: 600; line-height: 1.45; }
-.mem-galaxy-pop-body { display: -webkit-box; margin-top: 6px; overflow: hidden; color: var(--sl-fg-2); font-size: .8125rem; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
-.mem-galaxy-pop-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
-.mem-galaxy-pop-meta span { padding: 1px 7px; border: 1px solid var(--sl-line); border-radius: 999px; color: var(--sl-muted); font-size: .6875rem; line-height: 1.6; }
-.mem-galaxy-pop-meta .is-warn { border-color: color-mix(in srgb, var(--mem-warn) 55%, var(--sl-line)); color: var(--mem-warn); }
-.mem-galaxy-pop-time { margin-top: 7px; color: var(--sl-muted); font-size: .6875rem; }
-.mem-galaxy-pop-actions { display: flex; gap: 8px; margin-top: 11px; }
-.mem-galaxy-pop-actions button { min-height: 30px; padding: 5px 11px; border-radius: 7px; font-size: .75rem; cursor: pointer; }
-.mem-galaxy-pop-open { flex: 1; border: 1px solid var(--sl-accent); background: var(--sl-accent); color: var(--sl-on-accent); font-weight: 500; }
-.mem-galaxy-pop-open:hover { background: var(--sl-accent-hover); border-color: var(--sl-accent-hover); }
-.mem-galaxy-pop-dismiss { border: 1px solid var(--sl-line); background: transparent; color: var(--sl-muted); }
-.mem-galaxy-pop-dismiss:hover { background: var(--sl-hover); color: var(--sl-fg); }
-@keyframes mem-galaxy-pop-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* 详情抽屉 portal 在 body 上，需自带 Rukksh 表面，并把旧主题容器色映射到中性色。 */
 .mem-detail-overlay.rukksh-surface { color: var(--sl-fg); background: color-mix(in srgb, var(--sl-bg) 70%, transparent); --c-surface-container-lowest: var(--sl-bg); --c-surface-container-low: var(--sl-side); --c-surface-container: var(--sl-bubble); --c-surface-container-high: var(--sl-hover); --c-surface-container-highest: var(--sl-active); }
 @media (max-width: 650px) {
-  .mem-galaxy-stage { height: 54vh; }
-  .mem-galaxy-pop { width: calc(100% - 20px); }
   .mem-home-stats { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .625rem; }
   .mem-home-stats button { padding: .875rem; }
   .mem-home-intro h2 { font-size: 1.5rem; }

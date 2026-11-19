@@ -46,12 +46,10 @@ import {
   type TaskView,
   type Usage,
 } from '../api/client'
-import { Card } from '../components/Card'
 import FloatWindow from '../components/FloatWindow'
 import { Select } from '../components/Select'
 import { INPUT } from '../components/formStyles'
 import Toast from '../components/Toast'
-import { btnPrimary, btnQuiet, miniBtn } from '../components/ui'
 import { usePageKit } from '../kit'
 
 /** 心跳控制条的节拍输入。 */
@@ -67,6 +65,18 @@ const WINDOWS: readonly (readonly [number, string])[] = [
   [24 * 7, '7 天'],
   [24 * 30, '30 天'],
 ]
+
+function UsageWindow({ hours, onChange }: { hours: number; onChange: (hours: number) => void }) {
+  return (
+    <div className="ad-segments" role="group" aria-label="统计范围">
+      {WINDOWS.map(([value, label]) => (
+        <button key={value} type="button" aria-pressed={value === hours} onClick={() => onChange(value)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 /** Toast 回调：kind=success 走成功态，error 走错误态 */
 export type Notify = (kind: 'success' | 'error', msg: string) => void
@@ -383,7 +393,7 @@ function TaskLine({
       {onRerun && (
         <button
           type="button"
-          className={miniBtn}
+          className="ad-btn"
           onClick={(e) => {
             /* 行本身点了是看详情；重跑按钮只重跑，不连带打开详情 */
             e.stopPropagation()
@@ -427,7 +437,7 @@ function ExecLine({
       {onRerun && (
         <button
           type="button"
-          className={miniBtn}
+          className="ad-btn"
           onClick={(e) => {
             /* 行本身点了是看详情；重跑按钮只重跑，不连带打开详情 */
             e.stopPropagation()
@@ -484,9 +494,9 @@ function PlanRow({
   }
 
   return (
-    <Card as="li" pad="none">
+    <li className="ad-record">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 px-4 py-3.5">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-[1_1_15rem]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="truncate text-md font-semibold text-fg">{plan.name}</span>
             {plan.channels.map((c) => (
@@ -513,7 +523,7 @@ function PlanRow({
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           <label className="flex items-center gap-1.5 text-2xs text-muted">
             <Switch on={plan.enabled} disabled={busy} onToggle={() => onToggle(plan)} />
             {plan.enabled ? '启用' : '已停用'}
@@ -528,10 +538,10 @@ function PlanRow({
               {u?.failed ? ` · 失败 ${u.failed}` : ''}
             </span>
           </div>
-          <button type="button" className={miniBtn} disabled={busy} onClick={() => onRun(plan)}>
+          <button type="button" className="ad-btn" disabled={busy} onClick={() => onRun(plan)}>
             立即执行
           </button>
-          <button type="button" className={miniBtn} onClick={toggle}>
+          <button type="button" className="ad-btn" onClick={toggle}>
             {open ? '收起' : '记录'}
           </button>
         </div>
@@ -573,7 +583,7 @@ function PlanRow({
           </div>
         </div>
       )}
-    </Card>
+    </li>
   )
 }
 
@@ -584,7 +594,7 @@ function UsageCards({ usage, unitHint }: { usage: Usage | undefined; unitHint: s
   const done = usage?.done ?? 0
   const failed = usage?.failed ?? 0
   return (
-    <div className={kit.statRow}>
+    <div className={`ad-stats ${kit.statRow}`}>
       <kit.Stat label={unitHint} value={String(runs)} hint={`成功 ${done} · 失败 ${failed}`} />
       <kit.Stat
         label="成功率"
@@ -746,11 +756,11 @@ function HeartbeatTab({
     }
   }
 
-  if (!ready) return <kit.Empty>正在读取「{peerName}」的心跳…</kit.Empty>
+  if (!ready) return <p className="ad-empty" role="status">正在读取「{peerName}」的心跳…</p>
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border border-line px-4 py-3">
+      <section className="agent-runtime-status flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-lg border border-line px-4 py-3">
         <div className="flex min-w-0 items-start gap-3">
           <span
             className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
@@ -780,10 +790,10 @@ function HeartbeatTab({
             onChange={(e) => setTickDraft(e.target.value)}
             aria-label="节拍（毫秒）"
           />
-          <button type="button" className={btnQuiet()} onClick={saveTick}>
+          <button type="button" className="ad-btn" onClick={saveTick}>
             改节拍
           </button>
-          <button type="button" className={btnPrimary()} disabled={busy} onClick={beat}>
+          <button type="button" className="ad-btn" disabled={busy} onClick={beat}>
             敲一次
           </button>
         </div>
@@ -808,7 +818,7 @@ function HeartbeatTab({
       </div>
 
       <div className="flex justify-end border-t border-line pt-3">
-        <button type="button" className={btnPrimary('rounded-sm')} disabled={busy} onClick={saveContent}>
+        <button type="button" className="ad-btn ad-btn--primary" disabled={busy} onClick={saveContent}>
           {busy ? '保存中…' : '保存'}
         </button>
       </div>
@@ -827,7 +837,6 @@ function PlansTab({
   onOpenExec: (id: number) => void
   onToast: Notify
 }) {
-  const kit = usePageKit()
   const [plans, setPlans] = useState<PlanView[]>([])
   const [resources, setResources] = useState<ResourceView | null>(null)
   const [hours, setHours] = useState(24)
@@ -893,28 +902,17 @@ function PlansTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+      <header className="ad-toolbar">
         <p className="max-w-[720px] text-xs leading-relaxed text-muted">
-          常驻的岗位定义：一份带名字、正文、工具与交付渠道的职责。节拍只是给主会话的参考，派不派由本
-          Agent 的心跳主会话每拍裁量；立、改、撤都是大模型在对话里用
-          <span className="mx-1 font-mono text-xs">create_heartbeat / update_heartbeat / delete_heartbeat</span>
-          做的事，页面上唯一能改的是每行的启用开关（停用不删）。
+          在对话中添加或修改职责。这里可以启停职责，也可以立即执行一次。
         </p>
-        <kit.Range
-          value={hours}
-          options={WINDOWS.map(([v, label]) => ({ value: v, label }))}
-          onChange={setHours}
-        />
+        <UsageWindow hours={hours} onChange={setHours} />
       </header>
 
       <UsageCards usage={resources?.plans} unitHint={`被派出（${windowLabel}）`} />
 
       {plans.length === 0 ? (
-        <kit.Empty>
-          这位智能体的名册还是空的 —— 去对话里说一句「以后帮我盯着 X」，大模型就会用
-          <span className="mx-1 font-mono">create_heartbeat</span>
-          为它立一份。
-        </kit.Empty>
+        <p className="ad-empty">暂无常驻职责。可以在对话中请智能体长期跟进一件事。</p>
       ) : (
         <ul className="flex flex-col gap-2.5">
           {plans.map((p) => (
@@ -952,7 +950,6 @@ function ActionLogTab({
   onOpenExec: (id: number) => void
   onToast: Notify
 }) {
-  const kit = usePageKit()
   const [tasks, setTasks] = useState<TaskView[]>([])
   const [resources, setResources] = useState<ResourceView | null>(null)
   const [hours, setHours] = useState(24)
@@ -1003,25 +1000,17 @@ function ActionLogTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+      <header className="ad-toolbar">
         <p className="max-w-[720px] text-xs leading-relaxed text-muted">
-          这位智能体每一次行动的日志：心跳主会话登场、常驻职责被派出、子代理被交代，各有身份与状态；
-          <span className="mono mx-1 text-xs">↳ 由 #N 派出</span>
-          标出它属于谁的子任务。有执行留痕的点开可看全过程。
+          「由 #N 派出」标识子任务的来源。打开带执行留痕的记录可查看详情。
         </p>
-        <kit.Range
-          value={hours}
-          options={WINDOWS.map(([v, label]) => ({ value: v, label }))}
-          onChange={setHours}
-        />
+        <UsageWindow hours={hours} onChange={setHours} />
       </header>
 
       <UsageCards usage={resources?.totals} unitHint={`执行（${windowLabel}）`} />
 
       {tasks.length === 0 ? (
-        <kit.Empty>
-          还没有行动 —— 敲一次心跳、或去对话里派一个子代理，这里就会出现它们的身份与状态。
-        </kit.Empty>
+        <p className="ad-empty">暂无行动记录。触发心跳或委派子代理后，可在这里查看执行状态。</p>
       ) : (
         <div className="flex flex-col">
           {tasks.map((t) => (
@@ -1129,45 +1118,28 @@ function RagTab({ peerId, onToast }: { peerId: string; onToast: Notify }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <p className="max-w-[720px] text-xs leading-relaxed text-muted">
-          这位智能体的召回留痕（向量 / 图 / 记忆 / 网页）：既含检索工具调用，也含
-          <b>自动注入的记忆和网页资料</b>。模型问了什么、实际拿到了什么原始数据，都记在这里，用来回看检索效果。
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="mono flex w-fit shrink-0 border border-line-strong">
-            {FILTERS.map(([v, label]) => (
-              <button
-                key={v ?? 'all'}
-                type="button"
-                onClick={() => setChannel(v)}
-                className={`px-3 py-1.5 text-xs font-bold tracking-wider transition hover:bg-accent-soft first:pl-3.5 last:pr-3.5 ${
-                  channel === v ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button type="button" className={btnQuiet('rounded-sm')} onClick={() => void load(channel)}>
+      <header className="ad-toolbar">
+        <div className="ad-segments" role="group" aria-label="召回渠道">
+          {FILTERS.map(([v, label]) => (
+            <button key={v ?? 'all'} type="button" aria-pressed={channel === v} onClick={() => setChannel(v)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="ad-head-actions">
+          <button type="button" className="ad-btn" onClick={() => void load(channel)}>
             刷新
           </button>
-          <button type="button" className={btnQuiet('rounded-sm')} disabled={busy} onClick={clear}>
+          <button type="button" className="ad-btn" disabled={busy} onClick={clear}>
             清空
           </button>
         </div>
       </header>
 
       {rows === null ? (
-        <kit.Empty>正在读取召回留痕…</kit.Empty>
+        <p className="ad-empty" role="status">正在读取召回留痕…</p>
       ) : rows.length === 0 ? (
-        <kit.Empty>
-          还没有召回记录 —— 当这位智能体的对话或后台执行调用检索工具（
-          <span className="mx-1 font-mono">search_vector_chunks</span>/
-          <span className="mx-1 font-mono">recall_memory</span>/ 图谱查询）时，或每轮
-          <span className="mx-1 font-mono">memory_inject</span>自动注入记忆时，
-          这里会记下它问了什么、拿到了什么。
-        </kit.Empty>
+        <p className="ad-empty">{channel ? '该渠道暂无召回记录。' : '暂无召回记录。智能体检索资料或自动注入记忆后，查询与结果会显示在这里。'}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((r) => (
@@ -1175,7 +1147,7 @@ function RagTab({ peerId, onToast }: { peerId: string; onToast: Notify }) {
               <button
                 type="button"
                 onClick={() => setActive(r)}
-                className="flex w-full flex-col gap-1.5 border border-line px-4 py-3 text-left transition hover:border-line-strong hover:bg-accent-soft"
+                className="ad-record flex w-full flex-col gap-1.5 px-4 py-3 text-left"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <kit.Badge tone={RAG_CHANNEL_TONE[r.channel]}>

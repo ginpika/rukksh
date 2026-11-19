@@ -186,9 +186,9 @@
 .sl-chat__compose-left, .sl-chat__compose-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sl-chat__compose-left { flex: 0 1 auto; }
 .sl-chat__compose-right { flex: 0 1 auto; max-width: 100%; margin-left: auto; }
-.sl-chat__permissions { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 5px; border-radius: 6px; color: var(--sl-muted); text-decoration: none; font-size: 12px; white-space: nowrap; }
-.sl-chat__permissions:hover { color: var(--sl-fg); }
-.sl-chat__permissions svg { flex: none; }
+.sl-chat__agent-settings { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 5px; border-radius: 6px; color: var(--sl-muted); text-decoration: none; font-size: 12px; white-space: nowrap; }
+.sl-chat__agent-settings:hover { color: var(--sl-fg); }
+.sl-chat__agent-settings svg { flex: none; }
 .sl-chat__attach { display: flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--sl-fg-2); }
 .sl-chat__attach:hover:not(:disabled) { background: var(--sl-hover); color: var(--sl-fg); }
 .sl-chat__attach:disabled { opacity: .45; }
@@ -257,8 +257,8 @@
 }
 @media (max-width: 420px) {
   .sl-chat__compose-left { gap: 4px; }
-  .sl-chat__permissions { padding: 0 4px; }
-  .sl-chat__permissions span { display: none; }
+  .sl-chat__agent-settings { padding: 0 4px; }
+  .sl-chat__agent-settings span { display: none; }
   .sl-chat__compose-right { gap: 6px; }
   .sl-chat__compose-right.without-dictation .sl-model__panel { margin-left: -22px; }
 }

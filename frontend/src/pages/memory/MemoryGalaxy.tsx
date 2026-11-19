@@ -1,10 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { MemoryItem } from '../../api/client'
-import { useThemeState } from '../../theme/store'
-import { domainNames, expiring, status, time } from './model'
+import { AppIcon } from '../../components/AppIcon'
+import { time } from './model'
 
 export type GalaxyCluster = {
   id: string
@@ -19,9 +19,9 @@ export type GalaxyCluster = {
 
 type Props = {
   clusters: GalaxyCluster[]
-  query: string
+  matchingIds: ReadonlySet<number> | null
+  dueIds: ReadonlySet<number>
   focus: string | null
-  attentionOnly: boolean
   onFocus: (id: string | null) => void
   onOpen: (item: MemoryItem) => void
 }
@@ -47,17 +47,10 @@ const AGENT_AVATAR_CY = 370
 
 const WEIGHT_RADIUS = [11.2, 13.0, 14.8, 16.6]
 const MIN_RADIUS = 10.9
-const MAX_ITEMS_PER_CLUSTER = 40
-
-const SL_LIGHT = {
-  bg: '#ffffff', panel: '#ffffff', fg: '#1f2328', muted: '#656d76', line: '#d1d9e0',
-  brand: '#1f883d', info: '#0969da', extra: '#8250df', faint: '#656d76', warn: '#9a6700',
+const PALETTE = {
+  fg: '#ecf1ee', muted: '#9caeaa',
+  brand: '#c8ff8a', info: '#80d8ff', extra: '#cbb2ff', faint: '#a8bcb2', warn: '#f5be69',
 }
-const SL_DARK = {
-  bg: '#101213', panel: '#191c1e', fg: '#e6edf3', muted: '#919c9f', line: '#303638',
-  brand: '#c8ff5f', info: '#58a6ff', extra: '#d2a8ff', faint: '#919c9f', warn: '#d29922',
-}
-type Palette = typeof SL_LIGHT
 
 function hash(n: number) {
   const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453
@@ -105,8 +98,6 @@ function paintAgentCanvas(
   canvas: HTMLCanvasElement,
   cluster: GalaxyCluster,
   color: string,
-  palette: Palette,
-  scheme: string,
   image: HTMLImageElement | null,
 ) {
   const ctx = canvas.getContext('2d')
@@ -120,7 +111,7 @@ function paintAgentCanvas(
 
   /* 外圈光晕。 */
   const halo = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r * 1.55)
-  halo.addColorStop(0, colorRgba(color, scheme === 'dark' ? 0.36 : 0.2))
+  halo.addColorStop(0, colorRgba(color, 0.36))
   halo.addColorStop(1, colorRgba(color, 0))
   ctx.fillStyle = halo
   ctx.beginPath()
@@ -140,7 +131,7 @@ function paintAgentCanvas(
   } else {
     ctx.fillStyle = colorRgba(color, 0.2)
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2)
-    ctx.fillStyle = palette.fg
+    ctx.fillStyle = PALETTE.fg
     ctx.font = `600 ${r * 1.05}px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -155,7 +146,7 @@ function paintAgentCanvas(
   ctx.arc(cx, cy, r - 5, 0, Math.PI * 2)
   ctx.stroke()
   ctx.lineWidth = 4
-  ctx.strokeStyle = scheme === 'dark' ? 'rgba(0,0,0,.55)' : 'rgba(255,255,255,.9)'
+  ctx.strokeStyle = 'rgba(0,0,0,.55)'
   ctx.beginPath()
   ctx.arc(cx, cy, r, 0, Math.PI * 2)
   ctx.stroke()
@@ -171,11 +162,11 @@ function paintAgentCanvas(
     ctx.arc(bx, by, br, 0, Math.PI * 2)
     ctx.fill()
     ctx.lineWidth = 8
-    ctx.strokeStyle = scheme === 'dark' ? '#101213' : '#ffffff'
+    ctx.strokeStyle = '#101719'
     ctx.beginPath()
     ctx.arc(bx, by, br, 0, Math.PI * 2)
     ctx.stroke()
-    ctx.fillStyle = scheme === 'dark' ? '#101213' : '#ffffff'
+    ctx.fillStyle = '#101719'
     ctx.font = '600 42px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -195,20 +186,20 @@ function paintAgentCanvas(
   const pillW = Math.min(maxLabelWidth, textWidth + 64)
   const pillH = 112
   const pillY = 92
-  ctx.fillStyle = scheme === 'dark' ? 'rgba(16, 18, 19, .82)' : 'rgba(255, 255, 255, .9)'
-  ctx.strokeStyle = scheme === 'dark' ? 'rgba(88, 98, 93, .9)' : 'rgba(166, 176, 187, .85)'
+  ctx.fillStyle = 'rgba(15, 23, 25, .92)'
+  ctx.strokeStyle = 'rgba(91, 115, 107, .9)'
   ctx.lineWidth = 3
   ctx.beginPath()
   ctx.roundRect(cx - pillW / 2, pillY - pillH / 2, pillW, pillH, pillH / 2)
   ctx.fill()
   ctx.stroke()
-  ctx.fillStyle = palette.fg
+  ctx.fillStyle = PALETTE.fg
   ctx.fillText(label, cx, pillY + 2)
 }
 
-function makeAgentSprite(cluster: GalaxyCluster, color: string, palette: Palette, scheme: string, avatarWorld: number) {
+function makeAgentSprite(cluster: GalaxyCluster, color: string, avatarWorld: number) {
   const canvas = makeCanvas(AGENT_TEX_W, AGENT_TEX_H)
-  paintAgentCanvas(canvas, cluster, color, palette, scheme, null)
+  paintAgentCanvas(canvas, cluster, color, null)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   texture.minFilter = THREE.LinearFilter
@@ -268,7 +259,7 @@ function makeRingTexture(color: string, alpha: number, inner = 0.74, outer = 0.8
 }
 
 /** 吸积盘纹理：暖色内缘、品牌色中部、蓝色外缘，带旋转亮条纹。 */
-function makeDiskTexture(palette: Palette) {
+function makeDiskTexture() {
   const size = 1024
   const canvas = makeCanvas(size, size)
   const ctx = canvas.getContext('2d')
@@ -282,9 +273,9 @@ function makeDiskTexture(palette: Palette) {
   const fill = ctx.createRadialGradient(0, 0, inner, 0, 0, outer)
   fill.addColorStop(0, 'rgba(8, 10, 12, .62)')
   fill.addColorStop(0.24, 'rgba(14, 16, 18, .45)')
-  fill.addColorStop(0.5, colorRgba(palette.brand, 0.09))
-  fill.addColorStop(0.8, colorRgba(palette.info, 0.055))
-  fill.addColorStop(1, colorRgba(palette.info, 0))
+  fill.addColorStop(0.5, colorRgba(PALETTE.brand, 0.09))
+  fill.addColorStop(0.8, colorRgba(PALETTE.info, 0.055))
+  fill.addColorStop(1, colorRgba(PALETTE.info, 0))
   ctx.fillStyle = fill
   ctx.beginPath()
   ctx.arc(0, 0, outer, 0, Math.PI * 2)
@@ -297,7 +288,7 @@ function makeDiskTexture(palette: Palette) {
   ctx.beginPath()
   ctx.arc(0, 0, inner + 1.5, 0, Math.PI * 2)
   ctx.stroke()
-  ctx.strokeStyle = colorRgba(palette.brand, 0.38)
+  ctx.strokeStyle = colorRgba(PALETTE.brand, 0.38)
   ctx.lineWidth = 12
   ctx.beginPath()
   ctx.arc(0, 0, inner + 10, 0, Math.PI * 2)
@@ -317,7 +308,7 @@ function makeDiskTexture(palette: Palette) {
     const t = i / 89
     const radius = inner + (outer - inner) * t
     const alpha = (0.22 * Math.pow(1 - t, 0.7) + 0.025) * (0.7 + hash(i + 9.1) * 0.6)
-    const color = t < 0.38 ? '#fff0c8' : t < 0.7 ? palette.warn : palette.info
+    const color = t < 0.38 ? '#fff0c8' : t < 0.7 ? PALETTE.warn : PALETTE.info
     ctx.strokeStyle = colorRgba(color, alpha)
     ctx.lineWidth = 1.2 + (1 - t) * 2.6
     ctx.beginPath()
@@ -329,7 +320,7 @@ function makeDiskTexture(palette: Palette) {
     const radius = inner + (outer - inner) * (0.18 + hash(s + 3.3) * 0.68)
     const start = hash(s + 8.8) * Math.PI * 2
     const span = 0.28 + hash(s + 2.2) * 0.55
-    ctx.strokeStyle = colorRgba(s < 3 ? '#fff5dd' : palette.brand, 0.42)
+    ctx.strokeStyle = colorRgba(s < 3 ? '#fff5dd' : PALETTE.brand, 0.42)
     ctx.lineWidth = 3
     ctx.beginPath()
     ctx.arc(0, 0, radius, start, start + span)
@@ -366,7 +357,6 @@ type AgentPlan = {
 type DotPlan = {
   item: MemoryItem
   agentIndex: number
-  clusterId: string
   agentName: string
   color: string
   radius: number
@@ -374,7 +364,6 @@ type DotPlan = {
   speed: number
   tilt: number
   age: number
-  due: boolean
   world: THREE.Vector3
   alpha: number
   index: number
@@ -403,7 +392,6 @@ type Engine = {
   focusRing: THREE.Sprite | null
   disposables: (() => void)[]
   ring: number
-  fitRadius: number
   width: number
   height: number
   userMoved: boolean
@@ -436,24 +424,24 @@ void main() {
   vec2 p = gl_PointCoord - vec2(0.5);
   float d = length(p);
   if (d > 0.5) discard;
-  float edge = smoothstep(0.5, 0.40, d);
+  float edge = 1.0 - smoothstep(0.40, 0.5, d);
   gl_FragColor = vec4(vColor, vAlpha * edge);
+  #include <colorspace_fragment>
 }
 `
 
-export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, onFocus, onOpen }: Props) {
+export default function MemoryGalaxy({ clusters, matchingIds, dueIds, focus, onFocus, onOpen }: Props) {
   const stageRef = useRef<HTMLDivElement>(null)
   const mountRef = useRef<HTMLDivElement>(null)
   const engineRef = useRef<Engine | null>(null)
   const [hover, setHover] = useState<Spot | null>(null)
   const [picked, setPicked] = useState<Spot | null>(null)
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
-  const { scheme } = useThemeState()
-  const schemeRef = useRef(scheme)
-  const queryRef = useRef(query)
+  const [unavailable, setUnavailable] = useState(false)
+  const [paused, setPaused] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const matchingRef = useRef(matchingIds)
   const focusRef = useRef(focus)
-  const attentionRef = useRef(attentionOnly)
-  const reducedRef = useRef(false)
+  const pausedRef = useRef(paused)
   const onOpenRef = useRef(onOpen)
   const onFocusRef = useRef(onFocus)
   const hoverIdRef = useRef<number | null>(null)
@@ -466,26 +454,17 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
   const avatarCache = useRef(new Map<string, HTMLImageElement>())
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const reduced = useMemo(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    [],
-  )
-
   useEffect(() => {
-    schemeRef.current = scheme
-  }, [scheme])
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const sync = (event: MediaQueryListEvent) => setPaused(event.matches)
+    preference.addEventListener('change', sync)
+    return () => preference.removeEventListener('change', sync)
+  }, [])
   useEffect(() => {
-    queryRef.current = query
-  }, [query])
-  useEffect(() => {
+    matchingRef.current = matchingIds
     focusRef.current = focus
-  }, [focus])
-  useEffect(() => {
-    attentionRef.current = attentionOnly
-  }, [attentionOnly])
-  useEffect(() => {
-    reducedRef.current = reduced
-  }, [reduced])
+    pausedRef.current = paused
+  }, [matchingIds, focus, paused])
   useEffect(() => {
     onOpenRef.current = onOpen
     onFocusRef.current = onFocus
@@ -503,18 +482,29 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
     const stage = stageRef.current
     if (!mount || !stage) return
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' })
+    } catch {
+      // oxlint-disable-next-line react/set-state-in-effect -- 画布初始化失败时显示占位。
+      setUnavailable(true)
+      return
+    }
+    const canvas = renderer.domElement
+    const contextLost = () => setUnavailable(true)
+    const contextRestored = () => setUnavailable(false)
+    canvas.addEventListener('webglcontextlost', contextLost)
+    canvas.addEventListener('webglcontextrestored', contextRestored)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     renderer.setClearColor(0x000000, 0)
     renderer.outputColorSpace = THREE.SRGBColorSpace
-    mount.appendChild(renderer.domElement)
-    renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none;'
+    mount.appendChild(canvas)
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 4000)
     const content = new THREE.Group()
     scene.add(content)
-    const controls = new OrbitControls(camera, renderer.domElement)
+    const controls = new OrbitControls(camera, canvas)
     controls.enablePan = false
     controls.enableDamping = true
     controls.dampingFactor = 0.08
@@ -531,7 +521,7 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
       dotPositions: new Float32Array(0), dotColors: new Float32Array(0),
       dotAlphas: new Float32Array(0), dotSizes: new Float32Array(0),
       blackHoleSphere: null, blackHoleDisk: null, blackHoleSpin: null, hoverRing: null, focusRing: null,
-      disposables: [], ring: 34, fitRadius: 40, width: 1, height: 1, userMoved: false,
+      disposables: [], ring: 34, width: 1, height: 1, userMoved: false,
     }
     engineRef.current = engine
 
@@ -558,12 +548,11 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
       frame = requestAnimationFrame(render)
       const dt = Math.min(0.06, Math.max(0, (now - last) / 1000))
       last = now
-      const paused = pressedRef.current || hoverIdRef.current != null || pickedIdRef.current != null
-      if (!reducedRef.current && !paused) orbitClock.current += dt
+      const pointing = pressedRef.current || hoverIdRef.current != null || pickedIdRef.current != null
+      if (!pausedRef.current && !pointing) orbitClock.current += dt
       updateScene(engine, orbitClock.current, {
-        query: queryRef.current,
+        matchingIds: matchingRef.current,
         focus: focusRef.current,
-        attentionOnly: attentionRef.current,
         hoverId: hoverIdRef.current,
         pickedId: pickedIdRef.current,
       })
@@ -574,7 +563,11 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
 
     return () => {
       cancelAnimationFrame(frame)
+      cancelAnimationFrame(hoverFrame.current)
+      hoverFrame.current = 0
       observer.disconnect()
+      canvas.removeEventListener('webglcontextlost', contextLost)
+      canvas.removeEventListener('webglcontextrestored', contextRestored)
       clearContent(engine)
       controls.dispose()
       renderer.dispose()
@@ -587,7 +580,6 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
   useEffect(() => {
     const engine = engineRef.current
     if (!engine) return
-    const palette = scheme === 'dark' ? SL_DARK : SL_LIGHT
     clearContent(engine)
     const ordered = [...clusters].sort((a, b) => {
       const aa = a.isAgent ?? a.id !== 'shared'
@@ -615,10 +607,9 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
     const dotOrbit = avatarWorld * 1.15
     const fitRadius = maxStarRadius + dotOrbit * 1.15 + avatarWorld * 0.6
     engine.ring = ring
-    engine.fitRadius = fitRadius
 
     /* 黑洞。 */
-    buildBlackHole(engine, palette, scheme, ring)
+    buildBlackHole(engine, ring)
 
     /* 真实 3D 的星环轨道线，给中心轨道一个可读的几何参照。 */
     const orbitPoints: THREE.Vector3[] = []
@@ -628,9 +619,9 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
     }
     const orbitGeometry = new THREE.BufferGeometry().setFromPoints(orbitPoints)
     const orbitMaterial = new THREE.LineBasicMaterial({
-      color: new THREE.Color(palette.muted),
+      color: new THREE.Color(PALETTE.muted),
       transparent: true,
-      opacity: scheme === 'dark' ? 0.32 : 0.22,
+      opacity: 0.32,
       depthWrite: false,
       depthTest: true,
       toneMapped: false,
@@ -650,20 +641,20 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
     agents.length = 0
     const addAgent = (cluster: GalaxyCluster, role: 'orbit' | 'star', index: number, fixed: THREE.Vector3 | null) => {
       const color = cluster.id === 'shared'
-        ? palette.muted
-        : [palette.brand, palette.info, palette.extra, palette.warn][index % 4]
-      const { sprite, material, texture, canvas } = makeAgentSprite(cluster, color, palette, scheme, avatarWorld)
+        ? PALETTE.muted
+        : [PALETTE.brand, PALETTE.info, PALETTE.extra, PALETTE.warn][index % 4]
+      const { sprite, material, texture, canvas } = makeAgentSprite(cluster, color, avatarWorld)
       if (cluster.avatar) {
         const cached = avatarCache.current.get(cluster.avatar)
         if (cached) {
-          paintAgentCanvas(canvas, cluster, color, palette, scheme, cached)
+          paintAgentCanvas(canvas, cluster, color, cached)
           texture.needsUpdate = true
         } else {
           const image = new Image()
           image.onload = () => {
             if (!sprite.parent) return
             avatarCache.current.set(cluster.avatar!, image)
-            paintAgentCanvas(canvas, cluster, color, palette, scheme, image)
+            paintAgentCanvas(canvas, cluster, color, image)
             texture.needsUpdate = true
           }
           image.src = cluster.avatar
@@ -707,15 +698,13 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
         const dot: DotPlan = {
           item,
           agentIndex: agents.length - 1,
-          clusterId: cluster.id,
           agentName: cluster.name,
-          color: expiring(item) ? palette.warn : cluster.id === 'shared' ? palette.muted : [palette.brand, palette.info, palette.extra, palette.faint][itemIndex % 4],
+          color: dueIds.has(item.id) ? PALETTE.warn : cluster.id === 'shared' ? PALETTE.muted : [PALETTE.brand, PALETTE.info, PALETTE.extra, PALETTE.faint][itemIndex % 4],
           radius: orbit,
           angle: (itemIndex / Math.max(1, total)) * Math.PI * 2 + (hash(item.id * 3.7 + 1) - 0.5) * 0.9,
           speed: direction * (0.22 + 0.2 * hash(item.id * 7.31)),
           tilt,
           age,
-          due: expiring(item),
           world: new THREE.Vector3(),
           alpha: 1,
           index: dots.length,
@@ -747,6 +736,7 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
     dotGeometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3))
     dotGeometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1))
     dotGeometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
+    dotGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), fitRadius)
     const dotMaterial = new THREE.ShaderMaterial({
       vertexShader: DOT_VERTEX,
       fragmentShader: DOT_FRAGMENT,
@@ -777,7 +767,7 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
     })
 
     /* hover / focus 光圈。 */
-    const hoverTexture = makeRingTexture(palette.fg, 0.85, 0.58, 0.82)
+    const hoverTexture = makeRingTexture(PALETTE.fg, 0.85, 0.58, 0.82)
     const hoverMaterial = new THREE.SpriteMaterial({ map: hoverTexture, transparent: true, depthWrite: false, depthTest: true, toneMapped: false })
     const hoverRing = new THREE.Sprite(hoverMaterial)
     hoverRing.visible = false
@@ -786,7 +776,7 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
     engine.hoverRing = hoverRing
     engine.disposables.push(() => { hoverMaterial.dispose(); hoverTexture.dispose() })
 
-    const focusTexture = makeRingTexture(palette.warn, 0.8, 0.7, 0.86)
+    const focusTexture = makeRingTexture(PALETTE.warn, 0.8, 0.7, 0.86)
     const focusMaterial = new THREE.SpriteMaterial({ map: focusTexture, transparent: true, depthWrite: false, depthTest: true, toneMapped: false })
     const focusRing = new THREE.Sprite(focusMaterial)
     focusRing.visible = false
@@ -806,9 +796,8 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
     if (!engine.userMoved || engine.agents.length === 0) fitCamera(engine)
     // 重建后确保每个点立即有位置，避免第一帧堆在原点。
     updateScene(engine, orbitClock.current, {
-      query: queryRef.current,
+      matchingIds: matchingRef.current,
       focus: focusRef.current,
-      attentionOnly: attentionRef.current,
       hoverId: hoverIdRef.current,
       pickedId: pickedIdRef.current,
     })
@@ -822,7 +811,7 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
         orbitClock,
       }
     }
-  }, [clusters, scheme])
+  }, [clusters, dueIds])
 
   /* 尺寸变化时同步渲染器、相机和相机取景。 */
   useEffect(() => {
@@ -855,10 +844,11 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
     const top = clamp(picked.y - panelHeight / 2, 10, Math.max(10, stage.height - panelHeight - 10))
     panel.style.left = `${left}px`
     panel.style.top = `${top}px`
-  }, [picked])
+  }, [picked, stageSize])
 
   useEffect(() => {
     if (!picked) return
+    panelRef.current?.focus({ preventScroll: true })
     const close = (event: PointerEvent) => {
       if (event.target instanceof Node && panelRef.current?.contains(event.target)) return
       setPicked(null)
@@ -987,41 +977,62 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
       }
     : undefined
 
-  const hiddenAgents = useMemo(() => clusters.filter(c => c.isAgent ?? c.id !== 'shared'), [clusters])
+  function zoom(factor: number) {
+    const engine = engineRef.current
+    if (!engine) return
+    const { camera, controls } = engine
+    const distance = controls.getDistance()
+    const next = clamp(distance * factor, controls.minDistance, controls.maxDistance)
+    camera.position.sub(controls.target).multiplyScalar(next / distance).add(controls.target)
+    engine.userMoved = true
+    controls.update()
+  }
+
+  function resetView() {
+    const engine = engineRef.current
+    if (!engine) return
+    const { controls } = engine
+    controls.enableDamping = false
+    controls.update()
+    engine.userMoved = false
+    fitCamera(engine)
+    controls.enableDamping = true
+  }
 
   return (
     <div
       ref={stageRef}
       className="mem-galaxy-stage mem-galaxy-stage--three"
       role="group"
-      aria-label={`记忆星云：${clusters.length} 个 Agent 星系，共 ${clusters.reduce((n, c) => n + Math.min(c.items.length, MAX_ITEMS_PER_CLUSTER), 0)} 条最新记忆。按住拖动可围绕黑洞旋转视角；点击记忆圆点查看摘要，点击 Agent 头像只看这位 Agent。`}
+      aria-label="记忆星云。拖动旋转，滚轮缩放，点击星点查看记忆。"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerLeave}
       onPointerLeave={onPointerLeave}
     >
-      <div ref={mountRef} className="mem-galaxy-three" />
-      <div className="mem-galaxy-sr" aria-label="Agent 列表">
-        {hiddenAgents.map(cluster => (
-          <button
-            key={cluster.id}
-            type="button"
-            onClick={() => onFocusRef.current(focusRef.current === cluster.id ? null : cluster.id)}
-          >
-            {cluster.name}
-          </button>
-        ))}
-      </div>
-
-      {hover && !picked && tipStyle && (
-        <div className="mem-galaxy-tip" style={tipStyle} aria-hidden="true">
-          <strong>{hover.item.title || hover.item.body.slice(0, 30) || '未命名记忆'}</strong>
-          <span>{hover.agentName} · {status(hover.item)} · 点击查看</span>
+      <div ref={mountRef} className="mem-galaxy-three" aria-hidden="true" />
+      {unavailable ? (
+        <div className="mem-galaxy-stage-message" role="status">
+          <AppIcon name="graph" size={24} />星云图不可用
+        </div>
+      ) : (
+        <div className="mem-galaxy-view-controls" role="group" aria-label="星云视图控制" onPointerDown={event => event.stopPropagation()} onPointerMove={event => event.stopPropagation()}>
+          <button type="button" aria-label="暂停星云动画" aria-pressed={paused} title={paused ? '播放动画' : '暂停动画'} onClick={() => setPaused(value => !value)}><AppIcon name={paused ? 'play' : 'pause'} size={16} /></button>
+          <button type="button" aria-label="缩小星云" title="缩小" onClick={() => zoom(1.25)}><AppIcon name="zoom-out" size={17} /></button>
+          <button type="button" aria-label="放大星云" title="放大" onClick={() => zoom(0.8)}><AppIcon name="zoom-in" size={17} /></button>
+          <button type="button" aria-label="重置星云视角" title="重置视角" onClick={resetView}><AppIcon name="center" size={17} /></button>
         </div>
       )}
 
-      {picked && (
+      {!unavailable && hover && !picked && tipStyle && (
+        <div className="mem-galaxy-tip" style={tipStyle} aria-hidden="true">
+          <strong>{hover.item.title || hover.item.body.slice(0, 30) || '未命名记忆'}</strong>
+          <span>{hover.agentName}</span>
+        </div>
+      )}
+
+      {!unavailable && picked && (
         <div
           ref={panelRef}
           className="mem-galaxy-pop"
@@ -1037,22 +1048,13 @@ export default function MemoryGalaxy({ clusters, query, focus, attentionOnly, on
               {picked.agentName} · 记忆 #{picked.item.id}
             </span>
             <button type="button" className="mem-galaxy-pop-close" onClick={() => setPicked(null)} aria-label="关闭记忆预览">
-              ×
+              <AppIcon name="close" size={16} />
             </button>
           </div>
           <h3>{picked.item.title || '未命名记忆'}</h3>
           <p className="mem-galaxy-pop-body">{picked.item.body}</p>
-          <div className="mem-galaxy-pop-meta">
-            <span>{picked.item.layer ?? '未分类'}</span>
-            <span>{domainNames[picked.item.domain ?? ''] ?? '域未分类'}</span>
-            <span>{status(picked.item)}</span>
-            {expiring(picked.item) && <span className="is-warn">7 天内到期</span>}
-          </div>
-          <p className="mem-galaxy-pop-time">记住于 {time(picked.item.createdAt)}</p>
-          <div className="mem-galaxy-pop-actions">
-            <button type="button" className="mem-galaxy-pop-open" onClick={openDetails}>查看完整记忆 →</button>
-            <button type="button" className="mem-galaxy-pop-dismiss" onClick={() => setPicked(null)}>关闭</button>
-          </div>
+          <p className="mem-galaxy-pop-time">{time(picked.item.createdAt)}{dueIds.has(picked.item.id) && <span> · 即将到期</span>}</p>
+          <button type="button" className="mem-galaxy-pop-open" onClick={openDetails}>查看详情<AppIcon name="arrow-right" size={14} /></button>
         </div>
       )}
     </div>
@@ -1079,7 +1081,7 @@ function clearContent(engine: Engine) {
   engine.focusRing = null
 }
 
-function buildBlackHole(engine: Engine, palette: Palette, scheme: string, ring: number) {
+function buildBlackHole(engine: Engine, ring: number) {
   const scale = clamp(ring / 34, 1, 1.9)
   const horizon = 14 * scale
   const diskOuter = 27 * scale
@@ -1089,9 +1091,9 @@ function buildBlackHole(engine: Engine, palette: Palette, scheme: string, ring: 
 
   /* 大范围暗色背景光晕：真正 3D Sprite，仍参与深度测试，被黑洞球体遮挡。 */
   const haloTexture = makeRadialTexture([
-    [0, colorRgba('#000000', scheme === 'dark' ? 0.56 : 0.32)],
-    [0.42, colorRgba(palette.brand, scheme === 'dark' ? 0.05 : 0.03)],
-    [0.72, colorRgba('#000000', scheme === 'dark' ? 0.08 : 0.055)],
+    [0, colorRgba('#000000', 0.56)],
+    [0.42, colorRgba(PALETTE.brand, 0.05)],
+    [0.72, colorRgba('#000000', 0.08)],
     [1, colorRgba('#000000', 0)],
   ], 512, 1.2)
   const haloMaterial = new THREE.SpriteMaterial({ map: haloTexture, transparent: true, opacity: 0.68, depthWrite: false, depthTest: true, toneMapped: false })
@@ -1102,7 +1104,7 @@ function buildBlackHole(engine: Engine, palette: Palette, scheme: string, ring: 
   engine.disposables.push(() => { haloMaterial.dispose(); haloTexture.dispose() })
 
   /* 吸积盘：真实 XZ 平面上的圆盘，带深度写入，可遮挡后面的 Agent/记忆点。 */
-  const diskTexture = makeDiskTexture(palette)
+  const diskTexture = makeDiskTexture()
   const planeSize = diskOuter * 2 / 0.88
   const diskGeometry = new THREE.PlaneGeometry(planeSize, planeSize)
   const diskMaterial = new THREE.MeshBasicMaterial({
@@ -1135,7 +1137,7 @@ function buildBlackHole(engine: Engine, palette: Palette, scheme: string, ring: 
   engine.disposables.push(() => { sphereGeometry.dispose(); sphereMaterial.dispose() })
 
   /* 引力透镜光环。 */
-  const lensTexture = makeRingTexture(palette.brand, 0.42, 0.69, 0.83)
+  const lensTexture = makeRingTexture(PALETTE.brand, 0.42, 0.69, 0.83)
   const lensMaterial = new THREE.SpriteMaterial({ map: lensTexture, transparent: true, opacity: 0.52, depthWrite: false, depthTest: true, toneMapped: false })
   const lens = new THREE.Sprite(lensMaterial)
   lens.scale.setScalar(horizon * 2.9)
@@ -1156,27 +1158,20 @@ function agentOpacity(agent: AgentPlan, focusId: string | null) {
   return focusId && focusId !== agent.cluster.id ? 0.36 : 1
 }
 
-function dotAlpha(dot: DotPlan, query: string, focusId: string | null, attentionOnly: boolean) {
-  let alpha = 0.3 + 0.65 * (1 - dot.age)
-  if (query) {
-    const hitText = `${dot.item.title ?? ''} ${dot.item.body} ${dot.agentName}`.toLowerCase()
-    alpha = hitText.includes(query) ? 0.98 : 0.06
-  }
-  if (attentionOnly && !dot.due) alpha = 0.05
-  if (focusId && focusId !== dot.clusterId) alpha = Math.min(alpha, 0.05)
-  return alpha
+function dotAlpha(dot: DotPlan, matchingIds: ReadonlySet<number> | null) {
+  if (matchingIds) return matchingIds.has(dot.item.id) ? 0.98 : 0.06
+  return 0.3 + 0.65 * (1 - dot.age)
 }
 
 type RuntimeState = {
-  query: string
+  matchingIds: ReadonlySet<number> | null
   focus: string | null
-  attentionOnly: boolean
   hoverId: number | null
   pickedId: number | null
 }
 
 function updateScene(engine: Engine, clock: number, runtime: RuntimeState) {
-  const { query, focus, attentionOnly } = runtime
+  const { matchingIds, focus } = runtime
 
   /* 中心轨道 Agent 共享角速度；外围星星坐标固定。 */
   for (const agent of engine.agents) {
@@ -1202,7 +1197,7 @@ function updateScene(engine: Engine, clock: number, runtime: RuntimeState) {
     const y = Math.sin(theta) * dot.radius * Math.sin(dot.tilt)
     const z = Math.sin(theta) * dot.radius * Math.cos(dot.tilt)
     dot.world.set(agent.world.x + x, agent.world.y + y, agent.world.z + z)
-    const alpha = dotAlpha(dot, query, focus, attentionOnly)
+    const alpha = dotAlpha(dot, matchingIds)
     dot.alpha = alpha
     engine.dotPositions[index * 3] = dot.world.x
     engine.dotPositions[index * 3 + 1] = dot.world.y
@@ -1279,9 +1274,9 @@ function pickAt(engine: Engine, clientX: number, clientY: number): PickResult | 
   /* 记忆点画在头像层之上，优先命中点，避免透明头像包围盒把点抢走。 */
   if (engine.points) {
     engine.raycaster.params.Points.threshold = Math.max(1.1, engine.ring * 0.055)
-    const hit = engine.raycaster.intersectObject(engine.points, false)[0]
-    if (hit && hit.index != null && hit.distance < limit) {
-      const dot = engine.dots[hit.index]
+    for (const hit of engine.raycaster.intersectObject(engine.points, false)) {
+      if (hit.distance >= limit) break
+      const dot = hit.index == null ? undefined : engine.dots[hit.index]
       if (dot && dot.alpha >= 0.12) {
         return { kind: 'dot', dot, screenX: clientX - rect.left, screenY: clientY - rect.top }
       }

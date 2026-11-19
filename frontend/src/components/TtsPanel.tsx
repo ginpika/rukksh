@@ -21,7 +21,7 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : '操作失败，请检查配置和网络'
 }
 
-export default function TtsPanel({ agentId }: { agentId?: string }) {
+export default function TtsPanel({ agentId, embedded = false }: { agentId?: string; embedded?: boolean }) {
   const kit = usePageKit()
   const [view, setView] = useState<View>({ endpoints: [], profiles: [], defaultProfileId: null })
   const [selected, setSelected] = useState('')
@@ -58,12 +58,12 @@ export default function TtsPanel({ agentId }: { agentId?: string }) {
   }
   function edit(p: TtsProfile) { setDraft(p); setJson(JSON.stringify(p.parameters, null, 2)) }
   const profileOptions = [{ value: '', label: agentId ? '使用默认档案' : '未选择' }, ...view.profiles.map(p => ({ value: p.id, label: p.name }))]
-  return <kit.Panel title={agentId ? '语音配置' : 'Text To Speech · Fish Audio'}>
+  const content = <>
     <Toast message={toast?.message ?? null} kind={toast?.kind} onClose={() => setToast(null)} />
-    <p className="mb-3 text-sm text-muted">{agentId ? '留空时使用默认 TTS 档案；未配置任何档案时不启用语音。' : 'API 端点保存地址和 Key；语音档案引用端点，独立保存合成模型、语音模型 ID 和参数。'}</p>
+    {!embedded && <p className="mb-3 text-sm text-muted">{agentId ? '留空时使用默认 TTS 档案；未配置任何档案时不启用语音。' : 'API 端点保存地址和 Key；语音档案引用端点，独立保存合成模型、语音模型 ID 和参数。'}</p>}
     <div className="flex flex-wrap items-center gap-2">
-      <div className="min-w-48 flex-1"><Select label={agentId ? 'Agent TTS 档案' : '默认 TTS 档案'} disabled={busy || !loaded} value={selected} onChange={setSelected} options={profileOptions} searchable /></div>
-      <button className={miniBtn} disabled={busy || !loaded || (!agentId && !selected)} onClick={() => void run(async () => {
+      <div className="min-w-0 flex-[1_1_12rem]"><Select label={agentId ? 'Agent TTS 档案' : '默认 TTS 档案'} disabled={busy || !loaded} value={selected} onChange={setSelected} options={profileOptions} searchable /></div>
+      <button className={embedded ? 'ad-btn ad-btn--primary' : miniBtn} disabled={busy || !loaded || (!agentId && !selected)} onClick={() => void run(async () => {
         const path = agentId ? '/api/agents/' + encodeURIComponent(agentId) + '/tts' : '/api/settings/tts/default'
         await requestJson(path, { method: 'PUT', body: JSON.stringify({ profileId: selected || null }) })
       })}>保存{agentId ? '选择' : '默认'}</button>
@@ -123,5 +123,12 @@ export default function TtsPanel({ agentId }: { agentId?: string }) {
         </form>
       </FloatWindow>}
     </>}
-  </kit.Panel>
+  </>
+  return embedded ? (
+    <section className="ad-section">
+      <div className="ad-section-head"><h3>合成档案</h3></div>
+      {content}
+      {loaded && !view.defaultProfileId && <p className="ad-hint">系统尚未设置默认档案。选择具体档案后可启用语音。</p>}
+    </section>
+  ) : <kit.Panel title={agentId ? '语音配置' : 'Text To Speech · Fish Audio'}>{content}</kit.Panel>
 }
