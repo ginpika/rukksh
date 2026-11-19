@@ -15,6 +15,30 @@
 .deepseek-balance-total { display: block; font-size: 1.5rem; line-height: 1.4; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .deepseek-balance-breakdown { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
 .deepseek-balance-meta { margin-top: .5rem; font-size: .8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.deepseek-balance-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 9px;
+  font-size: .8125rem;
+}
+.deepseek-balance-summary > svg { align-self: flex-start; flex: none; margin-top: 2px; color: var(--c-muted); }
+.deepseek-balance-summary__content {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 6px;
+  min-width: 0;
+}
+.deepseek-balance-summary__amount {
+  margin-left: auto;
+  color: var(--c-muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.deepseek-balance-summary__amount > span { display: block; }
 @media (max-width: 640px) {
   .deepseek-balance { font-size: 1rem; }
   .deepseek-balance button { font-size: 1rem; }

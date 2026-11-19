@@ -436,18 +436,15 @@
   border-color: transparent;
 }
 
-/* Toast 铭牌换装（Endfield）：浅档 = 纯白底 + 黑左缘 + 印刷硬偏移影（--ui-e1）；
-   深档 = 炭底 #1C1B1D + 点缀色左缘与轻微光晕描边（--ui-e2，罗德岛档自动换蓝晕）。
-   无层规则压制 utilities 层的 bg-bg/95 / border-l-* / shadow-lg（同区惯例） */
+/* Toast 铭牌换装（Endfield）：浅档为纯白底与黑色左缘，深档为炭底与点缀色左缘。
+   无层规则覆盖 utilities 层的 bg-bg/95 / border-l-*。 */
 [data-theme='endfield'] .toast-card {
   background: #fff;
   border-left-color: #0a0b0c;
-  box-shadow: var(--ui-e1);
 }
 [data-theme='endfield'][data-scheme='dark'] .toast-card {
   background: #1c1b1d;
   border-left-color: var(--c-accent);
-  box-shadow: var(--ui-e2);
 }
 
 /* ---------------------------------------------------- Mono 交互态补丁 */

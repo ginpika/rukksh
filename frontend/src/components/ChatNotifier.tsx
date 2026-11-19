@@ -1,7 +1,10 @@
 import { AppIcon } from './AppIcon'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { listSessions, type SessionItem } from '../api/client'
+import { listMaPeers, listSessions } from '../api/client'
+import { CORE_AGENT_ID } from '../api/agentRuntime'
+import { BRAND } from '../branding'
 import { getActiveChatSession, onChatSettled } from './chatLive'
+import PeerAvatar from './PeerAvatar'
 import { subscribeSessionEvents } from './sessionEvents'
 
 /**
@@ -46,27 +49,15 @@ export function requestOpenSession(id: string): void {
 
 /* ---------- 通知气泡 ---------- */
 
-/** 提醒缘由：answered=大模型答完了 | delivered=会话被投递了新消息（潜意识子代理） */
-type NoticeKind = 'answered' | 'delivered'
-
-/** 一条待展示的通知 */
-type Notice = {
-  /** 会话 id（去重键，也是点击跳转的目标） */
-  id: string
-  /** 会话标题（未命名时由调用方兜底） */
-  title: string
-  kind: NoticeKind
-}
+/** id 为会话 id，用于去重和点击跳转。 */
+type Notice =
+  | { id: string; kind: 'answered'; name: string; avatar: string | null }
+  | { id: string; kind: 'delivered'; title: string }
 
 /** 同屏最多挂几条气泡，超出丢弃最旧的（避免连环投递时糊满左上角） */
 const MAX_NOTICES = 3
 /** 单条气泡停留时长（毫秒）：到点自动收起，点击 / 关闭可提前 */
 const NOTICE_TTL_MS = 12000
-
-const KIND_LABEL: Record<NoticeKind, string> = {
-  answered: '大模型已应答',
-  delivered: '会话有新消息',
-}
 
 /**
  * 单条气泡：淡入左滑入场，到点或点关闭按钮自行退场。
@@ -82,6 +73,7 @@ function NoticeCard({
   onClose: (id: string) => void
 }) {
   const [shown, setShown] = useState(false)
+  const answered = notice.kind === 'answered'
   const closeRef = useRef(onClose)
   closeRef.current = onClose
 
@@ -105,24 +97,32 @@ function NoticeCard({
         type="button"
         onClick={() => onOpen(notice)}
         title="点击前往会话"
-        className="flex w-72 cursor-pointer items-start gap-2.5 rounded-xl border border-line border-l-4 border-l-accent bg-bg/95 py-3 pl-3.5 pr-8 text-left shadow-lg backdrop-blur-md transition hover:border-line-strong"
+        className={`flex w-72 cursor-pointer gap-2.5 rounded-xl border border-line border-l-4 border-l-accent bg-bg/95 py-3 pl-3.5 pr-8 text-left shadow-lg backdrop-blur-md transition hover:border-line-strong ${answered ? 'items-center' : 'items-start'}`}
       >
-        <AppIcon name="chat" className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-        <span className="min-w-0 flex-1">
-          <span className="block text-2xs font-medium uppercase tracking-[0.18em] text-faint">
-            {KIND_LABEL[notice.kind]}
-          </span>
-          <span className="mt-1 block truncate text-base font-semibold text-fg">
-            {notice.title}
-          </span>
-          <span className="mt-0.5 block text-xs text-accent">点击前往会话</span>
-        </span>
+        {answered ? (
+          <>
+            <span aria-hidden="true" className="flex shrink-0">
+              <PeerAvatar name={notice.name} avatar={notice.avatar} size="h-8 w-8" />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{notice.name}</span>
+            <span className="shrink-0 text-xs font-medium text-muted">已应答</span>
+          </>
+        ) : (
+          <>
+            <AppIcon name="chat" className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-2xs font-medium uppercase tracking-[0.18em] text-faint">会话有新消息</span>
+              <span className="mt-1 block truncate text-base font-semibold text-fg">{notice.title}</span>
+              <span className="mt-0.5 block text-xs text-accent">点击前往会话</span>
+            </span>
+          </>
+        )}
       </button>
       <button
         type="button"
         onClick={() => onClose(notice.id)}
         aria-label="关闭通知"
-        className="absolute right-1.5 top-1.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md text-hint transition hover:bg-fg/[0.06] hover:text-fg"
+        className={`absolute right-1.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-md text-hint transition hover:bg-fg/[0.06] hover:text-fg ${answered ? 'top-1/2 -translate-y-1/2' : 'top-1.5'}`}
       >
         <AppIcon name="close" className="h-3 w-3" />
       </button>
@@ -137,39 +137,49 @@ export default function ChatNotifier() {
   const [notices, setNotices] = useState<Notice[]>([])
 
   /** 弹一条气泡；同一会话已有气泡挂在屏上就不重复弹 */
-  const pushNotice = useCallback((id: string, kind: NoticeKind, title: string) => {
+  const pushNotice = useCallback((notice: Notice) => {
     setNotices((cur) =>
-      cur.some((n) => n.id === id) ? cur : [{ id, title, kind }, ...cur].slice(0, MAX_NOTICES),
+      cur.some((n) => n.id === notice.id) ? cur : [notice, ...cur].slice(0, MAX_NOTICES),
     )
   }, [])
 
-  /* 来源一：本标签页的生成收尾（运行时仓当场推来，见 chatLive.onChatSettled）。
-     正在看那条会话时不打扰——输出就在眼前 */
-  useEffect(
-    () =>
-      onChatSettled((sessionId) => {
-        if (sessionId === getActiveChatSession()) return
-        /* 标题现取一次：会话标题是首条提问攒出来的，可能刚写进去，本地缓存还来不及更新 */
-        void listSessions()
-          .catch(() => [] as SessionItem[])
-          .then((list) => {
-            pushNotice(sessionId, 'answered', list.find((s) => s.id === sessionId)?.title || '未命名会话')
-          })
-      }),
-    [pushNotice],
-  )
+  useEffect(() => {
+    let subscribed = true
+    const resolving = new Set<string>()
+    const notifyAnswered = async (id: string) => {
+      if (id === getActiveChatSession() || resolving.has(id)) return
+      resolving.add(id)
+      const [sessions, peers] = await Promise.all([
+        listSessions().catch(() => []),
+        listMaPeers().catch(() => []),
+      ])
+      resolving.delete(id)
+      if (!subscribed || id === getActiveChatSession()) return
+      const session = sessions.find((item) => item.id === id)
+      const agentId = session ? session.agentId || CORE_AGENT_ID : null
+      const agent = peers.find((peer) => peer.id === agentId)
+      const builtin = agentId === CORE_AGENT_ID
+      pushNotice({
+        id,
+        kind: 'answered',
+        name: agent?.name || (builtin ? BRAND.name : 'Agent'),
+        avatar: agent?.avatar || (builtin ? '/icon-64x64.png' : null),
+      })
+    }
 
-  /* 来源二：会话事件推送（STEP 4，取代原来每 5 秒轮询会话列表的 unread）。
-     子代理结论投回、或某会话在别处答完，经 SSE 即时到达——正在看的那条不打扰（输出就在眼前） */
-  useEffect(
-    () =>
-      subscribeSessionEvents((e) => {
-        if (e.kind !== 'delivered' && e.kind !== 'answered') return
-        if (e.sessionId === getActiveChatSession()) return
-        pushNotice(e.sessionId, e.kind, e.title || '未命名会话')
-      }),
-    [pushNotice],
-  )
+    const stopSettled = onChatSettled(notifyAnswered)
+    const stopEvents = subscribeSessionEvents((e) => {
+      if (e.kind === 'answered') void notifyAnswered(e.sessionId)
+      if (e.kind === 'delivered' && e.sessionId !== getActiveChatSession()) {
+        pushNotice({ id: e.sessionId, kind: 'delivered', title: e.title || '未命名会话' })
+      }
+    })
+    return () => {
+      subscribed = false
+      stopSettled()
+      stopEvents()
+    }
+  }, [pushNotice])
 
   const dismiss = useCallback((id: string) => {
     setNotices((cur) => cur.filter((n) => n.id !== id))

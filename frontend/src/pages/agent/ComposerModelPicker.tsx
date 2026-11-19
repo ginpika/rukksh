@@ -76,16 +76,24 @@ export default function ComposerModelPicker({ models, value, inheritedLabel, inh
   }
   useEffect(() => {
     if (!visible) return
+    let pointerDownInside = false
     const onPointer = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false)
+      pointerDownInside = Boolean(root.current?.contains(event.target as Node))
+      if (!pointerDownInside) setOpen(false)
     }
+    const onPointerEnd = () => { pointerDownInside = false }
     const onFocus = (event: FocusEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false)
+      // WebKit can focus an ancestor when pressing a native range control.
+      if (!pointerDownInside && !root.current?.contains(event.target as Node)) setOpen(false)
     }
     document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('pointerup', onPointerEnd)
+    document.addEventListener('pointercancel', onPointerEnd)
     document.addEventListener('focusin', onFocus)
     return () => {
       document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('pointerup', onPointerEnd)
+      document.removeEventListener('pointercancel', onPointerEnd)
       document.removeEventListener('focusin', onFocus)
     }
   }, [visible])

@@ -26,7 +26,7 @@ function acquireDock() {
  * 子树内的 position:fixed 会被那个祖先劫持成 containing block——通知条于是跟着 DOM 卡在
  * 内容区里、既不在视口正中也可能被裁。portal 之后 fixed 恒以浏览器视口为参照，
  * 且脱离 main 的 z-20 叠层，直接压在 z-30 顶栏之上，无需再按外壳挪基准。
- * 终末地换装（.toast-card 白底黑缘 / 炭底点缀色光晕）在 shell.css 补丁区。
+ * 终末地的卡片底色与左缘颜色在 shell.css 补丁区。
  */
 export type ToastKind = 'success' | 'error'
 
@@ -91,7 +91,7 @@ export default function Toast({
         onMouseLeave={() => setHovered(false)}
         onFocusCapture={() => setFocused(true)}
         onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false) }}
-        className={`toast-card toast-card--${kind} pointer-events-auto flex w-max max-w-full shrink-0 items-center gap-2.5 rounded-lg border border-line border-l-4 bg-bg/95 px-4 py-3 shadow-lg backdrop-blur-md transition-all duration-300 ${
+        className={`toast-card toast-card--${kind} pointer-events-auto flex w-max max-w-full shrink-0 items-center gap-2.5 rounded-lg border border-line border-l-4 bg-bg/95 px-4 py-3 backdrop-blur-md transition-all duration-300 ${
           kind === 'error' ? 'border-l-danger' : 'border-l-ok'
         } ${shown ? 'translate-y-0 opacity-100' : '-translate-y-3 opacity-0'}${appearance ? ` ${appearance}` : ''}`}
       >

@@ -12,6 +12,7 @@ import { LoadState } from '../components/LoadState'
 import { PortalAppearanceContext } from '../components/portalAppearance'
 import { Select } from '../components/Select'
 import { Button } from '../components/ui'
+import { replacePageHash } from '../shell/pageHistory'
 import { codingHref } from './coding/navigation'
 import DailyEffort from './todo/DailyEffort'
 import DayNoteForm from './todo/DayNoteForm'
@@ -130,7 +131,7 @@ export default function Todos() {
     if (window.location.hash === href) return
     if (detailId) {
       if (openedDetail.current === window.location.hash) openedDetail.current = href
-      window.location.replace(href)
+      replacePageHash(href)
     } else {
       openedDetail.current = href
       window.location.hash = href
@@ -139,7 +140,7 @@ export default function Todos() {
   const closeDetail = () => {
     if (busy) return
     if (openedDetail.current === window.location.hash) window.history.back()
-    else window.location.replace(workTasksHref(project))
+    else replacePageHash(workTasksHref(project))
   }
   const openCreate = () => {
     if (detailId) closeDetail()

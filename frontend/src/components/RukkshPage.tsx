@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, type MouseEventHandler, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { BRAND } from '../branding'
-import { AppIcon } from './AppIcon'
+import PageBackLink from './PageBackLink'
 import { RukkshAppearanceButton } from './RukkshAppearance'
 import './rukkshPage.css'
 
@@ -8,7 +8,7 @@ export default function RukkshPage({ title, backHref, backLabel, onBack, classNa
   title: string
   backHref: string
   backLabel: string
-  onBack?: MouseEventHandler<HTMLAnchorElement>
+  onBack?: (href: string) => void
   className?: string
   children: ReactNode
 }) {
@@ -23,9 +23,7 @@ export default function RukkshPage({ title, backHref, backLabel, onBack, classNa
   return (
     <div className={className ? `sl-page rukksh-surface ${className}` : 'sl-page rukksh-surface'}>
       <header className="sl-page__header" data-tauri-drag-region>
-        <a className="sl-page__back" href={backHref} aria-label={backLabel} title={backLabel} onClick={onBack}>
-          <AppIcon name="arrow-left" size={18} />
-        </a>
+        <PageBackLink className="sl-page__back" backHref={backHref} backLabel={backLabel} onBack={onBack} />
         <h1 id={titleId} ref={headingRef} tabIndex={-1} data-tauri-drag-region>{title}</h1>
         <RukkshAppearanceButton />
       </header>

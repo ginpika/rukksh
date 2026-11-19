@@ -1,6 +1,6 @@
 /** The everyday Rukksh surface. Existing specialist tools live in Dashboard. */
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type SetStateAction } from 'react'
-import { createPortal } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import { ArrowDown, Check, ChevronDown, Copy, History, MessageSquare, PanelLeftOpen, Paperclip, PenLine, Plus, Search, X } from 'lucide-react'
 import { ApiError, createSession, getSettings, listMaPeers, listSessions, sessionMessages, sessionPreviews, updateSessionConfig, type MaPeer, type ReasoningEffort, type SessionItem, type SessionMessage, type SettingsView } from '../../api/client'
 import { CORE_AGENT_ID, isCodingAgent, sortAgentPeers } from '../../api/agentRuntime'
@@ -20,6 +20,7 @@ import { BRAND } from '../../branding'
 import AgentSidebar, { type AgentPreview } from './AgentSidebar'
 import ChatAttachmentPreviews, { AttachmentLabel } from './ChatAttachmentPreviews'
 import ComposerActivity from './ComposerActivity'
+import ComposerEmojiPicker from './ComposerEmojiPicker'
 import ComposerModelPicker from './ComposerModelPicker'
 import HomeSearch from './HomeSearch'
 import { useDictation } from './useDictation'
@@ -84,7 +85,10 @@ function canExpandBubble(event: ReactMouseEvent<HTMLElement>): boolean {
 
 /** 全屏阅读层在历史栈里那一格的标记：手机返回手势先消费这一格，不会直接退出页面。 */
 const READER_HISTORY_KEY = 'rukkshAgentReader'
-export default function AgentHome({ connErr, userSlot }: { connErr?: string | null; userSlot?: ReactNode }) {
+export default function AgentHome({ connErr, userSlot }: {
+  connErr?: string | null
+  userSlot?: (settings: SettingsView | null | undefined) => ReactNode
+}) {
   const { slogan, randomize: randomizeSlogan } = useWelcomeSlogan()
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const [peers, setPeers] = useState<MaPeer[]>([])
@@ -546,6 +550,17 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
     setAttachmentDrafts(current => writeAttachmentDraft(current, draftKey, next))
   }
 
+  const insertEmoji = (emoji: string) => {
+    const input = taRef.current
+    if (!input || input.disabled) return
+    const { value, selectionStart, selectionEnd } = input
+    const position = selectionStart + emoji.length
+    // Update the controlled input before restoring the caret in the same tap.
+    flushSync(() => setText(value.slice(0, selectionStart) + emoji + value.slice(selectionEnd)))
+    input.focus({ preventScroll: true })
+    input.setSelectionRange(position, position)
+  }
+
   const view = useMemo(() => live ? mergeLiveChat(msgs, live) : msgs, [live, msgs])
   const empty = !loading && !messageError && view.length === 0
   const latestTurn = view.findLastIndex(m => !isBackgroundReply(m))
@@ -573,6 +588,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
   const currentAgent = selectedAgentId ? peers.find(peer => peer.id === selectedAgentId) : mainAgent
   const peersById = useMemo(() => new Map(peers.map(peer => [peer.id, peer])), [peers])
   const agentName = currentAgent?.name || (selectedAgentId ? 'Agent' : BRAND.name)
+  const composerDisabled = loading || messageError
   const composerPlaceholder = dictation.listening ? '正在听你说…' : uploadingAttachments ? '正在接收附件…'
     : busy ? '继续提问或调整当前任务…' : `和 ${agentName} 一起工作`
   const agentAvatar = currentAgent?.avatar || (!selectedAgentId ? '/icon-64x64.png' : null)
@@ -625,7 +641,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
       <aside className="sl-chat__side" id="rukksh-history" ref={sideRef} inert={!sidebarOpen || reader !== null} aria-label="Agent 导航" role={narrow && sidebarOpen ? 'dialog' : undefined} aria-modal={narrow && sidebarOpen ? true : undefined}>
         <AgentSidebar mainAgent={mainAgent} agents={peers.filter(peer => peer.id !== CORE_AGENT_ID)}
           selectedAgentId={selectedAgentId} previews={agentPreviews} loading={peersLoading} error={peersError}
-          disabled={creating} narrow={narrow} searchOpen={searchOpen} userSlot={userSlot} onSelectAgent={selectAgent}
+          disabled={creating} narrow={narrow} searchOpen={searchOpen} userSlot={userSlot?.(settings ?? (settingsLoading ? undefined : null))} onSelectAgent={selectAgent}
           onOpenSearch={() => { setHistoryOpen(false); setSearchOpen(true) }}
           onReload={reloadPeers} onClose={closeSidebar} />
       </aside>
@@ -712,7 +728,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
                   if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229 && !narrow) {
                     event.preventDefault(); void sendText(text, files)
                   }
-                }} placeholder={composerPlaceholder} aria-label={`给 ${agentName} 发消息`} disabled={loading || messageError} />
+                }} placeholder={composerPlaceholder} aria-label={`给 ${agentName} 发消息`} disabled={composerDisabled} />
               <div className="sl-chat__composerbar">
                 <div className="sl-chat__compose-left">
                   <input ref={fileRef} type="file" accept={chatAttachmentAccept} multiple hidden
@@ -720,6 +736,7 @@ export default function AgentHome({ connErr, userSlot }: { connErr?: string | nu
                   <button type="button" className="sl-chat__attach" aria-label="添加附件"
                     title={`添加附件（${chatAttachmentFormats}）`} disabled={busy || creating || loading || messageError || files.length >= chatAttachmentMaxFiles}
                     onClick={() => fileRef.current?.click()}><Paperclip size={17} aria-hidden="true" /></button>
+                  <ComposerEmojiPicker key={composerDisabled ? 'disabled' : draftKey} disabled={composerDisabled} onSelect={insertEmoji} />
                   <a className="sl-chat__agent-settings" href={`#/multi-agent/${encodeURIComponent(selectedAgentId ?? CORE_AGENT_ID)}`} title="打开当前智能体设置" aria-label="智能体设置">
                     <AppIcon name="settings" size={15} /><span>智能体设置</span>
                   </a>

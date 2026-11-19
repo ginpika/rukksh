@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { LogOut } from 'lucide-react'
+import { ArrowLeftToLine, Settings as SettingsIcon } from 'lucide-react'
 import { loginUrlOf, logout, me, type SsoUser } from './api/client'
 import { isDesktopShell, backToLauncher, openDesktopHome } from './api/desktop'
 import AgentHome from './pages/agent/AgentHome'
+import SidebarDeepSeekBalance from './pages/agent/SidebarDeepSeekBalance'
 import AgentConversation from './pages/agent/AgentConversation'
 import ContextDebug from './pages/ContextDebug'
 import Dashboard from './pages/Dashboard'
@@ -87,6 +88,7 @@ function UserMenu({
   placement = 'down',
   withName = false,
   variant = 'plain',
+  balance,
 }: {
   user: SsoUser
   onLogout: () => void
@@ -101,6 +103,7 @@ function UserMenu({
    * plain = 外壳自己的用户按钮（跟随主题）；sidebar = 对话首页侧边栏
    */
   variant?: UserMenuVariant
+  balance?: ReactNode
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -127,11 +130,12 @@ function UserMenu({
   const initial = name ? name[0].toUpperCase() : '?'
   const chip = variant === 'chip'
   const sidebar = variant === 'sidebar'
-  const renderAvatar = (size: string) =>
+  const renderAvatar = (size: string, alt = name) =>
     user.avatarUrl ? (
-      <img src={user.avatarUrl} alt={name} className={`${size} shrink-0 rounded-full object-cover`} />
+      <img src={user.avatarUrl} alt={alt} className={`${size} shrink-0 rounded-full object-cover`} />
     ) : (
       <span
+        aria-hidden={alt === '' || undefined}
         className={`${size} flex shrink-0 items-center justify-center rounded-full bg-fg/10 font-semibold text-fg`}
       >
         {initial}
@@ -184,35 +188,57 @@ function UserMenu({
           </span>
         )}
       </button>
-      {open && (
+      {open && (sidebar ? (
+        <div id={panelId} className="sl-agents__account-panel">
+          <div className="sl-agents__account-identity">
+            {renderAvatar('h-8 w-8', '')}
+            <span>{name}</span>
+          </div>
+          {balance}
+          <hr className="sl-agents__account-divider" />
+          <a href="#/settings" className="sl-agents__account-action" onClick={() => onOpenChange(false)}>
+            <SettingsIcon size={15} aria-hidden="true" />
+            设置
+          </a>
+          {isDesktopShell() && (
+            <button type="button" className="sl-agents__account-action" onClick={() => {
+              onOpenChange(false)
+              openDesktopHome()
+            }}>
+              <ArrowLeftToLine size={15} aria-hidden="true" />
+              返回标题
+            </button>
+          )}
+        </div>
+      ) : (
         <div
           id={panelId}
-          className={sidebar ? 'sl-agents__account-panel' : `ui-card ui-surface menu-pop z-[60] ${
+          className={`ui-card ui-surface menu-pop z-[60] ${
             placement === 'up'
               ? 'absolute inset-x-0 bottom-[calc(100%+10px)]'
               : 'absolute right-0 top-[calc(100%+10px)] w-64'
           }`}
         >
-          <div className={sidebar ? 'text-left' : 'ui-card__in p-4 text-left'}>
-            <div className={sidebar ? 'sl-agents__account-identity' : 'flex items-center gap-3'}>
-              {renderAvatar(sidebar ? 'h-8 w-8' : 'h-11 w-11')}
+          <div className="ui-card__in p-4 text-left">
+            <div className="flex items-center gap-3">
+              {renderAvatar('h-11 w-11')}
               <div className="min-w-0 flex-1">
-                <p className={sidebar ? 'truncate text-sm font-semibold' : 'ui-heading truncate text-base'}>{name}</p>
+                <p className="ui-heading truncate text-base">{name}</p>
                 {user.username && (
                   <p className="truncate text-xs text-faint">@{user.username}</p>
                 )}
               </div>
               {roleLabel && (
                 <span
-                  className={sidebar ? 'sl-agents__account-role' : 'shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-bold'}
-                  style={sidebar ? undefined : { background: 'var(--c-accent-soft)', color: 'var(--c-accent)' }}
+                  className="shrink-0 rounded-full px-2.5 py-0.5 text-2xs font-bold"
+                  style={{ background: 'var(--c-accent-soft)', color: 'var(--c-accent)' }}
                 >
                   {roleLabel}
                 </span>
               )}
             </div>
 
-            <dl className={sidebar ? 'sl-agents__account-details' : 'mt-3 space-y-1 border-t border-line pt-3 text-xs'}>
+            <dl className="mt-3 space-y-1 border-t border-line pt-3 text-xs">
               {user.email && <InfoRow label="邮箱" value={user.email} />}
               {user.id && <InfoRow label="用户 ID" value={user.id} />}
             </dl>
@@ -224,15 +250,14 @@ function UserMenu({
                   onOpenChange(false)
                   onLogout()
                 }}
-                className={sidebar ? 'sl-agents__account-logout' : btnOutline('mt-3 w-full')}
+                className={btnOutline('mt-3 w-full')}
               >
-                {sidebar && <LogOut size={15} aria-hidden="true" />}
                 登出
               </button>
             )}
           </div>
         </div>
-      )}
+      ))}
     </div>
   )
 }
@@ -332,16 +357,14 @@ function App() {
       <ShellIcon name="home" />
     </button>
   )
-  const renderUser = (slot: { placement: 'up' | 'down'; withName: boolean }, variant?: UserMenuVariant) =>
+  const renderUser = (slot: { placement: 'up' | 'down'; withName: boolean; variant?: UserMenuVariant; balance?: ReactNode }) =>
     user ? (
       <UserMenu
         user={user}
         onLogout={handleLogout}
         open={userOpen}
         onOpenChange={setUserOpen}
-        placement={slot.placement}
-        withName={slot.withName}
-        variant={variant}
+        {...slot}
       />
     ) : null
 
@@ -349,7 +372,9 @@ function App() {
   let standalone: ReactNode = null
   switch (route) {
     case '/':
-      standalone = <AgentHome connErr={connErr} userSlot={renderUser({ placement: 'up', withName: false }, 'sidebar')} />
+      standalone = <AgentHome connErr={connErr} userSlot={settings => renderUser({
+        placement: 'up', withName: false, variant: 'sidebar', balance: <SidebarDeepSeekBalance settings={settings} />,
+      })} />
       break
     case '/dashboard':
       standalone = <Dashboard />
@@ -585,7 +610,7 @@ function App() {
           activePath={activePathOf(route)}
           toolsSlot={hideChrome ? themePanel : null}
           homeSlot={homeButton}
-          userSlot={renderUser({ placement: 'down', withName: true }, 'chip')}
+          userSlot={renderUser({ placement: 'down', withName: true, variant: 'chip' })}
         >
           {shell}
         </DesktopFrame>

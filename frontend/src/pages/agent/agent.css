@@ -178,7 +178,7 @@
   .sl-chat__activity { transition: none; }
   .sl-chat__activity-dots > span { animation: none; }
 }
-.sl-chat__composer { display: flex; flex-direction: column; min-height: 98px; padding: 14px 8px 8px 12px; border: 1px solid var(--sl-composer-line); border-radius: 22px; background: var(--sl-composer-bg); transition: border-color 150ms ease; }
+.sl-chat__composer { position: relative; display: flex; flex-direction: column; min-height: 98px; padding: 14px 8px 8px 12px; border: 1px solid var(--sl-composer-line); border-radius: 22px; background: var(--sl-composer-bg); transition: border-color 150ms ease; }
 .sl-chat__composer:focus-within { border-color: var(--sl-composer-focus); }
 .sl-chat__composer textarea { display: block; width: 100%; min-height: 40px; max-height: 180px; padding: 0; border: 0; border-radius: 0; outline: none !important; background: transparent; color: var(--sl-fg); font-size: 15px; line-height: 1.6; resize: none; }
 .sl-chat__composer textarea::placeholder { color: var(--sl-muted); opacity: 1; }
@@ -189,9 +189,24 @@
 .sl-chat__agent-settings { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 5px; border-radius: 6px; color: var(--sl-muted); text-decoration: none; font-size: 12px; white-space: nowrap; }
 .sl-chat__agent-settings:hover { color: var(--sl-fg); }
 .sl-chat__agent-settings svg { flex: none; }
-.sl-chat__attach { display: flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--sl-fg-2); }
-.sl-chat__attach:hover:not(:disabled) { background: var(--sl-hover); color: var(--sl-fg); }
-.sl-chat__attach:disabled { opacity: .45; }
+:is(.sl-chat__attach, .sl-emoji__trigger) { display: flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--sl-fg-2); }
+:is(.sl-chat__attach, .sl-emoji__trigger):hover:not(:disabled), .sl-emoji__trigger[aria-expanded='true'] { background: var(--sl-hover); color: var(--sl-fg); }
+:is(.sl-chat__attach, .sl-emoji__trigger):disabled { opacity: .45; }
+.sl-emoji__panel { position: absolute; z-index: 25; bottom: calc(100% + 8px); inset-inline-start: 12px; display: flex; flex-direction: column; gap: 6px; width: min(336px, calc(100% - 24px)); height: min(322px, 40dvh); padding: 8px; border: 1px solid var(--sl-line); border-radius: 14px; outline: none; background: var(--sl-panel); box-shadow: 0 4px 18px #0000001a; }
+.sl-emoji__toolbar { display: flex; flex: none; align-items: center; gap: 7px; min-height: 34px; color: var(--sl-fg-2); font-size: 12px; }
+.sl-emoji__search { display: flex; flex: 1; align-items: center; gap: 5px; min-width: 0; height: 34px; padding: 0 6px; border: 1px solid var(--sl-line); border-radius: 7px; color: var(--sl-muted); }
+.sl-emoji__search > svg { flex: none; }
+.sl-emoji__search:focus-within { border-color: var(--sl-focus-line); }
+.sl-emoji__search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; color: var(--sl-fg); }
+.sl-emoji__toolbar select { flex: none; max-width: 50%; height: 34px; padding: 0 2px 0 5px; border: 1px solid var(--sl-line); border-radius: 7px; background: var(--sl-panel); color: var(--sl-fg-2); font-size: inherit; }
+.sl-emoji__back { display: grid; flex: none; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--sl-fg-2); }
+.sl-emoji__back:hover { background: var(--sl-hover); }
+.sl-emoji__grid { display: grid; flex: 1 1 auto; grid-template-columns: repeat(6, minmax(0, 1fr)); align-content: start; gap: 3px; min-height: 0; padding: 3px; overflow-y: auto; overscroll-behavior: contain; }
+.sl-emoji__option { position: relative; display: grid; place-items: center; min-height: 40px; padding: 0; border: 0; border-radius: 7px; background: transparent; font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', emoji, sans-serif; font-size: 23px; line-height: 1; }
+.sl-emoji__option[data-variants]::after { position: absolute; right: 3px; bottom: 3px; width: 5px; height: 5px; background: var(--sl-muted); clip-path: polygon(100% 0, 100% 100%, 0 100%); content: ''; }
+.sl-emoji__option:hover, .sl-emoji__option:focus-visible { background: var(--sl-hover); }
+.sl-emoji__status { display: flex; align-items: center; gap: 8px; padding: 10px 4px; color: var(--sl-muted); font-size: 12px; }
+.sl-emoji__status button { padding: 0; border: 0; background: transparent; color: var(--sl-link); }
 .sl-chat__attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
 .sl-chat__attachment { display: flex; min-width: 0; max-width: 100%; align-items: center; gap: 6px; padding: 4px 7px; border: 1px solid var(--sl-line); border-radius: 6px; background: var(--sl-panel); color: var(--sl-fg-2); font-size: 12px; line-height: 1.5; }
 .sl-chat__attachment > svg { flex: none; color: var(--sl-muted); }
@@ -243,6 +258,7 @@
   .sl-chat__composearea { padding: 8px 14px max(14px, env(safe-area-inset-bottom)); }
   .is-welcome .sl-chat__composearea { padding-right: 20px; padding-left: 20px; }
   .sl-chat__composer textarea { font-size: 16px; line-height: 1.6; }
+  .sl-emoji__search input, .sl-emoji__toolbar select { font-size: 16px; }
   .sl-chat__thread { padding: 16px 19px 20px; }
   .sl-chat__answer { font-size: 16px; line-height: 1.8; }
   .sl-chat__bubble { font-size: 16px; }

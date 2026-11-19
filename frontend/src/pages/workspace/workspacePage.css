@@ -388,8 +388,12 @@
   border-color: var(--ws-border);
   border-radius: 8px;
   background: var(--ws-surface);
-  box-shadow: 0 8px 24px rgb(0 0 0 / .18);
   backdrop-filter: none;
+}
+
+.workspace-popover.ui-float-window,
+.workspace-popover:has(> [role='listbox']) {
+  box-shadow: 0 8px 24px rgb(0 0 0 / .18);
 }
 
 .workspace-popover.ui-float-window > :first-child { background: var(--ws-subtle); }

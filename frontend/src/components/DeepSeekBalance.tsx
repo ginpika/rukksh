@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import { Wallet } from 'lucide-react'
 import { ApiError, loginUrlOf, requestJson } from '../api/client'
 import type { DeepSeekBalance as BalanceView } from '../api/deepseekBalance'
 import { btnQuiet } from './ui'
 import './deepseekBalance.css'
 
 /** Only saved settings are queried. A new settings revision discards the previous account's view. */
-export default function DeepSeekBalance({ path, revision }: { path: string; revision: object }) {
+export default function DeepSeekBalance({ path, revision, compact = false }: { path: string; revision: object; compact?: boolean }) {
   const [state, setState] = useState<{ revision: object; path: string; view: BalanceView | null; loading: boolean; error: string | null }>(
     () => ({ revision, path, view: null, loading: true, error: null }),
   )
@@ -49,6 +50,21 @@ export default function DeepSeekBalance({ path, revision }: { path: string; revi
 
   const failure = error || view?.error
   const stale = !!failure && view?.checkedAt != null
+  if (compact) {
+    if (view?.status === 'unsupported' || view?.status === 'unconfigured') return null
+    return <section className="deepseek-balance-summary" aria-label="DeepSeek 余额" aria-busy={loading}>
+      <Wallet size={15} aria-hidden="true" />
+      <div className="deepseek-balance-summary__content">
+        <span>DeepSeek 余额</span>
+        <span className="deepseek-balance-summary__amount" role="status" title={failure || undefined}>
+          {view?.balances.length ? <>
+            {stale && <span>上次余额</span>}
+            {view.balances.map((balance, index) => <span key={`${balance.currency}:${index}`}>{balance.currency} {balance.totalBalance}</span>)}
+          </> : failure ? '查询失败' : loading ? '查询中…' : '暂无数据'}
+        </span>
+      </div>
+    </section>
+  }
   return <section className="deepseek-balance" aria-label="DeepSeek 官方账户余额" aria-busy={loading}>
     <div className="deepseek-balance-heading">
       <span className="font-semibold">DeepSeek 官方账户余额</span>

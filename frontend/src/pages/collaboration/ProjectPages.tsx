@@ -3,6 +3,7 @@ import { createProject, updateProject, type MaPeer, type MaSession, type Project
 import { saveCollaborationMembers } from '../../api/collaboration'
 import { AppIcon } from '../../components/AppIcon'
 import PeerAvatar from '../../components/PeerAvatar'
+import { replacePageHash } from '../../shell/pageHistory'
 import CollaborationDialog from './CollaborationDialog'
 import ProjectWorkspaceDialog from './ProjectWorkspaceDialog'
 import ProjectWorkspaceStatus from './ProjectWorkspaceStatus'
@@ -84,7 +85,7 @@ export default function ProjectPages({ projectId, projects, sessions, peers, con
     const [path, query = ''] = window.location.hash.split('?')
     const params = new URLSearchParams(query)
     params.set('section', tab)
-    window.history.replaceState(null, '', `${path}?${params}`)
+    replacePageHash(`${path}?${params}`)
   }
   useEffect(() => {
     const syncTab = () => {
@@ -101,7 +102,7 @@ export default function ProjectPages({ projectId, projects, sessions, peers, con
     const params = new URLSearchParams(query)
     if (params.get('project') !== projectId || params.get('configure') !== 'workspace') return
     params.delete('configure')
-    window.history.replaceState(null, '', `${path}?${params}`)
+    replacePageHash(`${path}?${params}`)
   }
   return (
     <div className="collab-project-page scrollbar-slim">

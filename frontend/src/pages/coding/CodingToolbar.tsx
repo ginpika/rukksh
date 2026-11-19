@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { AppIcon } from '../../components/AppIcon'
+import PageBackLink from '../../components/PageBackLink'
 import { RukkshAppearanceButton } from '../../components/RukkshAppearance'
 
 export default function CodingToolbar({ children, actions, onChooseProject, projectTabId, backHref = '#/dashboard', backLabel = '返回 Dashboard' }: {
@@ -17,9 +18,7 @@ export default function CodingToolbar({ children, actions, onChooseProject, proj
 
   return (
     <header className="coding-toolbar" data-tauri-drag-region>
-      <a className="coding-toolbar-icon" href={backHref} aria-label={backLabel} title={backLabel}>
-        <AppIcon name="arrow-left" size={18} />
-      </a>
+      <PageBackLink className="coding-toolbar-icon" backHref={backHref} backLabel={backLabel} />
       <h1 ref={heading} tabIndex={-1} data-tauri-drag-region>AI IDE</h1>
       {onChooseProject && (
         <button type="button" className="coding-switch-project" aria-controls={projectTabId}

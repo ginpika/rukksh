@@ -62,6 +62,7 @@ import { PageKitProvider, usePageKit } from '../kit'
 import { flatKit } from '../kit/flat'
 import FloatWindow from '../components/FloatWindow'
 import ProjectDialog from '../components/ProjectDialog'
+import { replacePageHash } from '../shell/pageHistory'
 import ProjectGraph from './collaboration/ProjectGraph'
 import ProjectPages from './collaboration/ProjectPages'
 import CollaborationDialog from './collaboration/CollaborationDialog'
@@ -467,7 +468,10 @@ function RoundtableBoard({
   useEffect(() => {
     if (sessionsLoading || !/^#\/(workflow|roundtable)(\?|$)/.test(window.location.hash)) return
     const latest = rootSessions[0]
-    if (latest && !location.taskId) window.location.hash = collaborationHref({ projectId: latest.projectId || '', taskId: latest.id, issueId: null }) + (window.location.hash.split('?')[0] === '#/workflow' ? '&view=graph' : '')
+    if (latest && !location.taskId) {
+      const href = collaborationHref({ projectId: latest.projectId || '', taskId: latest.id, issueId: null })
+      replacePageHash(`#${href}${window.location.hash.split('?')[0] === '#/workflow' ? '&view=graph' : ''}`)
+    }
   }, [sessionsLoading, rootSessions, location, initialView])
 
   useEffect(() => {

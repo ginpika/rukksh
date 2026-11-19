@@ -120,11 +120,11 @@ const auditContrast=async()=>{
   });assert.deepEqual(failures,[]);checks++
 }
 const leaveResearch=async()=>{
-  await page.getByRole('link',{name:'返回经济',exact:true}).click()
-  await page.getByRole('heading',{name:'经济',exact:true,level:1}).waitFor()
+  await page.getByRole('link',{name:'返回上一页',exact:true}).click()
+  await page.getByRole('heading',{name:'观测数据库',exact:true,level:1}).waitFor()
 }
 const returnResearch=async()=>{
-  await page.evaluate(()=>location.hash='/economy/research')
+  await page.goForward()
   await page.getByRole('heading',{name:'隔夜策略工作台',exact:true}).waitFor()
   await page.waitForFunction(()=>document.querySelector('[role="tab"][aria-selected="true"]')?.textContent==='已打开窗口')
 }
@@ -215,7 +215,7 @@ try{
   Object.assign(reportFixture,originalReport);await page.reload();await decisionReport.getByText('是，尾盘买入',{exact:true}).waitFor()
   assert.equal(listRequests.length,0,'the workbench must not load the database list');checks++
   await page.getByRole('link',{name:'观测数据库',exact:true}).click();await page.getByRole('heading',{name:'观测数据库',exact:true}).waitFor()
-  assert.equal(await page.getByRole('link',{name:'返回经济',exact:true}).getAttribute('href'),'#/economy')
+  assert.equal(await page.getByRole('link',{name:'返回上一页',exact:true}).getAttribute('href'),'#/economy/research')
   assert.equal(await page.locator('header').count(),1);assert.equal(await page.locator('footer').count(),0)
   assert.ok(page.url().endsWith('#/economy/database'));assert.equal(await page.getByRole('application').count(),0);checks++
   await page.reload();await page.getByRole('heading',{name:'观测数据库',exact:true}).waitFor();await page.getByText(/共 26 轮观测/).waitFor();checks++

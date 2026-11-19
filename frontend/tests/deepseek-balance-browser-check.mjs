@@ -12,19 +12,22 @@ const require = createRequire(path.join(process.env.RUKKSH_PLAYWRIGHT_DIR || fro
 const { chromium } = require('playwright')
 const html = await fs.readFile(path.join(dist, 'index.html'), 'utf8')
 const requests = [], errors = [], checks = []
-let mode = 'ready', timestamp = Date.now(), total = '110.0012'
+let mode = 'ready', timestamp = Date.now(), total = '110.0012', defaultModelId = 'env'
 const models = [
   { id: 'env', name: 'DeepSeek 官方', baseUrl: 'https://api.deepseek.com/v1/', apiKey: 'fixture-model-key', model: 'deepseek-flash', contextWindow: 262144, builtin: true },
   { id: 'gateway', name: 'DeepSeek 中转', baseUrl: 'https://gateway.example/v1', apiKey: 'fixture-gateway-key', model: 'deepseek-flash', contextWindow: 262144, builtin: false },
   { id: 'missing', name: '尚未配置密钥', baseUrl: 'https://api.deepseek.com', apiKey: '', model: 'deepseek-flash', contextWindow: 262144, builtin: false },
 ]
 const web = { baseUrl: 'https://api.deepseek.com', hasApiKey: true, fastEnabled: false, ragEnabled: false, fetchEnabled: true, count: 5, timeoutSeconds: 15 }
-const settings = () => ({ models, defaultModelId: 'env', embedding: { mode: 'llm', model: '' }, rerank: { mode: 'off', model: '' } })
+const settings = () => ({ models, defaultModelId, embedding: { mode: 'llm', model: '' }, rerank: { mode: 'off', model: '' } })
 function balance(url) {
   if (url.includes('/missing/')) return { status: 'unconfigured', available: null, balances: [], checkedAt: null, attemptedAt: null, error: '请先保存 API Key' }
   const search = url.includes('deepseek-web')
   return { status: mode === 'stale' || mode === 'auth' ? 'error' : 'ready', available: mode !== 'empty',
-    balances: mode === 'auth' ? [] : [{ currency: 'CNY', totalBalance: search ? '22.50' : mode === 'empty' ? '0.0000' : total, grantedBalance: '10.0012', toppedUpBalance: '100.00' }],
+    balances: mode === 'auth' ? [] : [
+      { currency: 'CNY', totalBalance: search ? '22.50' : mode === 'empty' ? '0.0000' : total, grantedBalance: '10.0012', toppedUpBalance: '100.00' },
+      ...(mode === 'multi' ? [{ currency: 'USD', totalBalance: '1.0234', grantedBalance: '0', toppedUpBalance: '1.0234' }] : []),
+    ],
     checkedAt: mode === 'auth' ? null : timestamp, attemptedAt: Date.now(),
     error: mode === 'stale' ? 'DeepSeek 余额查询 HTTP 429：请求过于频繁，请稍后刷新' : mode === 'auth' ? 'DeepSeek 余额查询 HTTP 401：API Key 无效，请检查已保存配置' : null }
 }
@@ -43,14 +46,19 @@ await context.route('**/*', async route => {
   if (url.origin !== 'http://balance.test') { await route.abort(); return }
   if (!url.pathname.startsWith('/api/')) {
     if (url.pathname === '/') { await route.fulfill({ contentType: 'text/html', body: html }); return }
+    if (url.pathname === '/__rukksh_desktop_home') {
+      await route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<!doctype html><h1>引导页</h1>' }); return
+    }
     const file = path.resolve(dist, '.' + url.pathname)
     if (!file.startsWith(dist + path.sep)) { await route.abort(); return }
     try { await route.fulfill({ path: file }) } catch { await route.fulfill({ status: 404, body: '' }) }
     return
   }
   requests.push({ path: url.pathname, query: url.search, method: request.method(), body: request.postData() })
-  if (url.pathname === '/api/auth/me') { await route.fulfill({ json: { id: 'fixture', username: 'fixture', nickname: '测试用户', role: 'user' } }); return }
-  if (url.pathname.endsWith('/events')) { await route.fulfill({ contentType: 'text/event-stream', body: '' }); return }
+  if (url.pathname === '/api/auth/me') { await route.fulfill({ json: { id: 'fixture', username: 'fixture', nickname: '测试用户', role: 'user', avatarUrl: '/icon-64x64.png' } }); return }
+  if (url.pathname === '/api/events/stream' || url.pathname.endsWith('/events')) {
+    await route.fulfill({ contentType: 'text/event-stream', body: '' }); return
+  }
   if (url.pathname === '/api/settings') { await route.fulfill({ json: settings() }); return }
   if (url.pathname === '/api/settings/models' && request.method() === 'POST') {
     models.push({ ...request.postDataJSON(), id: 'new', builtin: false }); await route.fulfill({ json: settings() }); return
@@ -155,6 +163,75 @@ try {
   await page.clock.fastForward(60_000)
   assert.equal(queried().length, beforeNavigation)
   checks.push('polling stops after leaving settings')
+
+  const accountTrigger = page.getByRole('button', { name: '用户', exact: true })
+  const accountPanel = page.locator('.sl-agents__account-panel')
+  const summary = accountPanel.getByRole('region', { name: 'DeepSeek 余额' })
+  const beforeMenu = queried().length
+  mode = 'multi'; defaultModelId = 'new'
+  await page.goto('http://balance.test/#/')
+  await accountTrigger.click()
+  await summary.getByText('CNY 109.9912', { exact: true }).waitFor()
+  await summary.getByText('USD 1.0234', { exact: true }).waitFor()
+  assert.deepEqual(queried().slice(beforeMenu).map(r => r.path), ['/api/settings/models/new/balance'])
+  assert.deepEqual(await accountPanel.locator(':scope > *').evaluateAll(nodes => nodes.map(node => node.tagName)), ['DIV', 'SECTION', 'HR', 'A'])
+  await accountPanel.getByText('测试用户', { exact: true }).waitFor()
+  assert.equal(await accountPanel.locator('img').getAttribute('src'), '/icon-64x64.png')
+  await accountPanel.getByRole('link', { name: '设置' }).focus()
+  await page.keyboard.press('Escape')
+  assert.equal(await accountPanel.count(), 0)
+  assert.equal(await accountTrigger.evaluate(el => document.activeElement === el), true)
+  const beforeClosed = queried().length
+  await page.clock.fastForward(60_000)
+  assert.equal(queried().length, beforeClosed)
+  await accountTrigger.click()
+  await accountPanel.getByRole('link', { name: '设置' }).click()
+  await page.waitForURL('**/#/settings')
+  await page.locator('[data-page="settings"]').waitFor()
+  checks.push('homepage balance uses the official default model; exact multi-currency totals; keyboard dismissal; no polling while closed; settings navigation')
+
+  await page.addInitScript(() => { window.__TAURI_INTERNALS__ = {} })
+  mode = 'ready'; defaultModelId = 'gateway'
+  await page.goto('http://balance.test/#/')
+  await page.reload()
+  const beforeAlternate = queried().length
+  await accountTrigger.click()
+  await summary.getByText('CNY 109.9912', { exact: true }).waitFor()
+  assert.deepEqual(queried().slice(beforeAlternate).map(r => r.path), ['/api/settings/models/env/balance'])
+
+  models.splice(0, models.length, ...models.filter(model => model.id === 'gateway' || model.id === 'missing'))
+  await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('rukksh.theme.v4'))
+    localStorage.setItem('rukksh.theme.v4', JSON.stringify({ ...state, schemeMode: 'dark' }))
+  })
+  await page.reload()
+  const beforeSearch = queried().length
+  await accountTrigger.click()
+  await summary.getByText('CNY 22.50', { exact: true }).waitFor()
+  assert.deepEqual(queried().slice(beforeSearch).map(r => r.path), ['/api/settings/deepseek-web/balance'])
+  await accountPanel.screenshot({ path: path.join(output, 'home-account-menu.png') })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: '展开 Agent 列表' }).click()
+  await accountTrigger.click()
+  await summary.getByText('CNY 22.50', { exact: true }).waitFor()
+  const bounds = await accountPanel.boundingBox()
+  assert.ok(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 390 && bounds.y + bounds.height <= 844)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+
+  web.hasApiKey = false
+  await page.reload()
+  const beforeUnconfigured = queried().length
+  const searchSettings = page.waitForResponse(response => new URL(response.url()).pathname === '/api/settings/deepseek-web')
+  await accountTrigger.click()
+  await searchSettings
+  assert.equal(await summary.count(), 0)
+  await accountPanel.getByRole('button', { name: '返回标题' }).click()
+  await page.waitForURL('**/__rukksh_desktop_home')
+  await page.getByRole('heading', { name: '引导页' }).waitFor()
+  assert.equal(queried().length, beforeUnconfigured)
+  assert.equal(requests.some(request => request.path === '/api/auth/logout'), false)
+  checks.push('homepage official model and Search / Fetch fallbacks; unconfigured balance hidden; desktop launcher navigation preserves the session')
   assert.deepEqual(errors, [])
   await fs.writeFile(path.join(output, 'report.json'), JSON.stringify({ checks, balanceRequests: queried().length, errors }, null, 2))
   console.log(JSON.stringify({ ok: true, checks: checks.length, output }))
