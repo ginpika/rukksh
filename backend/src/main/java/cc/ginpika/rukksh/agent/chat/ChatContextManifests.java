@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore;
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore.HubRow;
 import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
@@ -15,9 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.StreamSupport;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /** 单聊试点的进程内诊断记录。只留出站请求的结构和引用，最多 500 条、24 小时。 */
 @Service
@@ -64,10 +64,10 @@ public class ChatContextManifests {
 
     public List<Manifest> recent(String sessionId, String actorId, Long turnId, int limit) {
         if (actorId == null || actorId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
+            throw new DomainException(DomainException.ErrorKind.UNAUTHORIZED, "请先登录");
         }
         HubRow row = sessions.findById(sessionId).filter(session -> "ai".equals(session.mode()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "单聊会话不存在"));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "单聊会话不存在"));
         int resultLimit = Math.clamp(limit, 1, 100);
         List<Manifest> candidates = candidates(row, actorId, turnId);
         Map<Long, Boolean> present = new HashMap<>();

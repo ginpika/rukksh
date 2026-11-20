@@ -1,5 +1,9 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableWorkRunStore;
 import cc.ginpika.rukksh.agent.chat.dto.ChatDtos;
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.member.AgentDtos;
@@ -35,6 +39,7 @@ import org.springframework.stereotype.Service;
 public class RoundtableWorkflowService {
 
     private final RoundtableChatService chat;
+    private final RoundtableSessionService sessionService;
     private final AgentDirectory directory;
     private final RoundtableTodoStore taskBoard;
     private final TopicStateMachine machine;
@@ -44,12 +49,15 @@ public class RoundtableWorkflowService {
     private final List<AgentActivitySource> activitySources;
     private final RoundtableActivity timeline;
 
-    public RoundtableWorkflowService(RoundtableChatService chat, AgentDirectory directory,
+    public RoundtableWorkflowService(RoundtableChatService chat,
+                                     RoundtableSessionService sessionService,
+                                     AgentDirectory directory,
                                      RoundtableTodoStore taskBoard, TopicStateMachine machine,
                                      RoundtableWorkRuntime workRuntime,
                                      RoundtableWorkRunStore workRuns, ObjectMapper om,
                                      List<AgentActivitySource> activitySources, RoundtableActivity timeline) {
         this.chat = chat;
+        this.sessionService = sessionService;
         this.directory = directory;
         this.taskBoard = taskBoard;
         this.machine = machine;
@@ -194,7 +202,7 @@ public class RoundtableWorkflowService {
 
     public AgentDtos.WorkflowView overview(String owner) {
         List<RoundtableTodoStore.TodoRow> board = new ArrayList<>();
-        List<AgentDtos.SessionView> sessions = chat.sessions();
+        List<AgentDtos.SessionView> sessions = sessionService.sessions();
         for (AgentDtos.SessionView s : sessions) {
             board.addAll(taskBoard.list(s.id()));
         }
@@ -261,7 +269,7 @@ public class RoundtableWorkflowService {
 
     /** 取会话：给了 id 按 id 取，否则取最近建的一个 */
     private AgentDtos.SessionView pick(String sessionId) {
-        List<AgentDtos.SessionView> all = chat.sessions();
+        List<AgentDtos.SessionView> all = sessionService.sessions();
         if (all.isEmpty()) {
             return null;
         }

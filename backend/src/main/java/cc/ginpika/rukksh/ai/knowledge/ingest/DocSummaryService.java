@@ -2,7 +2,7 @@ package cc.ginpika.rukksh.ai.knowledge.ingest;
 
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient.ChatMessage;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.core.prompt.block.DocSummaryBlock;
 import cc.ginpika.rukksh.stats.TokenUsageService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,10 +31,10 @@ public class DocSummaryService {
             Set.of(TYPE_TECHNICAL, TYPE_NARRATIVE, TYPE_CONVERSATIONAL);
 
     private final OpenAiChatClient chat;
-    private final PromptManager prompts;
+    private final PromptService prompts;
     private final ObjectMapper om = new ObjectMapper();
 
-    public DocSummaryService(OpenAiChatClient chat, PromptManager prompts) {
+    public DocSummaryService(OpenAiChatClient chat, PromptService prompts) {
         this.chat = chat;
         this.prompts = prompts;
     }

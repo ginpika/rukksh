@@ -88,10 +88,4 @@ public class EventController {
             return null;
         }
     }
-
-    /** 客户端断开导致写流失败：常态（切页 / 关标签），静默收尾即可，不打 ERROR 刷屏（同 ChatController） */
-    @ExceptionHandler(IOException.class)
-    public void clientGone(IOException e) {
-        log.debug("事件流客户端已断开：{}", e.getMessage());
-    }
 }

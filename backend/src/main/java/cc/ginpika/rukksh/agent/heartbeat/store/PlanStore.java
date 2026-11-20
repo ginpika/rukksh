@@ -1,6 +1,5 @@
 package cc.ginpika.rukksh.agent.heartbeat.store;
 
-import cc.ginpika.rukksh.agent.runtime.ExecStore;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
@@ -12,7 +11,7 @@ import org.springframework.stereotype.Repository;
  * 后台运行层的「编制」持久化：heartbeat（每个 Agent 一行的心跳）/ heartbeat_plan（某 Agent 的常驻职责名册）。
  *
  * <p>编制是长期状态：心跳逐 Agent 各一行（{@code agent_id} 主键），职责是一份逐 Agent 隔离的名册。
- * 谁跑了一次、跑得怎么样，不在这一层——那属于 {@link ExecStore}（heartbeat_run / task / changeset_item）。
+ * 谁跑了一次、跑得怎么样，不在这一层——那属于 {@code ExecStore}（heartbeat_run / task / changeset_item）。
  *
  * <p>素材不再靠「注入器」声明式注入：心跳与职责的正文只写正文，需要什么就自己调工具现取
  * （everything in tools &amp; bash）。故本层不再有 {@code injectors} 列。

@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.web.controller;
 
-import cc.ginpika.rukksh.config.DeepSeekBalanceService;
+import cc.ginpika.rukksh.ai.llm.DeepSeekBalanceService;
 import cc.ginpika.rukksh.config.DeepSeekWebSettings;
 import cc.ginpika.rukksh.config.SettingsService;
 import org.springframework.http.CacheControl;

@@ -1,13 +1,16 @@
 package cc.ginpika.rukksh.coding;
 
 import cc.ginpika.rukksh.ai.computer.terminal.ExecTarget;
-import cc.ginpika.rukksh.coding.api.*;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.CodingService;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.runner.CodingTerminals;
 import cc.ginpika.rukksh.coding.workspace.WorkspaceProjects;
 import cc.ginpika.rukksh.config.*;
+import cc.ginpika.rukksh.web.config.WebConfig;
+import cc.ginpika.rukksh.web.controller.CodingTerminalController;
 import cc.ginpika.rukksh.web.desktop.DesktopTokenFilter;
 import cc.ginpika.rukksh.web.sso.*;
+import cc.ginpika.rukksh.web.terminal.*;
 import com.fasterxml.jackson.databind.*;
 import java.io.*;
 import java.net.*;
@@ -39,7 +42,7 @@ class CodingTerminalWebSocketTest {
         static final List<Shell> shells=new CopyOnWriteArrayList<>();
         @Bean DesktopProps desktop(){var props=new DesktopProps();props.setEnabled(true);props.setLocalToken("fixture-token");return props;}
         @Bean SsoInterceptor sso(DesktopProps desktop,ObjectMapper json){var service=mock(SsoService.class);when(service.isEnabled()).thenReturn(false);return new SsoInterceptor(new SsoProps(),desktop,service,json);}
-        @Bean CodingFacade coding(){var coding=mock(CodingFacade.class);when(coding.capabilities()).thenReturn(new Capabilities(true,false,"",60,30,"workspace"));return coding;}
+        @Bean CodingService coding(){var coding=mock(CodingService.class);when(coding.capabilities()).thenReturn(new Capabilities(true,false,"",60,30,"workspace"));return coding;}
         @Bean cc.ginpika.rukksh.coding.engine.CodingSubagents subagents(){return mock(cc.ginpika.rukksh.coding.engine.CodingSubagents.class);}
         @Bean cc.ginpika.rukksh.coding.engine.CodingRoles roles(){return mock(cc.ginpika.rukksh.coding.engine.CodingRoles.class);}
         @Bean WorkspaceProjects projects() throws Exception {

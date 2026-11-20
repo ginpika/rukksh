@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.dto.ChatDtos;
 import cc.ginpika.rukksh.agent.context.ContextBuilder;
 import cc.ginpika.rukksh.agent.context.ContextFragment;
@@ -11,10 +13,10 @@ import cc.ginpika.rukksh.ai.core.AgentScope;
 import cc.ginpika.rukksh.ai.core.MemoryIdentity;
 import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.ai.core.tool.ToolDomain;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
 import cc.ginpika.rukksh.ai.core.tool.chat.RequestTodoCompletionTool;
-import cc.ginpika.rukksh.agent.chat.turn.History;
+import cc.ginpika.rukksh.agent.chat.turn.ChatHistoryProvider;
 import cc.ginpika.rukksh.agent.chat.turn.Turn;
 import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
 import cc.ginpika.rukksh.config.ContextProps;
@@ -35,9 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /** 组装单聊上下文及 Turn 预览；实际出站请求另有逐尝试记录。 */
 @Service
@@ -57,11 +57,11 @@ public class ChatContextService {
     private final ObjectMapper om;
     private final SettingsService settings;
     private final AgentPromptService peerPrompts;
-    private final ToolManager tools;
+    private final ToolRegistry tools;
     private final ProjectStore projects;
     private final ContextBuilder context;
     private final ContextProps contextProps;
-    private final History history;
+    private final ChatHistoryProvider history;
     private final ChatContextSources sources;
     private final TurnStore turnStore;
     private final ChatScenes scenes;
@@ -78,11 +78,11 @@ public class ChatContextService {
             ObjectMapper om,
             SettingsService settings,
             AgentPromptService peerPrompts,
-            ToolManager tools,
+            ToolRegistry tools,
             ProjectStore projects,
             ContextBuilder context,
             ContextProps contextProps,
-            History history,
+            ChatHistoryProvider history,
             ChatContextSources sources,
             TurnStore turnStore,
             ChatScenes scenes) {
@@ -103,7 +103,7 @@ public class ChatContextService {
 
     public ChatDtos.RawContext rawContext(String hubId) {
         HubRow row = sessions.findById(hubId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在: " + hubId));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "会话不存在: " + hubId));
         String modelId=modelIdFor(row.agentId(),row.modelId());
         ModelTarget target = settings.resolveChatModel(modelId);
         int window = settings.chatContextWindow(modelId);
@@ -131,14 +131,14 @@ public class ChatContextService {
 
     private List<ChatDtos.TurnSpan> turnSpans(ObjectNode body, ContextRequest req) {
         ArrayNode msgs = (ArrayNode) body.get("messages");
-        List<History.TurnMessages> groups = history.turnMessages(req);
+        List<ChatHistoryProvider.TurnMessages> groups = history.turnMessages(req);
         int total = 0;
-        for (History.TurnMessages g : groups) {
+        for (ChatHistoryProvider.TurnMessages g : groups) {
             total += g.messages().size();
         }
         int cursor = msgs.size() - total; // 跳过前置的 system（由 ContextBuilder 首条挂上）
         List<ChatDtos.TurnSpan> spans = new ArrayList<>();
-        for (History.TurnMessages g : groups) {
+        for (ChatHistoryProvider.TurnMessages g : groups) {
             int from = cursor;
             int to = from + g.messages().size();
             Turn.Reply reply = g.turn().reply();
@@ -192,7 +192,7 @@ public class ChatContextService {
         var visible = sources.segmentMessageIds(row.id(), agentId, row.projectId(), sceneId, boundary);
         String userQuery = sources.visibleUserText(row.id(), agentId, row.projectId(), currentUserId);
         if (currentUserId > 0 && (!visible.contains(currentUserId) || userQuery == null)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "本轮用户消息已无法在当前会话读取");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "本轮用户消息已无法在当前会话读取");
         }
         var stage = continuation == null ? null
                 : continuation.forPlan(turnId, contextProps.getCompressKeepTurns(), visible);

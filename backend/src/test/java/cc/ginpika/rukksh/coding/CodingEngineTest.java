@@ -2,7 +2,7 @@ package cc.ginpika.rukksh.coding;
 
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.ai.runtime.ModelLoop;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.context.CodingContext;
 import cc.ginpika.rukksh.coding.engine.CodingTools;
@@ -17,11 +17,11 @@ import static org.mockito.ArgumentMatchers.*;
 class CodingEngineTest {
     private final ObjectMapper json=new ObjectMapper();
     @Test void devIdentityCannotRegisterOrUseCodeFromRemoteConnections(){
-        assertTrue(CodingFacade.allowsActorAt("local-dev","127.0.0.1"));
-        assertTrue(CodingFacade.allowsActorAt("local-dev","::1"));
-        assertFalse(CodingFacade.allowsActorAt("local-dev","192.168.1.20"));
-        assertFalse(CodingFacade.allowsActorAt(null,"127.0.0.1"));
-        assertTrue(CodingFacade.allowsActorAt("authenticated-user","192.168.1.20"));
+        assertTrue(CodingService.allowsActorAt("local-dev","127.0.0.1"));
+        assertTrue(CodingService.allowsActorAt("local-dev","::1"));
+        assertFalse(CodingService.allowsActorAt("local-dev","192.168.1.20"));
+        assertFalse(CodingService.allowsActorAt(null,"127.0.0.1"));
+        assertTrue(CodingService.allowsActorAt("authenticated-user","192.168.1.20"));
     }
     @Test void codingContinuesAfterToolsUntilAnActualAnswer(){
         var client=mock(OpenAiChatClient.class);

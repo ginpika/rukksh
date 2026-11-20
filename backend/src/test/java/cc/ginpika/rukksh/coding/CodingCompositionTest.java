@@ -1,9 +1,11 @@
 package cc.ginpika.rukksh.coding;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.core.*;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.ai.runtime.ModelLoop;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.context.*;
 import cc.ginpika.rukksh.coding.engine.*;
@@ -47,9 +49,9 @@ class CodingCompositionTest {
     private CodingContext context;
     private CodingTools tools;
     private CodingSubagents subagents;
-    private CodingFacade facade;
+    private CodingService facade;
     private Run run;
-    private cc.ginpika.rukksh.coding.api.CodingDtos.Repository repo;
+    private cc.ginpika.rukksh.coding.dto.CodingDtos.Repository repo;
     private final AtomicBoolean parent=new AtomicBoolean();
     private CodingBudget budget;
     private final AtomicInteger delegateIds=new AtomicInteger();
@@ -139,7 +141,7 @@ class CodingCompositionTest {
     @Test void parentWaitsForBackgroundReportThenContinuesRatherThanDeliveringAPrematureAnswer() throws Exception {
         var agent=mock(CodingAgent.class);when(agent.modelId(any())).thenReturn("m1");when(agent.instructions()).thenReturn("主协调者");
         var projects=mock(WorkspaceProjects.class);var processes=mock(CodingProcesses.class);
-        facade=new CodingFacade(props,store,files,processes,tools,context,new ModelLoop(client),settings,json,projects,agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));facade.setComposition(subagents,roles);
+        facade=new CodingService(props,store,files,processes,tools,context,new ModelLoop(client),settings,json,projects,agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));facade.setComposition(subagents,roles);
         AtomicInteger mainRequests=new AtomicInteger();
         CountDownLatch prematureAnswer=new CountDownLatch(1);
         when(client.chatRaw(any(),any(),any(),anyString(),any())).thenAnswer(inv->{
@@ -158,7 +160,7 @@ class CodingCompositionTest {
     @Test void excessRunsQueueAndAQueuedCancellationDoesNotConsumeAnotherRunsPermit() throws Exception {
         props.setMaxConcurrentRuns(1);
         var agent=mock(CodingAgent.class);when(agent.modelId(any())).thenReturn("m1");
-        facade=new CodingFacade(props,store,files,mock(CodingProcesses.class),tools,context,new ModelLoop(client),settings,json,mock(WorkspaceProjects.class),agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));
+        facade=new CodingService(props,store,files,mock(CodingProcesses.class),tools,context,new ModelLoop(client),settings,json,mock(WorkspaceProjects.class),agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));
         var entered=new CountDownLatch(1);var release=new CountDownLatch(1);var count=new AtomicInteger();
         when(client.chatRaw(any(),any(),any(),anyString(),any())).thenAnswer(inv->{if(count.incrementAndGet()==1){entered.countDown();assertTrue(release.await(5,TimeUnit.SECONDS));}return answer("完成");});
         Run first=facade.submit("alice",new StartRun(repo.id(),"first",null,Mode.PLAN,Runner.DOCKER,0));
@@ -175,7 +177,7 @@ class CodingCompositionTest {
     }
     @Test void aPureSynchronousSpecialistBatchStartsBothLoopsBeforeWaiting() throws Exception {
         var agent=mock(CodingAgent.class);when(agent.modelId(any())).thenReturn("m1");
-        facade=new CodingFacade(props,store,files,mock(CodingProcesses.class),tools,context,new ModelLoop(client),settings,json,mock(WorkspaceProjects.class),agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));facade.setComposition(subagents,roles);
+        facade=new CodingService(props,store,files,mock(CodingProcesses.class),tools,context,new ModelLoop(client),settings,json,mock(WorkspaceProjects.class),agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));facade.setComposition(subagents,roles);
         var both=new CountDownLatch(2);var mainRequests=new AtomicInteger();
         when(client.chatRaw(any(),any(),any(),anyString(),any())).thenAnswer(inv->{
             if("coding-subagent".equals(inv.getArgument(3))) {both.countDown();assertTrue(both.await(3,TimeUnit.SECONDS),"同步委派批次不能逐一等待");return answer("独立调查完成");}
@@ -196,7 +198,7 @@ class CodingCompositionTest {
     @Test void optedInChangesAutomaticallyRunReadOnlyReviewerBeforeBecomingReviewable() throws Exception {
         var agent=mock(CodingAgent.class);when(agent.modelId(any())).thenReturn("m1");
         var processes=mock(CodingProcesses.class);
-        facade=new CodingFacade(props,store,files,processes,tools,context,new ModelLoop(client),settings,json,mock(WorkspaceProjects.class),agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));facade.setComposition(subagents,roles);
+        facade=new CodingService(props,store,files,processes,tools,context,new ModelLoop(client),settings,json,mock(WorkspaceProjects.class),agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));facade.setComposition(subagents,roles);
         var change=new Change("src/App.tsx","MODIFIED","old","new",100,false,false);
         when(files.diff(anyString())).thenReturn(new Diff("tree-1",List.of(change),"+"+"x".repeat(30000),false));
         AtomicInteger reviewers=new AtomicInteger();
@@ -213,7 +215,7 @@ class CodingCompositionTest {
     }
     @Test void userCanApprovePlanAndImplementInTheSameRunAndHistoricalTurnsStayReadOnly() throws Exception {
         var agent=mock(CodingAgent.class);var projects=mock(WorkspaceProjects.class);
-        facade=new CodingFacade(props,store,files,mock(CodingProcesses.class),tools,context,new ModelLoop(client),settings,json,projects,agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));facade.setComposition(subagents,roles);
+        facade=new CodingService(props,store,files,mock(CodingProcesses.class),tools,context,new ModelLoop(client),settings,json,projects,agent,mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class),mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class));facade.setComposition(subagents,roles);
         store.mode(run.id(),Mode.PLAN);store.phase(run.id(),"REVIEWABLE",null);
         var previous=json.createArrayNode();previous.addObject().put("role","system").put("content","旧 PLAN 规则");previous.addObject().put("role","user").put("content","原始要求");store.checkpoint(run.id(),previous,0);
         when(client.chatRaw(any(),any(),any(),anyString(),any())).thenAnswer(inv->{
@@ -224,7 +226,7 @@ class CodingCompositionTest {
         assertEquals(Mode.EDIT,store.run(run.id(),"alice").mode());assertEquals("REVIEWABLE",store.run(run.id(),"alice").status());
         assertTrue(store.events(run.id(),0,500).stream().anyMatch(e->e.type().equals("plan.approved") && e.payload().contains("alice")));
         store.phase(run.id(),"COMPLETED",null);String session=store.sessionOf(run).id();store.create("alice",new StartRun(repo.id(),"新一轮",null,Mode.PLAN,Runner.DOCKER,10,session),10);
-        assertTrue(assertThrows(org.springframework.web.server.ResponseStatusException.class,()->facade.resume("alice",run.id(),new ResumeRun("旧轮次",false))).getReason().contains("历史轮次"));
-        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->facade.children("bob",run.id()));
+        assertTrue(assertThrows(DomainException.class,()->facade.resume("alice",run.id(),new ResumeRun("旧轮次",false))).getMessage().contains("历史轮次"));
+        assertThrows(DomainException.class,()->facade.children("bob",run.id()));
     }
 }

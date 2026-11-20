@@ -18,7 +18,7 @@ import java.util.List;
  * </ul>
  * 顺序由 Spring 的 {@code @Order} 决定（数值越小越靠前），两条插口各自独立按序拼接。
  *
- * <p>现状（STEP 2）：已启用 {@link cc.ginpika.rukksh.agent.chat.turn.History}（会话历史 Turn 回放）、
+ * <p>现状（STEP 2）：已启用 {@link cc.ginpika.rukksh.agent.chat.turn.ChatHistoryProvider}（会话历史 Turn 回放）、
  * {@link ActiveSubagentProvider}、
  * {@link TodoProvider}、{@link KnowledgeProvider}、{@link MemoryProvider} 五路源——知识 / 记忆两路
  * 属行为变更，由 {@code cc.ginpika.rukksh.config.ContextProps} 控制、默认关；代码库 / 文件树一路是

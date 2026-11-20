@@ -1,8 +1,10 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.ai.computer.terminal.TerminalService;
-import cc.ginpika.rukksh.coding.api.CodingDtos;
+import cc.ginpika.rukksh.coding.dto.CodingDtos;
 import cc.ginpika.rukksh.coding.workspace.WorkspaceProjects;
 import cc.ginpika.rukksh.project.ProjectStore;
 import cc.ginpika.rukksh.project.ProjectWorkspaceStore;
@@ -10,9 +12,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Reuses workspace-project path validation and identity; collaboration never chooses another repository itself. */
 @Service
@@ -33,19 +33,19 @@ public class CollaborationWorkspaceBinding {
 
     private Location readLocation(ProjectWorkspaceStore.Binding binding) {
         try { return location(binding); }
-        catch (ResponseStatusException error) {
+        catch (DomainException error) {
             return new Location(binding.projectId(),binding.repositoryId(),null,"绑定已失效",null,null,false);
         }
     }
     public Location bind(String project, CodingDtos.OpenProject request) {
-        projects.findById(project).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"项目不存在"));
+        projects.findById(project).orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND,"项目不存在"));
         String owner=UserScope.get();
-        if (owner==null || owner.isBlank()) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"缺少用户身份");
+        if (owner==null || owner.isBlank()) throw new DomainException(DomainException.ErrorKind.UNAUTHORIZED,"缺少用户身份");
         if (request==null || request.directory()==null || request.directory().isBlank())
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请明确选择工作空间内的项目目录");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST,"请明确选择工作空间内的项目目录");
         var selected=workspaces.open(owner,new CodingDtos.OpenProject(request.workspaceId(),request.directory(),
                 request.create() ? request.name() : null,request.create(),request.validationCommand()));
-        if(!selected.enabled()) throw new ResponseStatusException(HttpStatus.CONFLICT,"所选项目的工作空间绑定已失效，请先核对原工作空间连接配置");
+        if(!selected.enabled()) throw new DomainException(DomainException.ErrorKind.CONFLICT,"所选项目的工作空间绑定已失效，请先核对原工作空间连接配置");
         store.bind(project,selected.id());
         return location(store.find(project).orElseThrow());
     }
@@ -67,7 +67,7 @@ public class CollaborationWorkspaceBinding {
             return "\n【本项目唯一工作目录】工作空间："+p.workspaceName()+"；相对目录："+p.directory()+"；实际根路径："+p.root()
                     +"；coding_task repositoryId="+p.repositoryId()+"。所有成员在此项目内工作，不读取其他项目作为当前上下文，不自行切换目录。"
                     +(p.enabled()?"":" 当前绑定不可用，请用户检查工作空间配置后重新绑定。");
-        } catch(ResponseStatusException error) { return "\n【项目工作目录不可用】请用户重新核对绑定；禁止回退到其他项目。"; }
+        } catch (DomainException error) { return "\n【项目工作目录不可用】请用户重新核对绑定；禁止回退到其他项目。"; }
     }
     public String terminal(JsonNode call,String session,Set<String> allowed,TerminalService terminal) {
         try {
@@ -76,6 +76,6 @@ public class CollaborationWorkspaceBinding {
             if(p==null) return "项目未绑定工作目录，未执行。请用户在协作项目页设置工作目录，不能自行选择其他项目。";
             if(!p.enabled()) return "项目绑定已失效或工作空间未启用，未执行；请用户重新核对绑定。";
             return terminal.runScoped(call,TerminalService.SOURCE_CHAT,allowed,p.workspaceId(),p.root()).content();
-        } catch(ResponseStatusException error) { return "项目工作目录不可用，未执行："+error.getReason(); }
+        } catch (DomainException error) { return "项目工作目录不可用，未执行："+error.getMessage(); }
     }
 }

@@ -3,8 +3,8 @@ package cc.ginpika.rukksh.ai.knowledge.ingest;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
-import cc.ginpika.rukksh.ai.knowledge.web.WebToolbox;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
+import cc.ginpika.rukksh.ai.knowledge.web.WebToolExecutor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,10 +14,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentToolDispatchTest {
-    @Mock DocumentToolbox documents;
-    @Mock WebToolbox web;
-    @Mock ToolManager tools;
-    @InjectMocks KnowledgeToolbox dispatcher;
+    @Mock DocumentToolExecutor documents;
+    @Mock WebToolExecutor web;
+    @Mock ToolRegistry tools;
+    @InjectMocks KnowledgeToolExecutor dispatcher;
 
     @Test void documentToolsReachLibraryAndSavedSnapshotsReachWebReader() throws Exception {
         var args = new ObjectMapper().readTree("{}");

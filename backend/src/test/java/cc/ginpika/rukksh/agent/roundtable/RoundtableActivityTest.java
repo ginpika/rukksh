@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEventStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;

@@ -1,5 +1,6 @@
 package cc.ginpika.rukksh.ai.memory.store;
 
+import cc.ginpika.rukksh.ai.core.util.VectorMath;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Repository;
 /**
  * memory_item_embedding（记忆条目向量）的读写：记忆体系 v2 的「条目向量轴」。
  *
- * <p>与 {@link MemoryEventEmbeddingStore} 同构（列结构一致、编码沿用 {@link MemoryVecMath}）：
+ * <p>与 {@link MemoryEventEmbeddingStore} 同构（列结构一致、编码沿用 {@link VectorMath}）：
  * 写入只有覆盖式 save（换模型重算整行覆盖），读侧按当前模型取指定条目集的向量。
  * 补齐入口见 {@link cc.ginpika.rukksh.ai.memory.MemoryItemEmbeddingWriter}。
  */
@@ -31,7 +32,7 @@ public class MemoryItemEmbeddingStore {
                         + "VALUES(?,?,?,?,?) "
                         + "ON CONFLICT(item_id) DO UPDATE SET model=excluded.model, "
                         + "dim=excluded.dim, vec=excluded.vec, updated_at=excluded.updated_at",
-                itemId, model, vec.length, MemoryVecMath.encode(vec), System.currentTimeMillis());
+                itemId, model, vec.length, VectorMath.encode(vec), System.currentTimeMillis());
     }
 
     public boolean saveVersion(long itemId, String model, float[] vec, long version) {
@@ -39,7 +40,7 @@ public class MemoryItemEmbeddingStore {
                 + "SELECT id, ?, ?, ?, ?, ? FROM graph_claim WHERE id = ? AND COALESCE(version,0) = ? "
                 + "ON CONFLICT(item_id) DO UPDATE SET model=excluded.model, dim=excluded.dim, "
                 + "vec=excluded.vec, updated_at=excluded.updated_at, item_version=excluded.item_version",
-                model, vec.length, MemoryVecMath.encode(vec), System.currentTimeMillis(), version,
+                model, vec.length, VectorMath.encode(vec), System.currentTimeMillis(), version,
                 itemId, version) > 0;
     }
 
@@ -55,7 +56,7 @@ public class MemoryItemEmbeddingStore {
                         + "AND COALESCE(item_version,0) = (SELECT COALESCE(version,0) FROM graph_claim i WHERE i.id = item_id)",
                 rs -> {
                     out.put(rs.getLong("item_id"),
-                            MemoryVecMath.decode(rs.getBytes("vec"), rs.getInt("dim")));
+                            VectorMath.decode(rs.getBytes("vec"), rs.getInt("dim")));
                 },
                 model);
         return out;
@@ -92,7 +93,7 @@ public class MemoryItemEmbeddingStore {
         sql+=") AND COALESCE(item_version,0)=(SELECT COALESCE(version,0) FROM graph_claim WHERE id=item_id)";
         jdbc.query(sql,rs->{
             while(rs.next()) {
-                double score=MemoryVecMath.cosine(query,MemoryVecMath.decode(rs.getBytes("vec"),rs.getInt("dim")));
+                double score=VectorMath.cosine(query,VectorMath.decode(rs.getBytes("vec"),rs.getInt("dim")));
                 if(score>0 && (heap.size()<limit || score>heap.peek().score())) {
                     heap.add(new Scored(rs.getLong("item_id"),score)); if(heap.size()>limit) heap.poll();
                 }

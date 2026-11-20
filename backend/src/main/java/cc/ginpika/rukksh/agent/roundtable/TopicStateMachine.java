@@ -1,9 +1,9 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicEventStore;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicEventStore.EventRow;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicStore;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicStore.TopicRow;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicEventStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicEventStore.EventRow;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore.TopicRow;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

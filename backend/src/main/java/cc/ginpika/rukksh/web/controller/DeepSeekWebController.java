@@ -2,10 +2,7 @@ package cc.ginpika.rukksh.web.controller;
 
 import cc.ginpika.rukksh.ai.knowledge.web.DeepSeekWebClient;
 import cc.ginpika.rukksh.config.DeepSeekWebSettings;
-import java.util.Map;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/settings/deepseek-web")
@@ -32,15 +29,9 @@ public class DeepSeekWebController {
                 detail = "Fetch 请求成功，返回 " + page.content().length() + " 字符正文";
             }
             return new TestResult(true, elapsed(start), detail, null);
-        } catch (ResponseStatusException e) {
-            return new TestResult(false, elapsed(start), null, e.getReason());
         } catch (RuntimeException e) {
             return new TestResult(false, elapsed(start), null, e.getMessage());
         }
-    }
-    @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Map<String, String>> error(ResponseStatusException e) {
-        return ResponseEntity.status(e.getStatusCode()).body(Map.of("message", e.getReason() == null ? "配置无效" : e.getReason()));
     }
     private static long elapsed(long start) { return (System.nanoTime() - start) / 1_000_000; }
 }

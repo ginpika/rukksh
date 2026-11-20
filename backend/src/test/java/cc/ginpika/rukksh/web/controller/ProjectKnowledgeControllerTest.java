@@ -1,6 +1,7 @@
 package cc.ginpika.rukksh.web.controller;
 
 import cc.ginpika.rukksh.project.ProjectKnowledgeStore;
+import cc.ginpika.rukksh.web.advice.WebExceptionAdvice;
 import cc.ginpika.rukksh.web.sso.SsoInterceptor;
 import cc.ginpika.rukksh.web.sso.SsoUser;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ProjectKnowledgeControllerTest {
     @Test void authenticationIsRequiredForReadsAndWritesAndHumanEditsHaveAttribution() throws Exception {
         var knowledge=mock(ProjectKnowledgeStore.class);
-        var mvc=MockMvcBuilders.standaloneSetup(new ProjectKnowledgeController(knowledge)).build();
+        var mvc=MockMvcBuilders.standaloneSetup(new ProjectKnowledgeController(knowledge)).setControllerAdvice(new WebExceptionAdvice()).build();
         for(String path:new String[]{"","/progress","/documents/overview","/documents/overview/history"})
             mvc.perform(get("/api/projects/p/knowledge"+path)).andExpect(status().isUnauthorized());
         String body="{\"kind\":\"overview\",\"title\":\"现状\",\"content\":\"尚未验证\",\"expectedVersion\":0,\"retired\":false}";

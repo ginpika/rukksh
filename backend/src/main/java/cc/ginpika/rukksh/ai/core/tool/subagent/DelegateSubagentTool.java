@@ -2,8 +2,6 @@ package cc.ginpika.rukksh.ai.core.tool.subagent;
 
 import cc.ginpika.rukksh.ai.core.tool.AiTool;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
-import cc.ginpika.rukksh.ai.core.tool.heartbeat.CreatePlanTool;
-import cc.ginpika.rukksh.ai.core.tool.heartbeat.DelegatePlanTool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Set;
@@ -19,7 +17,7 @@ import org.springframework.stereotype.Component;
  * <p>派活不阻塞调用方：对话里当场只回一张受理回执，结论稍后作为一条新消息投回本会话；
  * 心跳里则由它当场交出结论（心跳主会话要拿它继续裁量这一拍）。
  *
- * <p>与「任务计划」（{@link DelegatePlanTool}）的区别：计划是常驻编制（有名字、有排班、
+ * <p>与「任务计划」（{@code delegate_heartbeat}）的区别：计划是常驻编制（有名字、有排班、
  * 能被反复派），子代理是临时的兵。一次性的活派子代理；反复要做的活才值得立一个计划。
  */
 @Component
@@ -39,7 +37,7 @@ public class DelegateSubagentTool implements AiTool {
                 + "对话默认 background=true，后台执行后回报本会话；当前决策依赖调查结果时用 background=false，优先等待结论，超时后由后台回报。"
                 + "心跳中始终同步取回结论。同一条消息可派多个独立问题；简单工作直接完成，不机械委派。"
                 + "协作项目中只读调查，代码实施交 coding_task 独立副本，不能借子代理绕过派工、独立检查或扩大计划。"
-                + "需要长期反复运行的职责才使用任务计划（" + CreatePlanTool.NAME + "）。";
+                + "需要长期反复运行的职责才使用任务计划（create_heartbeat）。";
     }
 
     @Override

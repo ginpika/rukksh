@@ -2,11 +2,12 @@ package cc.ginpika.rukksh.coding;
 
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.roundtable.*;
+import cc.ginpika.rukksh.agent.roundtable.store.*;
 import cc.ginpika.rukksh.agent.runtime.event.*;
 import cc.ginpika.rukksh.ai.core.*;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.ai.runtime.ModelLoop;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.context.CodingContext;
 import cc.ginpika.rukksh.coding.engine.CodingTools;
@@ -38,7 +39,7 @@ import static org.mockito.Mockito.*;
 class CollaborationCodingLoopTest {
     @TempDir Path temp;
     final ObjectMapper json=new ObjectMapper();
-    CodingFacade coding;CodingWorkspace files;CodingStore store;ProjectWorkExecution authority;
+    CodingService coding;CodingWorkspace files;CodingStore store;ProjectWorkExecution authority;
     CollaborationPlan plans;RoundtableTodoStore board;RoundtableTaskTools taskTools;
     String session,todo,runId;Path project;JdbcTemplate jdbc;
     final AtomicInteger commandExecutions=new AtomicInteger();
@@ -98,7 +99,7 @@ class CollaborationCodingLoopTest {
                 response(call("run_validation",json.createObjectNode().put("command","npm run build && npm test"))),
                 new OpenAiChatClient.RawResult(json.createObjectNode().put("role","assistant").put("content","已构建并测试当前函数"),"raw","stop"));
         var tools=new CodingTools(json,files,processes,store);
-        coding=new CodingFacade(props,store,files,processes,tools,new CodingContext(json,files,store,props),new ModelLoop(client),settings,json,workspaces,agent,bindings,authority);
+        coding=new CodingService(props,store,files,processes,tools,new CodingContext(json,files,store,props),new ModelLoop(client),settings,json,workspaces,agent,bindings,authority);
         var events=new RuntimeEventBus(new RuntimeEventStore(jdbc,json),new DataSourceTransactionManager(source));
         taskTools=new RoundtableTaskTools(json,board,mock(AgentDirectory.class),events,new CollaborationStore(jdbc),mock(CollaborationIssueActions.class),plans,new RoundtableMessageStore(jdbc),mock(CollaborationScopeGuard.class),coding,new CollaborationQuality(jdbc,json),tx,new cc.ginpika.rukksh.project.ProjectKnowledgeStore(jdbc));
         String started=AgentScope.run("author",()->coding.assistantTool("alice",json.createObjectNode().put("action","start").put("mode","EXECUTE")

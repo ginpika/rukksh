@@ -2,10 +2,8 @@ package cc.ginpika.rukksh.web.controller;
 
 import cc.ginpika.rukksh.ai.comfyui.ComfyUiService;
 import cc.ginpika.rukksh.ai.comfyui.ComfyUiSettings;
-import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 public class ComfyUiController {
@@ -14,10 +12,6 @@ public class ComfyUiController {
     public record Selection(String profileId) {}
     public record Generate(String profileId, String prompt) {}
     public ComfyUiController(ComfyUiSettings settings, ComfyUiService service) { this.settings = settings; this.service = service; }
-    @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Map<String,String>> error(ResponseStatusException error) {
-        return ResponseEntity.status(error.getStatusCode()).body(Map.of("message", error.getReason() == null ? "ComfyUI 请求失败" : error.getReason()));
-    }
     @GetMapping("/api/settings/comfyui") public ComfyUiSettings.View view() { return settings.view(); }
     @PostMapping("/api/settings/comfyui/endpoints") public ComfyUiSettings.View createEndpoint(@RequestBody ComfyUiSettings.Endpoint e) { return settings.saveEndpoint(null,e); }
     @PutMapping("/api/settings/comfyui/endpoints/{id}") public ComfyUiSettings.View updateEndpoint(@PathVariable String id, @RequestBody ComfyUiSettings.Endpoint e) { return settings.saveEndpoint(id,e); }

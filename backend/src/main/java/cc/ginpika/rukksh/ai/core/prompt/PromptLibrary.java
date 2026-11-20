@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  *
  * <p><b>可覆盖</b>——内置正文只是缺省值：用户可在「潜意识 · 提示词」页为任意块保存多份版本
  * （{@code prompt_version}），并选定一份覆盖内置（{@code prompt_binding}）。解析与组装由
- * {@link PromptComposer} 完成、经 {@code PromptManager} 对外提供；本包保持纯定义、不碰运行时状态。
+ * {@link PromptComposer} 完成、经 {@code PromptService} 对外提供；本包保持纯定义、不碰运行时状态。
  */
 public final class PromptLibrary {
 

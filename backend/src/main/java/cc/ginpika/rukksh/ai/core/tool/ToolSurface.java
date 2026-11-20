@@ -4,7 +4,7 @@ package cc.ginpika.rukksh.ai.core.tool;
  * 工具面：一次 LLM 调用里「模型能看见哪些工具」的契约。
  *
  * <p>同一个工具可属于多个工具面（如 upsert_node 既在对话里可写、也在文档分析的入库流程里可用），
- * 由 {@link ToolManager} 按面聚合出该次调用要挂的 tools 数组。
+ * 由 {@link ToolRegistry} 按面聚合出该次调用要挂的 tools 数组。
  */
 public enum ToolSurface {
 

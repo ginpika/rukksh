@@ -5,14 +5,13 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
 import cc.ginpika.rukksh.todo.TodoService;
 import cc.ginpika.rukksh.web.sso.SsoInterceptor;
 import cc.ginpika.rukksh.web.sso.SsoUser;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.server.ResponseStatusException;
 
 class PersonalTodoControllerTest {
     final TodoService service=mock(TodoService.class);
@@ -38,7 +37,7 @@ class PersonalTodoControllerTest {
     }
 
     @Test void scopedErrorsAreReadableAndMutationsUseAuthenticatedOwner() throws Exception {
-        when(service.detail("person","hidden")).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND,"事项不存在"));
+        when(service.detail("person","hidden")).thenThrow(DomainException.notFound("事项不存在"));
         mvc.perform(get("/api/todos/hidden").requestAttr(SsoInterceptor.ATTR,user)).andExpect(status().isNotFound()).andExpect(jsonPath("$.error").value("事项不存在"));
         mvc.perform(post("/api/todos/t/start").requestAttr(SsoInterceptor.ATTR,user).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"expectedActiveId\":null}")).andExpect(status().isOk());

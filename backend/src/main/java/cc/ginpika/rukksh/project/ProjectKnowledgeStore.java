@@ -1,14 +1,14 @@
 package cc.ginpika.rukksh.project;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Project-owned documents. Session provenance is retained as text, never as cascading ownership. */
 @Repository
@@ -39,7 +39,7 @@ public class ProjectKnowledgeStore {
 
     private void requireProject(String project) {
         if (project == null || !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM project WHERE id=?)", Boolean.class, project)))
-            throw error(HttpStatus.NOT_FOUND, "项目不存在");
+            throw error(DomainException.ErrorKind.NOT_FOUND, "项目不存在");
     }
 
     public Page<Entry> list(String project, String query, boolean retired, int offset, int limit) {
@@ -62,7 +62,7 @@ public class ProjectKnowledgeStore {
         var rows = version == null
                 ? jdbc.query(sql+" ORDER BY d.version DESC LIMIT 1",(r,n)->document(r),project,key)
                 : jdbc.query(sql+" AND d.version=?",(r,n)->document(r),project,key,version);
-        return rows.stream().findFirst().orElseThrow(() -> error(HttpStatus.NOT_FOUND,"项目文档或版本不存在"));
+        return rows.stream().findFirst().orElseThrow(() -> error(DomainException.ErrorKind.NOT_FOUND,"项目文档或版本不存在"));
     }
 
     public List<Document> history(String project, String key) {
@@ -79,22 +79,22 @@ public class ProjectKnowledgeStore {
     @Transactional
     public Document save(String project, String key, Write request, String session, String author) {
         requireProject(project);
-        if (key == null || !key.matches("[A-Za-z0-9._-]{1,120}")) throw error(HttpStatus.BAD_REQUEST,"文档标识只能使用字母、数字、点、横线和下划线（1–120 字）");
-        if (request == null || request.expectedVersion()==null || request.expectedVersion()<0) throw error(HttpStatus.BAD_REQUEST,"请提供 expectedVersion，新文档为 0");
-        if (request.kind()==null || !List.of("overview","decision","reference","delivery").contains(request.kind())) throw error(HttpStatus.BAD_REQUEST,"未知文档类型");
+        if (key == null || !key.matches("[A-Za-z0-9._-]{1,120}")) throw error(DomainException.ErrorKind.BAD_REQUEST,"文档标识只能使用字母、数字、点、横线和下划线（1–120 字）");
+        if (request == null || request.expectedVersion()==null || request.expectedVersion()<0) throw error(DomainException.ErrorKind.BAD_REQUEST,"请提供 expectedVersion，新文档为 0");
+        if (request.kind()==null || !List.of("overview","decision","reference","delivery").contains(request.kind())) throw error(DomainException.ErrorKind.BAD_REQUEST,"未知文档类型");
         String title=required(request.title(),160,"文档标题"), content=required(request.content(),40000,"文档内容");
         Integer current=jdbc.queryForObject("SELECT COALESCE(MAX(version),0) FROM project_document WHERE project_id=? AND doc_key=?",Integer.class,project,key);
-        if (!request.expectedVersion().equals(current)) throw error(HttpStatus.CONFLICT,"文档已有新版本，请重新读取后合并，不能覆盖他人的更新");
+        if (!request.expectedVersion().equals(current)) throw error(DomainException.ErrorKind.CONFLICT,"文档已有新版本，请重新读取后合并，不能覆盖他人的更新");
         String sourceTitle=null;
         if(session!=null) {
-            if(!project.equals(projectForSession(session))) throw error(HttpStatus.CONFLICT,"来源会话不属于此项目");
+            if(!project.equals(projectForSession(session))) throw error(DomainException.ErrorKind.CONFLICT,"来源会话不属于此项目");
             sourceTitle=jdbc.queryForObject("SELECT title FROM hub_session WHERE id=?",String.class,session);
         }
         long now=System.currentTimeMillis();
         try {
             jdbc.update("INSERT INTO project_document(project_id,doc_key,version,kind,title,content,retired,source_session_id,source_title,author,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                     project,key,current+1,request.kind(),title,content,Boolean.TRUE.equals(request.retired()),session,sourceTitle,author,now);
-        } catch (DuplicateKeyException conflict) { throw error(HttpStatus.CONFLICT,"文档已有新版本，请重新读取后合并"); }
+        } catch (DuplicateKeyException conflict) { throw error(DomainException.ErrorKind.CONFLICT,"文档已有新版本，请重新读取后合并"); }
         new cc.ginpika.rukksh.ai.memory.graph.MemoryGraphStore(jdbc).projectDocument(project,key,current+1,request.kind(),title,content,Boolean.TRUE.equals(request.retired()),author);
         return read(project,key,null);
     }
@@ -161,8 +161,8 @@ public class ProjectKnowledgeStore {
     }
     private static String required(String value,int max,String label) {
         String text=value==null?"":value.strip();
-        if(text.isEmpty() || text.length()>max) throw error(HttpStatus.BAD_REQUEST,label+"须为 1–"+max+" 字");
+        if(text.isEmpty() || text.length()>max) throw error(DomainException.ErrorKind.BAD_REQUEST,label+"须为 1–"+max+" 字");
         return text;
     }
-    private static ResponseStatusException error(HttpStatus status,String text) { return new ResponseStatusException(status,text); }
+    private static DomainException error(DomainException.ErrorKind status,String text) { return new DomainException(status,text); }
 }

@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.config.SettingsService;
 import cc.ginpika.rukksh.project.ProjectStore;

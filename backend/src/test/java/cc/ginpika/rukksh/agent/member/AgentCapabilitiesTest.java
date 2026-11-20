@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import cc.ginpika.rukksh.ai.core.BuiltinAgents;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -57,7 +57,7 @@ class AgentCapabilitiesTest {
     }
 
     @Test void coreResponsibilityPreservesTheSelectedGlobalPersona() {
-        var prompts = mock(PromptManager.class);
+        var prompts = mock(PromptService.class);
         when(prompts.chatSystem("chosen")).thenReturn("用户选定的人格");
         var service = new AgentPromptService(null, null, prompts, null);
         var system = service.builtinSystem("chosen");

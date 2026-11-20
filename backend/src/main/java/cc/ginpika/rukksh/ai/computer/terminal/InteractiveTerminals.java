@@ -1,12 +1,12 @@
 package cc.ginpika.rukksh.ai.computer.terminal;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Shared PTY lifecycle, buffering and ownership; adapters validate their own scope. */
 public abstract class InteractiveTerminals {
@@ -49,14 +49,14 @@ public abstract class InteractiveTerminals {
     }
     public synchronized View create(String owner,String project,int cols,int rows){
         size(cols,rows);Object identity=scope(owner,project,true);
-        if(terminals.size()>=64 || terminals.values().stream().filter(t->t.owner.equals(owner)).count()>=8){throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,"终端数量已达上限，请先删除不用的终端（每人最多 8 个）");}
+        if(terminals.size()>=64 || terminals.values().stream().filter(t->t.owner.equals(owner)).count()>=8){throw new DomainException(DomainException.ErrorKind.TOO_MANY_REQUESTS,"终端数量已达上限，请先删除不用的终端（每人最多 8 个）");}
         try{
             var shell=openShell(owner,project,cols,rows);
             Set<String> titles=new HashSet<>();terminals.values().stream().filter(t->t.owner.equals(owner)&&t.project.equals(project)).forEach(t->titles.add(t.title));
             int number=1;while(titles.contains("T"+number)){number++;}String title="T"+number;
             Terminal terminal=new Terminal(owner,project,title,shell,identity);terminals.put(terminal.id,terminal);
             Thread.startVirtualThread(()->pump(terminal));return terminal.view();
-        }catch(IOException | IllegalStateException | UnsupportedOperationException error){throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"无法创建交互终端："+error.getMessage(),error);}
+        }catch(IOException | IllegalStateException | UnsupportedOperationException error){throw new DomainException(DomainException.ErrorKind.BAD_GATEWAY,"无法创建交互终端："+error.getMessage(),error);}
     }
     public Output read(String owner,String project,String id,long after){var chunk=require(owner,project,id).read(after);return new Output(Base64.getEncoder().encodeToString(chunk.data()),chunk.nextOffset(),chunk.reset(),chunk.running(),chunk.error());}
     /** Wake on PTY bytes or EOF, rather than polling the shell for WebSocket output. */
@@ -71,25 +71,25 @@ public abstract class InteractiveTerminals {
     public void input(String owner,String project,String id,String data){
         Terminal terminal=require(owner,project,id);
         if(data==null || data.length()>65536){throw bad("终端输入过长");}
-        if(!terminal.running){throw new ResponseStatusException(HttpStatus.CONFLICT,"终端已退出，请新建终端");}
+        if(!terminal.running){throw new DomainException(DomainException.ErrorKind.CONFLICT,"终端已退出，请新建终端");}
         try{synchronized(terminal.shell){terminal.shell.input().write(data.getBytes(java.nio.charset.StandardCharsets.UTF_8));terminal.shell.input().flush();}}
-        catch(IOException error){terminal.error="终端输入失败："+error.getMessage();terminal.close();throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,terminal.error,error);}
+        catch(IOException error){terminal.error="终端输入失败："+error.getMessage();terminal.close();throw new DomainException(DomainException.ErrorKind.BAD_GATEWAY,terminal.error,error);}
     }
     public void resize(String owner,String project,String id,int cols,int rows){
         size(cols,rows);Terminal terminal=require(owner,project,id);
         if(!terminal.running){return;}
-        try{terminal.shell.resize(cols,rows);}catch(IOException error){throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,"终端缩放失败",error);}
+        try{terminal.shell.resize(cols,rows);}catch(IOException error){throw new DomainException(DomainException.ErrorKind.BAD_GATEWAY,"终端缩放失败",error);}
     }
     public void delete(String owner,String project,String id){
         scope(owner,project,false);Terminal terminal=terminals.get(id);if(terminal==null){return;}
-        if(!terminal.owner.equals(owner) || !terminal.project.equals(project)){throw new ResponseStatusException(HttpStatus.NOT_FOUND,"终端不存在或不属于当前工作范围");}
+        if(!terminal.owner.equals(owner) || !terminal.project.equals(project)){throw new DomainException(DomainException.ErrorKind.NOT_FOUND,"终端不存在或不属于当前工作范围");}
         terminals.remove(id,terminal);terminal.close();
     }
     private Terminal require(String owner,String project,String id){
         Terminal terminal=terminals.get(id);
-        if(terminal==null || !terminal.owner.equals(owner) || !terminal.project.equals(project)){throw new ResponseStatusException(HttpStatus.NOT_FOUND,"终端不存在或不属于当前工作范围");}
+        if(terminal==null || !terminal.owner.equals(owner) || !terminal.project.equals(project)){throw new DomainException(DomainException.ErrorKind.NOT_FOUND,"终端不存在或不属于当前工作范围");}
         try {
-            if(!Objects.equals(terminal.identity,scope(owner,project,true))){throw new ResponseStatusException(HttpStatus.CONFLICT,"工作空间连接配置发生变化，请新建终端");}
+            if(!Objects.equals(terminal.identity,scope(owner,project,true))){throw new DomainException(DomainException.ErrorKind.CONFLICT,"工作空间连接配置发生变化，请新建终端");}
         } catch(RuntimeException error){terminal.close();throw error;}
         terminal.accessed=System.currentTimeMillis();return terminal;
     }
@@ -100,6 +100,6 @@ public abstract class InteractiveTerminals {
     }
     private void expire(){long cutoff=System.currentTimeMillis()-TimeUnit.MINUTES.toMillis(30);terminals.forEach((id,t)->{if(t.accessed<cutoff && terminals.remove(id,t)){t.close();}});}
     private static void size(int cols,int rows){if(cols<2 || cols>500 || rows<1 || rows>200){throw bad("终端尺寸无效");}}
-    private static ResponseStatusException bad(String message){return new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
+    private static DomainException bad(String message){return new DomainException(DomainException.ErrorKind.BAD_REQUEST,message);}
     @PreDestroy public void close(){reaper.shutdownNow();terminals.values().forEach(Terminal::close);terminals.clear();}
 }

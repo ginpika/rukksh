@@ -10,7 +10,7 @@ import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-@Repository("personalTodoStore")
+@Repository
 public class TodoStore {
     private final JdbcTemplate jdbc;
     public TodoStore(JdbcTemplate jdbc) { this.jdbc = jdbc; }

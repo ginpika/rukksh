@@ -1,5 +1,13 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.memory.MemoryIngest;
 import cc.ginpika.rukksh.ai.memory.store.MemoryRetractionStore;
 import java.util.List;
@@ -11,7 +19,6 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -60,7 +67,7 @@ class CollaborationTaskLifecycleTest {
             f.archive(true);
             assertEquals(List.of(f.root),f.sessions.archivedIds());
             assertTrue(f.sessions.archived(f.child));assertFalse(f.sessions.archived(f.other));
-            assertThrows(ResponseStatusException.class,()->f.sessions.requireWritable(f.child));
+            assertThrows(DomainException.class,()->f.sessions.requireWritable(f.child));
             assertEquals(messages,f.count("chat_message"));assertEquals(1,f.count("collaboration_issue"));
             assertFalse(f.progress.allowed(f.root));assertFalse(f.progress.allowed(f.child));
             f.archive(false);assertTrue(f.sessions.archivedIds().isEmpty());f.sessions.requireWritable(f.child);
@@ -71,12 +78,12 @@ class CollaborationTaskLifecycleTest {
     @Test void runningIssueOrQueuedCodingTaskPreventsArchiveAndDeletion() {
         try(var f=new Fixture()) {
             when(f.work.workingCount(f.child)).thenReturn(1);
-            assertThrows(ResponseStatusException.class,()->f.archive(true));
-            assertThrows(ResponseStatusException.class,f::delete);
+            assertThrows(DomainException.class,()->f.archive(true));
+            assertThrows(DomainException.class,f::delete);
             assertTrue(f.sessions.archivedIds().isEmpty());assertEquals(3,f.count("hub_session"));
             when(f.work.workingCount(f.child)).thenReturn(0);
             f.jdbc.update("UPDATE task SET status='pending'");
-            assertThrows(ResponseStatusException.class,f::delete);
+            assertThrows(DomainException.class,f::delete);
             verifyNoInteractions(f.memories);
         }
     }
@@ -108,10 +115,10 @@ class CollaborationTaskLifecycleTest {
     }
     @Test void issueAndOrdinaryChatAreNotIndependentCollaborationTasks() {
         try(var f=new Fixture()) {
-            assertThrows(ResponseStatusException.class,()->f.service.archive(f.child,true));
-            assertThrows(ResponseStatusException.class,()->f.service.delete(f.child));
+            assertThrows(DomainException.class,()->f.service.archive(f.child,true));
+            assertThrows(DomainException.class,()->f.service.delete(f.child));
             f.jdbc.update("UPDATE hub_session SET mode='ai' WHERE id=?",f.other);
-            assertEquals(404,assertThrows(ResponseStatusException.class,()->f.service.delete(f.other)).getStatusCode().value());
+            assertEquals(404,assertThrows(DomainException.class,()->f.service.delete(f.other)).statusCode());
         }
     }
 }

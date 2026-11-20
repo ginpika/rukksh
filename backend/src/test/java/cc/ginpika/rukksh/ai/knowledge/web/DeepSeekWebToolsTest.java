@@ -5,7 +5,7 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 import cc.ginpika.rukksh.ai.core.tool.*;
 import cc.ginpika.rukksh.ai.core.tool.doc.*;
-import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolbox;
+import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolExecutor;
 import cc.ginpika.rukksh.ai.knowledge.recall.*;
 import cc.ginpika.rukksh.config.DeepSeekWebSettings;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 class DeepSeekWebToolsTest {
     @Test void everyToolSelectionPathHonorsRuntimeSwitches() {
         var settings = mock(DeepSeekWebSettings.class);
-        var manager = new ToolManager(List.of(new SearchVectorChunksTool(), new SearchWebTool(settings), new FetchWebTool(settings)), new ObjectMapper());
+        var manager = new ToolRegistry(List.of(new SearchVectorChunksTool(), new SearchWebTool(settings), new FetchWebTool(settings)), new ObjectMapper());
         var c = new DeepSeekWebSettings.Config("https://api.deepseek.com", "fixture", true, false, true, 5, 2);
         when(settings.resolve()).thenReturn(c);
         assertEquals(1, manager.toolsOf(ToolSurface.CHAT).size());
@@ -36,8 +36,7 @@ class DeepSeekWebToolsTest {
         when(settings.resolve()).thenReturn(new DeepSeekWebSettings.Config("https://api.deepseek.com", "fixture", true, false, true, 5, 2));
         var service = new WebRetrievalService(settings, client);
         var recorder = mock(RagRecallRecorder.class);
-        var toolbox = new KnowledgeToolbox(null, null, null, null, null, null, null, null, null, null,
-                recorder, null, null, null, null, null, null, null, null, service);
+        var toolbox = new KnowledgeToolExecutor(null, null, null, null, null, null, null, recorder, null, service);
         var search = toolbox.run("search_web", "{\"query\":\"hello\"}", "chat");
         assertTrue(search.content().contains("未启用"));
         verify(recorder).record("search_web", "{\"query\":\"hello\"}", search.content(), "chat");

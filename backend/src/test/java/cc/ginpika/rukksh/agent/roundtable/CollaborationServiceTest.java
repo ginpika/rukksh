@@ -1,5 +1,12 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.member.AgentDtos;
 import cc.ginpika.rukksh.agent.member.AgentStore.AgentRow;
@@ -13,7 +20,6 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
-import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -26,11 +32,11 @@ class CollaborationServiceTest {
         final RoundtableSessionStore sessions = new RoundtableSessionStore(jdbc);
         final RoundtableMessageStore messages = new RoundtableMessageStore(jdbc);
         final ProjectStore projects = new ProjectStore(jdbc);
-        final RoundtableChatService chat = mock(RoundtableChatService.class);
+        final RoundtableSessionService sessionService = mock(RoundtableSessionService.class);
         final AgentDirectory directory = mock(AgentDirectory.class);
         final RoundtableDiscussionRuntime runtime = mock(RoundtableDiscussionRuntime.class);
         final RoundtableWorkRuntime work = mock(RoundtableWorkRuntime.class);
-        final CollaborationService service = new CollaborationService(store, chat, sessions, messages, directory, projects, runtime, work,
+        final CollaborationService service = new CollaborationService(store, sessionService, sessions, messages, directory, projects, runtime, work,
                 new CollaborationIssueActions(store, new RoundtableTodoStore(jdbc), messages, sessions,
                         new RoundtableProgress(jdbc), mock(cc.ginpika.rukksh.agent.runtime.event.RuntimeEventBus.class), new CollaborationPlan(jdbc, new cc.ginpika.rukksh.project.ProjectKnowledgeStore(jdbc))), new CollaborationPlan(jdbc, new cc.ginpika.rukksh.project.ProjectKnowledgeStore(jdbc)), mock(CollaborationWorkspaceBinding.class));
         Fixture() throws Exception {
@@ -41,12 +47,12 @@ class CollaborationServiceTest {
             when(a.id()).thenReturn("a"); when(b.id()).thenReturn("b"); when(c.id()).thenReturn("c");
             when(directory.peers()).thenReturn(List.of(a, b, c));
             when(directory.peers(anyString())).thenReturn(List.of(a, b));
-            when(chat.createSession(anyList(), nullable(String.class))).thenAnswer(inv -> {
+            when(sessionService.createSession(anyList(), nullable(String.class))).thenAnswer(inv -> {
                 String id = sessions.insert(new ObjectMapper().writeValueAsString(inv.getArgument(0)));
                 jdbc.update("UPDATE hub_session SET project_id=? WHERE id=?", inv.getArgument(1), id);
                 return new AgentDtos.NewSession(id);
             });
-            when(chat.session(anyString())).thenAnswer(inv -> {
+            when(sessionService.session(anyString())).thenAnswer(inv -> {
                 var row = sessions.findById(inv.getArgument(0)).orElseThrow();
                 return new AgentDtos.SessionView(row.id(), row.title(), null, null, "closed", null,
                         List.of("a", "b"), row.createdAt(), row.updatedAt(), row.projectId());
@@ -60,8 +66,8 @@ class CollaborationServiceTest {
 
     @Test void taskPersistsSelectedControllerAndRequiresIndependentMembers() throws Exception {
         try (var f = new Fixture()) {
-            assertThrows(ResponseStatusException.class, () -> f.service.task("project", "单人成果", List.of("a"), "a"));
-            assertThrows(ResponseStatusException.class, () -> f.service.task("project", "无效主控", List.of("a", "b"), "c"));
+            assertThrows(DomainException.class, () -> f.service.task("project", "单人成果", List.of("a"), "a"));
+            assertThrows(DomainException.class, () -> f.service.task("project", "无效主控", List.of("a", "b"), "c"));
             String task = f.service.task("project", "由乙主控", List.of("a", "b"), "b").sessionId();
             var plan = f.service.workspace().plans().stream().filter(p -> task.equals(p.sessionId())).findFirst().orElseThrow();
             assertEquals("b", plan.coordinatorId()); assertEquals("planning", plan.phase());
@@ -96,11 +102,11 @@ class CollaborationServiceTest {
         try (var f = new Fixture()) {
             String main = f.task();
             int before = f.sessions.listAll().size();
-            assertThrows(ResponseStatusException.class, () -> f.service.createIssue(main, "问题", List.of("c")));
-            assertThrows(ResponseStatusException.class, () -> f.service.createIssue(main, "问题", List.of()));
+            assertThrows(DomainException.class, () -> f.service.createIssue(main, "问题", List.of("c")));
+            assertThrows(DomainException.class, () -> f.service.createIssue(main, "问题", List.of()));
             assertEquals(before, f.sessions.listAll().size());
             var issue = f.service.createIssue(main, "有效问题", List.of("a"));
-            assertThrows(ResponseStatusException.class, () -> f.service.createIssue(issue.sessionId(), "嵌套问题", List.of("a")));
+            assertThrows(DomainException.class, () -> f.service.createIssue(issue.sessionId(), "嵌套问题", List.of("a")));
             assertEquals(before + 1, f.sessions.listAll().size());
         }
     }
@@ -110,12 +116,12 @@ class CollaborationServiceTest {
             var issue = f.service.createIssue(f.task(), "待解决问题", List.of("a"));
             when(f.runtime.snapshot(issue.sessionId())).thenReturn(new RoundtableDiscussionRuntime.ConversationSnapshot(
                     issue.sessionId(), "multi-agent", true, null, null, null, Map.of(), Map.of()));
-            assertThrows(ResponseStatusException.class, () -> f.service.resolve(issue.id(), "过早结论"));
+            assertThrows(DomainException.class, () -> f.service.resolve(issue.id(), "过早结论"));
             assertEquals("open", f.store.issues().getFirst().status());
             when(f.runtime.snapshot(issue.sessionId())).thenReturn(new RoundtableDiscussionRuntime.ConversationSnapshot(
                     issue.sessionId(), "multi-agent", false, null, null, null, Map.of(), Map.of()));
             when(f.work.isWorking(issue.sessionId(), "a")).thenReturn(true);
-            assertThrows(ResponseStatusException.class, () -> f.service.resolve(issue.id(), "仍在执行"));
+            assertThrows(DomainException.class, () -> f.service.resolve(issue.id(), "仍在执行"));
             assertEquals("open", f.store.issues().getFirst().status());
         }
     }
@@ -127,8 +133,8 @@ class CollaborationServiceTest {
             f.service.members("project", List.of("b", "b", "c"));
             assertEquals(List.of("b", "c"), new CollaborationStore(f.jdbc).projectMembers().get("project"));
             assertEquals(original, f.sessions.findById(main).orElseThrow().memberIds());
-            assertThrows(ResponseStatusException.class, () -> f.service.members("missing", List.of("a")));
-            assertThrows(ResponseStatusException.class, () -> f.service.members("project", List.of("deleted-agent")));
+            assertThrows(DomainException.class, () -> f.service.members("missing", List.of("a")));
+            assertThrows(DomainException.class, () -> f.service.members("project", List.of("deleted-agent")));
         }
     }
 }

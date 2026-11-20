@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.ai.knowledge.store;
 
-import cc.ginpika.rukksh.ai.knowledge.retrieval.VecMath;
+import cc.ginpika.rukksh.ai.core.util.VectorMath;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -421,7 +421,7 @@ public class GraphStore {
                 "INSERT INTO graph_entity_embedding(id, model, dim, vec, updated_at) VALUES(?,?,?,?,?) "
                         + "ON CONFLICT(id) DO UPDATE SET model=excluded.model, dim=excluded.dim, "
                         + "vec=excluded.vec, updated_at=excluded.updated_at",
-                entityId, model, vec.length, VecMath.encode(vec), System.currentTimeMillis());
+                entityId, model, vec.length, VectorMath.encode(vec), System.currentTimeMillis());
     }
 
     /** 实体向量相似度命中（同模型全量余弦 top-k，M0 暴力；sim<=0 不返回） */
@@ -436,7 +436,7 @@ public class GraphStore {
         }
         List<EntitySimilarity> scored = new ArrayList<>();
         scored.addAll(scoped("SELECT id,dim,vec FROM graph_entity_embedding WHERE model=? AND id IN (SELECT id FROM graph_entity WHERE @entities)",
-                (rs,n)->new EntitySimilarity(rs.getString("id"),VecMath.cosine(qvec,VecMath.decode(rs.getBytes("vec"),rs.getInt("dim")))),model)
+                (rs,n)->new EntitySimilarity(rs.getString("id"),VectorMath.cosine(qvec,VectorMath.decode(rs.getBytes("vec"),rs.getInt("dim")))),model)
                 .stream().filter(s->s.sim()>0).toList());
         scored.sort((a, b) -> Float.compare(b.sim(), a.sim()));
         return scored.size() <= limit ? scored : scored.subList(0, limit);

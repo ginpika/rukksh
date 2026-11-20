@@ -3,7 +3,7 @@ package cc.ginpika.rukksh.ai.llm;
 import cc.ginpika.rukksh.config.LlmProps;
 import cc.ginpika.rukksh.config.ModelTarget;
 import cc.ginpika.rukksh.config.SettingsService;
-import cc.ginpika.rukksh.ai.knowledge.retrieval.RerankScorer;
+import cc.ginpika.rukksh.ai.llm.RerankScorer;
 import cc.ginpika.rukksh.stats.TokenUsageService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

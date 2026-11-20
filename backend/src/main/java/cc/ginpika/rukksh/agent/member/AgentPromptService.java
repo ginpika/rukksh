@@ -1,11 +1,13 @@
 package cc.ginpika.rukksh.agent.member;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.member.AgentStore;
 import cc.ginpika.rukksh.agent.member.AgentPromptStore;
 import cc.ginpika.rukksh.ai.core.prompt.PromptComposer;
 import cc.ginpika.rukksh.ai.core.prompt.PromptLibrary;
 import cc.ginpika.rukksh.ai.core.prompt.PromptLibrary.PromptContext;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.core.prompt.block.IdentityBlock;
 import cc.ginpika.rukksh.ai.core.prompt.dto.PromptDtos;
 import java.util.ArrayList;
@@ -16,9 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 成员提示词：<b>每个智能体独立一套</b>「对话」提示词（对话身份 / 对话增强 / 终端 / 子代理 /
@@ -40,7 +40,7 @@ import org.springframework.web.server.ResponseStatusException;
  * 存在 {@code agent_prompt_*} 里（每个成员可各持一份协作规程），不再全桌共用一份。
  *
  * <p><b>内置 Agent 的取舍</b>：内置 Agent（{@link AgentDirectory#BUILTIN_ID}）的提示词恒等于全局提示词，
- * 故它这一侧的读写（含圆桌）一律路由到全局 {@link PromptManager}——这样「改内置 = 改首页对话 / 改全局圆桌」，
+ * 故它这一侧的读写（含圆桌）一律路由到全局 {@link PromptService}——这样「改内置 = 改首页对话 / 改全局圆桌」，
  * 且内置不必在 {@code agent_prompt_*} 里另存一份（最简单、也保持内置 == 全局）。
  */
 @Service
@@ -51,10 +51,10 @@ public class AgentPromptService {
 
     private final AgentPromptStore store;
     private final PromptComposer composer;
-    private final PromptManager prompts;
+    private final PromptService prompts;
     private final AgentStore peers;
 
-    public AgentPromptService(AgentPromptStore store, PromptComposer composer, PromptManager prompts,
+    public AgentPromptService(AgentPromptStore store, PromptComposer composer, PromptService prompts,
                              AgentStore peers) {
         this.store = store;
         this.composer = composer;
@@ -213,9 +213,9 @@ public class AgentPromptService {
             return;
         }
         AgentPromptStore.VersionRow row = store.version(id).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "提示词版本不存在: " + id));
+                () -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "提示词版本不存在: " + id));
         if (!row.peerId().equals(peerId) || !row.promptKey().equals(slotKey)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST,
                     "该版本不属于这位成员的提示词位 " + slotKey);
         }
         store.saveBinding(peerId, slotKey, id);
@@ -254,7 +254,7 @@ public class AgentPromptService {
             return;
         }
         PromptContext ctx = PromptLibrary.context(contextKey).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "上下文不存在: " + contextKey));
+                () -> new DomainException(DomainException.ErrorKind.BAD_REQUEST, "上下文不存在: " + contextKey));
         Set<String> known = new LinkedHashSet<>(ctx.parts());
         List<String> order = new ArrayList<>();
         List<String> given = req == null || req.slots() == null ? List.of() : req.slots();
@@ -278,7 +278,7 @@ public class AgentPromptService {
 
     // ---------- 私有 ----------
 
-    /** 内置 Agent 的人设就是全局提示词：它这一侧的读写一律路由到全局（{@link PromptManager}） */
+    /** 内置 Agent 的人设就是全局提示词：它这一侧的读写一律路由到全局（{@link PromptService}） */
     private static boolean isBuiltin(String peerId) {
         return AgentDirectory.isBuiltin(peerId);
     }
@@ -302,19 +302,19 @@ public class AgentPromptService {
 
     private void requirePeer(String peerId) {
         if (peerId == null || peerId.isBlank() || peers.peer(peerId).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "成员不存在: " + peerId);
+            throw new DomainException(DomainException.ErrorKind.NOT_FOUND, "成员不存在: " + peerId);
         }
     }
 
     private void requireSlot(String slotKey) {
         if (!composer.hasBlock(slotKey)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "提示词位不存在: " + slotKey);
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "提示词位不存在: " + slotKey);
         }
     }
 
     private static void requireName(PromptDtos.VersionRequest req) {
         if (req == null || req.name() == null || req.name().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "版本名不能为空");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "版本名不能为空");
         }
     }
 
@@ -322,10 +322,10 @@ public class AgentPromptService {
     private AgentPromptStore.VersionRow requireOwnedVersion(String peerId, String id) {
         AgentPromptStore.VersionRow row = (id == null ? Optional.<AgentPromptStore.VersionRow>empty()
                 : store.version(id))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND,
                         "提示词版本不存在: " + id));
         if (!row.peerId().equals(peerId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "提示词版本不存在: " + id);
+            throw new DomainException(DomainException.ErrorKind.NOT_FOUND, "提示词版本不存在: " + id);
         }
         return row;
     }

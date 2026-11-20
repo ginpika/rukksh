@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.ai.computer.terminal;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.computer.terminal.dto.TerminalDtos;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
 import cc.ginpika.rukksh.config.TerminalProps;
@@ -12,7 +14,6 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
-import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -52,7 +53,7 @@ class WorkspaceDockerSettingsTest {
                     "{\"kind\":\"docker\",\"hostWorkdir\":\"/srv/app\",\"workdir\":\"/./\"}",
                     "{\"kind\":\"docker\",\"hostWorkdir\":\"/srv/app\",\"workdir\":\"/a/../b\"}",
                     "{\"kind\":\"docker\",\"hostWorkdir\":\"/srv/app\",\"container\":\"existing\"}")) {
-                assertThrows(ResponseStatusException.class, () -> service.create(request(body)));
+                assertThrows(DomainException.class, () -> service.create(request(body)));
             }
             assertEquals(3, store.targets().size(), "Invalid binding must not create a workspace");
         }

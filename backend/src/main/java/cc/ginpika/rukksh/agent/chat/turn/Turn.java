@@ -9,7 +9,7 @@ import java.util.List;
  *
  * <p><b>不变量</b>：Turn 是协议闭合的最小单位——{@link Reply#toolRounds()} 里 assistant 的
  * {@code tool_calls} 与其 tool 结果必须配对、同生同灭；回放就是把 Turn 序列按序展开成 messages
- * （见 {@link History#replay}），不必再猜边界。
+ * （见 {@link ChatHistoryProvider#replay}），不必再猜边界。
  *
  * <p>子代理 / 计划将来是它的<b>子 Turn</b>（完成即触发父会话的一条新 Turn，「再激活」由此进模型）——
  * 嵌套字段随子代理那一步一并落下，此处先不建空位。

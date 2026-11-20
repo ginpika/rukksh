@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import cc.ginpika.rukksh.ai.core.tool.*;
 import cc.ginpika.rukksh.ai.core.tool.doc.*;
+import cc.ginpika.rukksh.ai.core.util.ToolTextPage;
 import cc.ginpika.rukksh.ai.knowledge.store.*;
 import cc.ginpika.rukksh.ai.knowledge.web.*;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,7 +25,7 @@ class DocumentLibraryTest {
     private JdbcTemplate jdbc;
     private DocumentStore documents;
     private ChunkStore chunks;
-    private DocumentToolbox toolbox;
+    private DocumentToolExecutor toolbox;
     private WebSnapshotStore snapshots;
 
     @BeforeEach void setUp() {
@@ -37,7 +38,7 @@ class DocumentLibraryTest {
         when(chunker.split(anyString())).thenAnswer(call -> List.of(call.getArgument(0, String.class)));
         documents = new DocumentStore(jdbc, chunks, new GraphStore(jdbc, om), chunker, "unused", evidence);
         snapshots = new WebSnapshotStore(jdbc, chunks, documents, om, evidence);
-        toolbox = new DocumentToolbox(documents, om);
+        toolbox = new DocumentToolExecutor(documents, om);
     }
 
     @AfterEach void close() { ds.destroy(); }
@@ -139,7 +140,7 @@ class DocumentLibraryTest {
 
     @Test void ragResultsExposeHandlesForDirectDocumentAndSnapshotReading() {
         var snapshot = save("Source title");
-        var text = ResultTexts.ragChunksText(chunks.rowsByDoc(snapshot.docId()));
+        var text = KnowledgeResultFormatter.ragChunksText(chunks.rowsByDoc(snapshot.docId()));
         assertTrue(text.contains("doc_id: " + snapshot.docId()));
         assertTrue(text.contains("snapshot_id: " + snapshot.id()));
         assertTrue(text.contains("chunk_id: "));
@@ -179,7 +180,7 @@ class DocumentLibraryTest {
     }
 
     @Test void toolsAreAvailableInChatHeartbeatAndTheDefaultReadOnlyWorkerSet() {
-        var manager = new ToolManager(List.of(new ListDocumentsTool(), new ReadWebSnapshotTool(), new ReadDocumentTool(), new SearchDocumentsTool()), om);
+        var manager = new ToolRegistry(List.of(new ListDocumentsTool(), new ReadWebSnapshotTool(), new ReadDocumentTool(), new SearchDocumentsTool()), om);
         for (var schemas : List.of(manager.toolsOf(ToolSurface.CHAT), manager.toolsOf(ToolSurface.HEARTBEAT), manager.readOnlyToolsOf(ToolSurface.CHAT))) {
             assertEquals(4, schemas.size());
             assertTrue(schemas.toString().contains("list_documents")); assertTrue(schemas.toString().contains("read_web_snapshot"));

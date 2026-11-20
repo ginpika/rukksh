@@ -51,4 +51,8 @@ public class SsoProps {
     public void setTokenTtl(Duration tokenTtl) {
         this.tokenTtl = tokenTtl;
     }
+
+    public boolean isEnabled() {
+        return serverUrl != null && !serverUrl.isBlank();
+    }
 }

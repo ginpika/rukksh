@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.stats;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.config.ModelTarget;
 import cc.ginpika.rukksh.stats.dto.StatsDtos;
 import cc.ginpika.rukksh.stats.store.TokenUsageStore;
@@ -14,10 +16,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class TokenUsageService {
@@ -185,7 +185,7 @@ public class TokenUsageService {
 
     @Transactional
     public void deletePrice(long id) {
-        if (!store.deletePrice(id)) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"价格版本不存在");
+        if (!store.deletePrice(id)) throw new DomainException(DomainException.ErrorKind.NOT_FOUND,"价格版本不存在");
     }
 
     private static void validatePrice(BigDecimal price,boolean optional) {
@@ -194,7 +194,7 @@ public class TokenUsageService {
             throw bad("价格需为 0 至 10 亿的数字，最多 8 位小数；留空不代表免费");
     }
     private static String blankToNull(String s) { return s==null || s.isBlank() ? null : s.strip(); }
-    private static ResponseStatusException bad(String message) { return new ResponseStatusException(HttpStatus.BAD_REQUEST,message); }
+    private static DomainException bad(String message) { return new DomainException(DomainException.ErrorKind.BAD_REQUEST,message); }
     private static final Comparator<StatsDtos.Bucket> BY_TOKENS=Comparator.comparingLong(StatsDtos.Bucket::totalTokens).reversed();
 
     /** 部分/失败记录不计价；缓存单价未知时也不把缓存当成普通输入收费。 */

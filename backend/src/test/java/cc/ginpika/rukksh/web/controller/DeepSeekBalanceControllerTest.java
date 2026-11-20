@@ -1,13 +1,15 @@
 package cc.ginpika.rukksh.web.controller;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import cc.ginpika.rukksh.ai.llm.DeepSeekBalanceService;
 import cc.ginpika.rukksh.config.*;
 import cc.ginpika.rukksh.config.store.SettingsStore;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
 
 class DeepSeekBalanceControllerTest {
     @Test void usesSavedModelAndIndependentWebCredentialsAndDisablesBrowserCaching() {
@@ -30,10 +32,10 @@ class DeepSeekBalanceControllerTest {
         var store = mock(SettingsStore.class);
         when(store.model("deleted")).thenReturn(Optional.empty());
         var props = new LlmProps(); props.setBaseUrl("https://api.deepseek.com"); props.setApiKey("env-secret");
-        var models = new SettingsService(props, store, null, null, null, null, null, null, null, null);
+        var models = new SettingsService(props, store);
         var balances = mock(DeepSeekBalanceService.class);
         var controller = new DeepSeekBalanceController(models, mock(DeepSeekWebSettings.class), balances);
-        assertEquals(404, assertThrows(ResponseStatusException.class, () -> controller.model("deleted", false)).getStatusCode().value());
+        assertEquals(404, assertThrows(DomainException.class, () -> controller.model("deleted", false)).statusCode());
         verifyNoInteractions(balances);
         assertEquals("env-secret", models.requireModelTarget("env").apiKey());
     }

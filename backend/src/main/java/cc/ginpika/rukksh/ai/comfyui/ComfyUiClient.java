@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.ai.comfyui;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -13,9 +15,7 @@ import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 /** 自托管 ComfyUI 的 HTTP 协议；提交不自动重试，避免网络故障时重复生成。 */
 @Component
@@ -133,7 +133,7 @@ public class ComfyUiClient {
     }
     private static long remainingMillis(long deadline) {
         long remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
-        if (remaining <= 0) throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "等待 ComfyUI 生成图片超时，远程任务可能仍在运行，请勿立即重复提交");
+        if (remaining <= 0) throw new DomainException(DomainException.ErrorKind.GATEWAY_TIMEOUT, "等待 ComfyUI 生成图片超时，远程任务可能仍在运行，请勿立即重复提交");
         return remaining;
     }
     static String imageType(byte[] b) {
@@ -145,5 +145,5 @@ public class ComfyUiClient {
                 || new String(b, 0, 6, java.nio.charset.StandardCharsets.US_ASCII).equals("GIF87a"))) return "image/gif";
         return null;
     }
-    private static ResponseStatusException upstream(String message) { return new ResponseStatusException(HttpStatus.BAD_GATEWAY, message); }
+    private static DomainException upstream(String message) { return new DomainException(DomainException.ErrorKind.BAD_GATEWAY, message); }
 }

@@ -1,0 +1,686 @@
+package cc.ginpika.rukksh.ai.knowledge.ingest;
+
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
+import cc.ginpika.rukksh.ai.core.tool.ToolResult;
+import cc.ginpika.rukksh.ai.core.tool.doc.FetchWebTool;
+import cc.ginpika.rukksh.ai.core.tool.doc.SearchVectorChunksTool;
+import cc.ginpika.rukksh.ai.core.tool.doc.SearchWebTool;
+import cc.ginpika.rukksh.ai.core.tool.graph.DeleteGraphItemTool;
+import cc.ginpika.rukksh.ai.core.tool.graph.EditEntityPropsTool;
+import cc.ginpika.rukksh.ai.core.tool.graph.EditRelationPropsTool;
+import cc.ginpika.rukksh.ai.core.tool.graph.ExploreSubgraphTool;
+import cc.ginpika.rukksh.ai.core.tool.graph.QueryEntityPathTool;
+import cc.ginpika.rukksh.ai.core.tool.graph.QueryEntityRelationsTool;
+import cc.ginpika.rukksh.ai.core.tool.graph.SearchGraphEntitiesTool;
+import cc.ginpika.rukksh.ai.core.tool.graph.UpsertEdgeTool;
+import cc.ginpika.rukksh.ai.core.tool.graph.UpsertNodeTool;
+import cc.ginpika.rukksh.ai.core.util.LlmJson;
+import cc.ginpika.rukksh.ai.knowledge.anchor.GraphAnchors;
+import cc.ginpika.rukksh.ai.knowledge.recall.RagRecallRecorder;
+import cc.ginpika.rukksh.ai.knowledge.retrieval.FastSearchService;
+import cc.ginpika.rukksh.ai.knowledge.retrieval.GraphExplorer;
+import cc.ginpika.rukksh.ai.knowledge.retrieval.GraphPathFinder;
+import cc.ginpika.rukksh.ai.knowledge.store.ChunkStore;
+import cc.ginpika.rukksh.ai.knowledge.store.GraphStore;
+import cc.ginpika.rukksh.ai.knowledge.web.WebRetrievalService;
+import cc.ginpika.rukksh.ai.knowledge.web.WebToolExecutor;
+import cc.ginpika.rukksh.ai.llm.EmbeddingClient;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+/**
+ * 知识库工具执行器：按 OpenAI 风格的工具调用节点分发到 RAG 检索、图谱读写、文档库与网页检索工具实现。
+ * 记忆域与通用能力工具由上层 {@code AgentToolRouter} 协调，保持知识库模块与记忆/生图解耦。
+ */
+@Component
+public class KnowledgeToolExecutor {
+
+    private static final Logger log = LoggerFactory.getLogger(KnowledgeToolExecutor.class);
+
+    /** 图谱实体查找工具单次返回的实体条数上限 */
+    private static final int GRAPH_LOOKUP_LIMIT = 10;
+
+    /** 图谱最短路径工具返回的路径条数上限 */
+    private static final int PATH_TOP_K = 3;
+
+    /** PPR 子图探索：seed 实体数 / BFS 子图节点数 / 返回周边实体数上限 */
+    private static final int EXPLORE_SEED_LIMIT = 4;
+    private static final int EXPLORE_NODE_LIMIT = 240;
+    private static final int EXPLORE_TOP_K = 12;
+
+    /** 实体消歧的 LIKE 候选条数上限 */
+    private static final int ENTITY_CANDIDATE_LIMIT = 5;
+
+    /** 实体语义定位阈值：相似度 >=RESOLVE 且领先次名 >=GAP 直接定位；>=CANDIDATE 作为候选交模型确认 */
+    private static final float VECTOR_RESOLVE_MIN = 0.55f;
+    private static final float VECTOR_GAP_MIN = 0.05f;
+    private static final float VECTOR_CANDIDATE_MIN = 0.40f;
+
+    private final FastSearchService fast;
+    private final GraphStore graph;
+    private final GraphPathFinder pathFinder;
+    private final ChunkStore chunkStore;
+    private final DocumentToolExecutor documents;
+    private final EmbeddingClient embedding;
+    private final ToolRegistry tools;
+    private final RagRecallRecorder ragRecalls;
+    private final WebToolExecutor web;
+    private final WebRetrievalService webRetrieval;
+
+    public KnowledgeToolExecutor(FastSearchService fast, GraphStore graph, GraphPathFinder pathFinder,
+                                 ChunkStore chunkStore, DocumentToolExecutor documents, EmbeddingClient embedding,
+                                 ToolRegistry tools, RagRecallRecorder ragRecalls,
+                                 WebToolExecutor web, WebRetrievalService webRetrieval) {
+        this.fast = fast;
+        this.graph = graph;
+        this.pathFinder = pathFinder;
+        this.chunkStore = chunkStore;
+        this.documents = documents;
+        this.embedding = embedding;
+        this.tools = tools;
+        this.ragRecalls = ragRecalls;
+        this.web = web;
+        this.webRetrieval = webRetrieval;
+    }
+
+    /** 执行一次 OpenAI 风格的工具调用节点；source 标明来自哪条流（chat / multiagent / heartbeat / plan / agent） */
+    public ToolResult run(JsonNode call, String source) {
+        String name = call.path("function").path("name").asText("");
+        String args = call.path("function").path("arguments").asText("");
+        return run(name, args, source);
+    }
+
+    /** 执行一次工具调用，返回给模型的 tool 消息内容（按工具名分发）；召回类工具顺手留痕 */
+    public ToolResult run(String name, String argsJson, String source) {
+        JsonNode args = LlmJson.readTree(argsJson);
+        if (SearchWebTool.NAME.equals(name) || FetchWebTool.NAME.equals(name)) {
+            String content;
+            if (FetchWebTool.NAME.equals(name)) {
+                content = webRetrieval.fetch(args.path("url").asText(""));
+            } else {
+                var result = webRetrieval.search(args.path("query").asText(""), true,
+                        args.has("count") ? args.path("count").asInt(0) : null);
+                content = result.enabled() ? WebRetrievalService.render(result)
+                        : "网页检索未启用，请在设置中开启「在 RAG 中启用」";
+            }
+            ragRecalls.record(name, argsJson, content, source);
+            return new ToolResult(name, argsJson, content, false);
+        }
+        if (WebToolExecutor.handles(name)) {
+            return new ToolResult(name, argsJson, web.run(name, args), tools.isWriteTool(name));
+        }
+        if (DocumentToolExecutor.handles(name)) {
+            return new ToolResult(name, argsJson, documents.run(name, args), tools.isWriteTool(name));
+        }
+        String content = switch (name) {
+            case SearchVectorChunksTool.NAME -> ragTool(args);
+            case SearchGraphEntitiesTool.NAME -> graphSearchTool(args);
+            case QueryEntityRelationsTool.NAME -> entityRelationsTool(args);
+            case QueryEntityPathTool.NAME -> entityPathTool(args);
+            case ExploreSubgraphTool.NAME -> exploreSubgraphTool(args);
+            case EditEntityPropsTool.NAME -> editEntityPropsTool(args);
+            case EditRelationPropsTool.NAME -> editRelationPropsTool(args);
+            case UpsertNodeTool.NAME -> upsertNodeTool(args);
+            case UpsertEdgeTool.NAME -> upsertEdgeTool(args);
+            case DeleteGraphItemTool.NAME -> deleteGraphTool(args);
+            default -> "未知工具: " + name;
+        };
+        ragRecalls.record(name, argsJson, content, source);
+        return new ToolResult(name, argsJson, content, tools.isWriteTool(name));
+    }
+
+    /** search_vector_chunks：关键词检索知识库 chunk（三路召回后按 RRF 取前若干条），
+     *  命中同时附带图谱结构证据（锚点实体 + 子图三元组，纯字符串拼接无 LLM 成本） */
+    private String ragTool(JsonNode args) {
+        String keywords = args.path("keywords").asText("");
+        if (keywords.isBlank()) {
+            return "参数缺少 keywords";
+        }
+        FastSearchService.RagRecall recall = fast.ragRecall(keywords);
+        String chunksText = KnowledgeResultFormatter.ragChunksText(recall.chunks());
+        String triples = KnowledgeResultFormatter.graphTriplesText(recall.graph());
+        return triples.isEmpty() ? chunksText : chunksText + "\n\n" + triples;
+    }
+
+    /** search_graph_entities：按实体名/别名关键词模糊查找图谱实体；
+     *  字面命中不足时用实体向量语义补足（如「我们公司」→ 星尘科技） */
+    private String graphSearchTool(JsonNode args) {
+        String keywords = args.path("keywords").asText("");
+        if (keywords.isBlank()) {
+            return "参数缺少 keywords";
+        }
+        List<GraphStore.Entity> hits =
+                new ArrayList<>(graph.lookup(List.of(keywords.strip().split("\\s+")), GRAPH_LOOKUP_LIMIT));
+        Set<String> seen = new HashSet<>();
+        for (GraphStore.Entity e : hits) {
+            seen.add(e.id());
+        }
+        List<String> extra = new ArrayList<>();
+        for (GraphStore.EntitySimilarity sim : entityVectorRecall(keywords, GRAPH_LOOKUP_LIMIT)) {
+            if (seen.add(sim.entityId())) {
+                extra.add(sim.entityId());
+                if (hits.size() + extra.size() >= GRAPH_LOOKUP_LIMIT) {
+                    break;
+                }
+            }
+        }
+        if (!extra.isEmpty()) {
+            hits.addAll(graph.entitiesByIds(extra));
+        }
+        return KnowledgeResultFormatter.graphEntitiesText(hits);
+    }
+
+    /** query_entity_relations：定位实体并展开其一跳关系（含边的 props 与来源 chunk）；
+     *  多候选时返回候选清单让模型消歧，不再静默取首条 */
+    private String entityRelationsTool(JsonNode args) {
+        String name = args.path("entity").asText("");
+        if (name.isBlank()) {
+            return "参数缺少 entity";
+        }
+        Resolution r = resolveEntity(name);
+        if (r.candidates() != null) {
+            return candidatesText(name, r.candidates());
+        }
+        if (r.entity() == null) {
+            return "（知识图谱中没有找到实体：" + name + "）";
+        }
+        GraphStore.Entity center = r.entity();
+        List<GraphStore.Edge> edges = graph.edgesTouching(List.of(center.id()));
+        List<GraphStore.Entity> related = graph.entitiesByIds(graph.neighborsOf(List.of(center.id())));
+        return KnowledgeResultFormatter.graphRelationsText(center, edges, related, chunkLabels(edgeChunkIds(edges)));
+    }
+
+    /** query_entity_path：定位两端实体并求其间最短路径（最多 PATH_TOP_K 条，按跳数升序），
+     *  每步附带该边的 props 与来源 */
+    private String entityPathTool(JsonNode args) {
+        String source = args.path("source").asText("");
+        String target = args.path("target").asText("");
+        if (source.isBlank() || target.isBlank()) {
+            return "参数缺少 source / target";
+        }
+        Resolution fromR = resolveEntity(source);
+        if (fromR.candidates() != null) {
+            return candidatesText(source, fromR.candidates());
+        }
+        Resolution toR = resolveEntity(target);
+        if (toR.candidates() != null) {
+            return candidatesText(target, toR.candidates());
+        }
+        GraphStore.Entity from = fromR.entity();
+        GraphStore.Entity to = toR.entity();
+        if (from == null || to == null) {
+            return "（知识图谱中没有找到实体：" + (from == null ? source : target) + "）";
+        }
+        if (from.id().equals(to.id())) {
+            return "（起点与终点为同一实体：" + from.name() + "）";
+        }
+        List<GraphPathFinder.Path> paths = pathFinder.shortestPaths(from.id(), to.id(), PATH_TOP_K);
+        /* 路径上全部节点 id → 名称，供结果文本渲染出可读的实体名（含未在路径端点出现的中转实体） */
+        Map<String, String> names = new LinkedHashMap<>();
+        names.put(from.id(), from.name());
+        names.put(to.id(), to.name());
+        List<String> ids = new ArrayList<>();
+        for (GraphPathFinder.Path p : paths) {
+            ids.addAll(p.nodeIds());
+        }
+        for (GraphStore.Entity e : graph.entitiesByIds(ids)) {
+            names.put(e.id(), e.name());
+        }
+        /* 路径触及的边（Step.edgeId 回查）：渲染 props 与来源 */
+        Map<String, GraphStore.Edge> edgesById = new LinkedHashMap<>();
+        for (GraphStore.Edge e : graph.edgesTouching(ids)) {
+            edgesById.put(e.id(), e);
+        }
+        return KnowledgeResultFormatter.graphPathsText(from, to, paths, names, edgesById,
+                chunkLabels(edgeChunkIds(edgesById.values())));
+    }
+
+    /** explore_subgraph：seed 实体做 PPR 扩散，一次拿到多跳相关子图 + 证据 chunk
+     *  （「张伟和李娜怎么认识的」→ 共同邻居自然浮到高分位，替代多轮工具往返） */
+    private String exploreSubgraphTool(JsonNode args) {
+        List<String> names = new ArrayList<>();
+        for (JsonNode n : args.path("entities")) {
+            String s = n.asText("").strip();
+            if (!s.isBlank() && !names.contains(s)) {
+                names.add(s);
+            }
+        }
+        if (names.isEmpty()) {
+            return "参数缺少 entities";
+        }
+        if (names.size() > EXPLORE_SEED_LIMIT) {
+            names = names.subList(0, EXPLORE_SEED_LIMIT);
+        }
+        Set<String> seedIds = new LinkedHashSet<>();
+        List<String> missing = new ArrayList<>();
+        for (String n : names) {
+            Resolution r = resolveEntity(n);
+            if (r.entity() != null) {
+                seedIds.add(r.entity().id());
+            } else if (r.candidates() != null) {
+                return candidatesText(n, r.candidates());
+            } else {
+                missing.add(n);
+            }
+        }
+        if (seedIds.isEmpty()) {
+            return "（知识图谱中没有找到实体：" + String.join("、", names) + "）";
+        }
+        GraphExplorer.Exploration exploration = new GraphExplorer(graph)
+                .explore(seedIds, EXPLORE_NODE_LIMIT, EXPLORE_TOP_K, KnowledgeResultFormatter.GRAPH_EDGE_LIMIT);
+        String text = KnowledgeResultFormatter.subgraphText(exploration, chunkLabels(exploration.chunkIds()));
+        if (!missing.isEmpty()) {
+            text = "（未找到实体：" + String.join("、", missing) + "，已忽略）\n" + text;
+        }
+        return text;
+    }
+
+    /** edit_entity_props：新增/修改/删除某实体的 KV 属性（底层为覆盖式写入，故先读现有属性再合并写回） */
+    private String editEntityPropsTool(JsonNode args) {
+        String name = args.path("entity").asText("");
+        if (name.isBlank()) {
+            return "参数缺少 entity";
+        }
+        Resolution r = resolveEntity(name);
+        if (r.candidates() != null) {
+            return candidatesText(name, r.candidates()) + "\n未做任何修改";
+        }
+        GraphStore.Entity entity = r.entity();
+        if (entity == null) {
+            return "（知识图谱中没有找到实体：" + name + "，未做任何修改）";
+        }
+        List<GraphStore.Prop> merged = mergeProps(entity.props(), args.path("props"),
+                args.path("remove_keys"));
+        if (merged == null) {
+            return "参数中未提供 props 或 remove_keys，未做任何修改";
+        }
+        graph.updateEntityProps(entity.id(), merged);
+        return "已更新实体「" + entity.name() + "」的属性：" + propsText(merged);
+    }
+
+    /** edit_relation_props：新增/修改/删除某条关系的 KV 属性（关系由 subject + predicate + object 定位） */
+    private String editRelationPropsTool(JsonNode args) {
+        String subject = args.path("subject").asText("");
+        String predicate = args.path("predicate").asText("");
+        String object = args.path("object").asText("");
+        if (subject.isBlank() || predicate.isBlank() || object.isBlank()) {
+            return "参数缺少 subject / predicate / object";
+        }
+        Resolution sR = resolveEntity(subject);
+        if (sR.candidates() != null) {
+            return candidatesText(subject, sR.candidates()) + "\n未做任何修改";
+        }
+        Resolution oR = resolveEntity(object);
+        if (oR.candidates() != null) {
+            return candidatesText(object, oR.candidates()) + "\n未做任何修改";
+        }
+        GraphStore.Entity s = sR.entity();
+        GraphStore.Entity o = oR.entity();
+        if (s == null || o == null) {
+            return "（知识图谱中没有找到实体：" + (s == null ? subject : object) + "，未做任何修改）";
+        }
+        String relationId = GraphStore.relationIdFor(s.id(), predicate, o.id());
+        /* 无按三元组直接取边的方法：借两端 id 触及的边过滤出目标关系，以读取其现有 props */
+        GraphStore.Edge edge = graph.edgesTouching(List.of(s.id())).stream()
+                .filter(e -> relationId.equals(e.id()))
+                .findFirst()
+                .orElse(null);
+        if (edge == null) {
+            return "（知识图谱中没有找到关系：" + s.name() + " --" + predicate + "--> " + o.name()
+                    + "，未做任何修改）";
+        }
+        List<GraphStore.Prop> merged = mergeProps(edge.props(), args.path("props"),
+                args.path("remove_keys"));
+        if (merged == null) {
+            return "参数中未提供 props 或 remove_keys，未做任何修改";
+        }
+        graph.updateRelationProps(relationId, merged);
+        /* 关系属性变动同样算两端实体上的知识变动：刷新 updated_at（不动 created_at） */
+        graph.touchEntities(List.of(s.id(), o.id()));
+        return "已更新关系「" + s.name() + " --" + predicate + "--> " + o.name() + "」的属性："
+                + propsText(merged);
+    }
+
+    /** upsert_node：写入/更新实体节点。按精确名 upsert——不存在则新建（并尝试向量化），
+     *  同名则合并类型/覆盖别名与摘要；另有名称相近的既有实体时附提示，交模型自查是否本应更新而非新建。 */
+    private String upsertNodeTool(JsonNode args) {
+        String name = args.path("name").asText("").trim();
+        if (name.isEmpty()) {
+            return "参数缺少 name";
+        }
+        GraphStore.Entity exist = args.path("identity_key").isTextual()?null:graph.byName(name);
+        /* type 兼容字符串（可逗号/顿号分隔多类型）与字符串数组（同 AnalyzeService 写图） */
+        List<String> types = new ArrayList<>();
+        JsonNode tnode = args.path("type");
+        if (tnode.isArray()) {
+            tnode.forEach(t -> types.add(t.asText()));
+        } else if (tnode.isTextual()) {
+            for (String s : tnode.asText().split("[,，、]")) {
+                types.add(s);
+            }
+        }
+        String primary = types.stream().filter(s -> !s.isBlank()).findFirst().orElse("CONCEPT");
+        List<String> aliases = new ArrayList<>();
+        if (args.path("aliases").isArray()) {
+            args.path("aliases").forEach(a -> aliases.add(a.asText()));
+        }
+        String summary = args.path("summary").asText(null);
+        String entityId=graph.upsertEntity(primary,types,name,aliases,summary,args.path("identity_key").asText(null));
+        embedEntity(entityId, name, summary);
+        String msg = exist == null
+                ? "已新建实体「" + name + "」（type: " + primary + "）"
+                : "已更新实体「" + name + "」（类型已并入，主类型保持 " + exist.type()
+                        + "；别名/摘要按本次提交覆盖）";
+        msg += "；实体 ID="+entityId;
+        /* 写入按精确名，不据此拦截；提示相近实体让模型自查撞名/应否合并 */
+        List<String> near = graph.lookup(List.of(name), ENTITY_CANDIDATE_LIMIT).stream()
+                .filter(e -> !e.name().equals(name))
+                .map(GraphStore.Entity::name)
+                .toList();
+        if (!near.isEmpty()) {
+            msg += "\n注意：图谱中已有名称相近的实体（" + String.join("、", near)
+                    + "），若本应更新它们而非新建，请改用其完整名称重新调用并向用户说明。";
+        }
+        return msg;
+    }
+
+    /** upsert_edge：写入 实体-关系-实体 边。两端按写入侧规则定位（不做语义猜测），
+     *  多候选要求消歧后再写；同一条关系已存在则幂等跳过。 */
+    private String upsertEdgeTool(JsonNode args) {
+        String subj = args.path("subject").asText("").trim();
+        String pred = args.path("predicate").asText("").trim();
+        String obj = args.path("object").asText("").trim();
+        if (subj.isEmpty() || pred.isEmpty() || obj.isEmpty()) {
+            return "参数缺少 subject / predicate / object";
+        }
+        Resolution sr = resolveEntityForWrite(subj);
+        if (sr.candidates() != null) {
+            return candidatesText(subj, sr.candidates()) + "\n未做任何修改";
+        }
+        Resolution or = resolveEntityForWrite(obj);
+        if (or.candidates() != null) {
+            return candidatesText(obj, or.candidates()) + "\n未做任何修改";
+        }
+        GraphStore.Entity s = sr.entity();
+        GraphStore.Entity o = or.entity();
+        int inserted = graph.upsertRelation(s.id(), pred, o.id(), null);
+        /* 新挂关系算实体上的知识变动：刷新两端 updated_at（幂等跳过则不动；
+         *  自动新建的端点在 resolveEntityForWrite 的 upsert 里已带上 created_at/updated_at） */
+        if (inserted == 1) {
+            graph.touchEntities(List.of(s.id(), o.id()));
+        }
+        return (inserted == 1 ? "已新增关系: " : "关系已存在（幂等跳过）: ")
+                + s.name() + " --" + pred + "--> " + o.name();
+    }
+
+    /** delete_graph_item：删除图谱中的实体（连带其全部关系）或一条关系。按 target 分派；
+     *  实体/两端均按读侧规则定位，多候选先消歧、未命中一律「未做任何修改」，不静默删错。 */
+    private String deleteGraphTool(JsonNode args) {
+        String target = args.path("target").asText("").trim();
+        if (target.isEmpty()) {
+            return "参数缺少 target（entity=删实体，relation=删关系）";
+        }
+        return switch (target) {
+            case "entity" -> deleteEntityTool(args);
+            case "relation" -> deleteRelationTool(args);
+            default -> "target 只能是 entity 或 relation，未做任何修改";
+        };
+    }
+
+    /** 删除实体及其全部关联（GraphStore.deleteEntity 先清关系再清 chunk 关联/向量，事务内完成） */
+    private String deleteEntityTool(JsonNode args) {
+        String name = args.path("entity").asText("").trim();
+        if (name.isEmpty()) {
+            return "参数缺少 entity";
+        }
+        Resolution r = resolveEntity(name);
+        if (r.candidates() != null) {
+            return candidatesText(name, r.candidates()) + "\n未做任何修改";
+        }
+        GraphStore.Entity entity = r.entity();
+        if (entity == null) {
+            return "（知识图谱中没有找到实体：" + name + "，未做任何修改）";
+        }
+        if (GraphAnchors.isAnchor(entity)) {
+            return "「" + entity.name() + "」是系统预置的锚点实体，不可删除（未做任何修改）。"
+                    + "锚点承载对世界/用户的长期认知坐标，其上的关系照常可增删改。";
+        }
+        int relations = graph.deleteEntity(entity.id());
+        return "已删除实体「" + entity.name() + "」（连带删除 " + relations + " 条关系，及其文档关联与实体向量）";
+    }
+
+    /** 删除一条关系：按 subject + predicate + object 定位（同 edit_relation_props），命中后按稳定 id 删 */
+    private String deleteRelationTool(JsonNode args) {
+        String subject = args.path("subject").asText("").trim();
+        String predicate = args.path("predicate").asText("").trim();
+        String object = args.path("object").asText("").trim();
+        if (subject.isEmpty() || predicate.isEmpty() || object.isEmpty()) {
+            return "参数缺少 subject / predicate / object";
+        }
+        Resolution sR = resolveEntity(subject);
+        if (sR.candidates() != null) {
+            return candidatesText(subject, sR.candidates()) + "\n未做任何修改";
+        }
+        Resolution oR = resolveEntity(object);
+        if (oR.candidates() != null) {
+            return candidatesText(object, oR.candidates()) + "\n未做任何修改";
+        }
+        GraphStore.Entity s = sR.entity();
+        GraphStore.Entity o = oR.entity();
+        if (s == null || o == null) {
+            return "（知识图谱中没有找到实体：" + (s == null ? subject : object) + "，未做任何修改）";
+        }
+        String relationId = GraphStore.relationIdFor(s.id(), predicate, o.id());
+        int removed = graph.deleteRelation(relationId);
+        if (removed == 0) {
+            return "（知识图谱中没有找到关系：" + s.name() + " --" + predicate + "--> " + o.name()
+                    + "，未做任何修改）";
+        }
+        return "已删除关系: " + s.name() + " --" + predicate + "--> " + o.name();
+    }
+
+    /** 写入侧实体定位（比读取侧 {@link #resolveEntity} 更保守，不做向量语义猜测）：
+     *  精确名 → 别名精确 → 唯一 LIKE 命中则复用；多条 LIKE → 候选交模型消歧；全不中 → 按字面名新建 CONCEPT 节点。 */
+    private Resolution resolveEntityForWrite(String name) {
+        GraphStore.Entity hit = graph.byName(name);
+        if (hit != null) {
+            return Resolution.of(hit);
+        }
+        List<GraphStore.Entity> hits = graph.lookup(List.of(name), ENTITY_CANDIDATE_LIMIT);
+        for (GraphStore.Entity e : hits) {
+            if (aliasExact(e.aliases(), name)) {
+                return Resolution.of(e);
+            }
+        }
+        if (hits.size() == 1) {
+            return Resolution.of(hits.get(0));
+        }
+        if (hits.size() > 1) {
+            return Resolution.ambiguous(hits);
+        }
+        graph.upsertEntity("CONCEPT", name, List.of(), null);
+        embedEntity(graph.byName(name).id(), name, null);
+        return Resolution.of(graph.byName(name));
+    }
+
+    /** 实体向量化入库（供后续语义召回）；embedding 未配置/失败静默跳过——写图不因向量服务抖动而失败 */
+    private void embedEntity(String id, String name, String summary) {
+        if (!embedding.configured()) {
+            return;
+        }
+        try {
+            embedding.embed(summary == null || summary.isBlank() ? name : name + "\n" + summary)
+                    .ifPresent(vec -> graph.saveEntityEmbedding(id, embedding.model(), vec));
+        } catch (RuntimeException e) {
+            log.warn("实体向量化失败（跳过）: {}", e.getMessage());
+        }
+    }
+
+    /** 实体定位结果：entity=唯一命中；candidates=多个候选（交模型/用户消歧）；两者皆空=未找到 */
+    private record Resolution(GraphStore.Entity entity, List<GraphStore.Entity> candidates) {
+        static Resolution of(GraphStore.Entity e) {
+            return new Resolution(e, null);
+        }
+
+        static Resolution ambiguous(List<GraphStore.Entity> candidates) {
+            return new Resolution(null, candidates);
+        }
+    }
+
+    /**
+     * 定位实体（不静默猜错）：
+     * ① 精确名 → ② 别名精确命中 → ③ LIKE 唯一命中 → ④ LIKE 多条 → 返回候选清单交模型消歧；
+     * ⑤ 字面全不中 → 实体向量语义回退（相似度过线直接定位，弱命中作为候选确认，否则未找到）。
+     */
+    private Resolution resolveEntity(String name) {
+        GraphStore.Entity hit = graph.byName(name);
+        if (hit != null) {
+            return Resolution.of(hit);
+        }
+        List<GraphStore.Entity> hits = graph.lookup(List.of(name), ENTITY_CANDIDATE_LIMIT);
+        for (GraphStore.Entity e : hits) {
+            if (aliasExact(e.aliases(), name)) {
+                return Resolution.of(e);
+            }
+        }
+        if (hits.size() == 1) {
+            return Resolution.of(hits.get(0));
+        }
+        if (hits.size() > 1) {
+            return Resolution.ambiguous(hits);
+        }
+        /* 字面不匹配（如「我们公司」）→ 语义回退 */
+        List<GraphStore.EntitySimilarity> sims = entityVectorRecall(name, 3);
+        if (sims.isEmpty() || sims.get(0).sim() < VECTOR_CANDIDATE_MIN) {
+            return new Resolution(null, null);
+        }
+        /* 高分且与次名拉开差距才直接定位；否则作为候选清单交模型确认 */
+        float top1 = sims.get(0).sim();
+        float top2 = sims.size() > 1 ? sims.get(1).sim() : 0f;
+        if (top1 >= VECTOR_RESOLVE_MIN && top1 - top2 >= VECTOR_GAP_MIN) {
+            GraphStore.Entity e = graph.entitiesByIds(List.of(sims.get(0).entityId()))
+                    .stream().findFirst().orElse(null);
+            return e == null ? new Resolution(null, null) : Resolution.of(e);
+        }
+        List<GraphStore.Entity> candidates = graph.entitiesByIds(sims.stream()
+                .filter(s -> s.sim() >= VECTOR_CANDIDATE_MIN)
+                .map(GraphStore.EntitySimilarity::entityId)
+                .toList());
+        return candidates.isEmpty() ? new Resolution(null, null) : Resolution.ambiguous(candidates);
+    }
+
+    /** 别名 JSON 数组中是否精确含 name */
+    private boolean aliasExact(String aliasesJson, String name) {
+        if (aliasesJson == null || aliasesJson.isBlank()) {
+            return false;
+        }
+        for (JsonNode a : LlmJson.readTree(aliasesJson)) {
+            if (name.equals(a.asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 实体向量召回（读 entity_embedding 余弦 top-k）；embedding 失败/未配置降级为空，
+     *  消歧与查找不因向量服务抖动而硬失败 */
+    private List<GraphStore.EntitySimilarity> entityVectorRecall(String text, int limit) {
+        if (!embedding.configured()) {
+            return List.of();
+        }
+        try {
+            return graph.entitiesByCosine(embedding.model(), embedding.embed(text).orElse(null), limit);
+        } catch (RuntimeException e) {
+            log.warn("实体向量召回失败（降级为字面匹配）: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** 多候选消歧文本：列候选让模型确认——一次反问胜过基于错误实体推理三轮 */
+    private String candidatesText(String name, List<GraphStore.Entity> candidates) {
+        return "实体「" + name + "」匹配到多个候选，请结合上下文确认想要的是哪一个"
+                + "（用明确实体 ID 重新调用，或向用户澄清）:\n"
+                + KnowledgeResultFormatter.graphEntitiesText(candidates);
+    }
+
+    /** 边集合中的非空 source_chunk id（去重） */
+    private static Set<Long> edgeChunkIds(Collection<GraphStore.Edge> edges) {
+        Set<Long> ids = new LinkedHashSet<>();
+        for (GraphStore.Edge e : edges) {
+            if (e.sourceChunk() != null) {
+                ids.add(e.sourceChunk());
+            }
+        }
+        return ids;
+    }
+
+    /** chunkId → 可读溯源标签《标题》（ref: …），图谱关系/路径渲染来源用 */
+    private Map<Long, String> chunkLabels(Collection<Long> ids) {
+        Map<Long, String> out = new LinkedHashMap<>();
+        for (ChunkStore.Row r : chunkStore.rowsByIds(ids)) {
+            String title = r.title() == null || r.title().isBlank() ? "chunk " + r.id() : r.title();
+            String label = "《" + title + "》";
+            if (r.sourceRef() != null && !r.sourceRef().isBlank()) {
+                label += "（ref: " + r.sourceRef() + "）";
+            }
+            out.put(r.id(), label);
+        }
+        return out;
+    }
+
+    /**
+     * 按「props 新增/覆盖 + remove_keys 删除」合并现有 KV 属性（保持原顺序，新属性追加在末尾）；
+     * 两者均未提供时返回 null，调用方据此判定无需写库。props 项缺 t 时沿用原属性类型（新属性默认 text）。
+     */
+    private static List<GraphStore.Prop> mergeProps(List<GraphStore.Prop> current, JsonNode props,
+                                                    JsonNode removeKeys) {
+        boolean hasProps = props.isArray() && !props.isEmpty();
+        boolean hasRemovals = removeKeys.isArray() && !removeKeys.isEmpty();
+        if (!hasProps && !hasRemovals) {
+            return null;
+        }
+        Map<String, GraphStore.Prop> merged = new LinkedHashMap<>();
+        for (GraphStore.Prop p : current) {
+            merged.put(p.k(), p);
+        }
+        if (hasProps) {
+            for (JsonNode p : props) {
+                String k = p.path("k").asText("");
+                if (k.isBlank()) {
+                    continue;
+                }
+                String t = p.path("t").asText("");
+                if (t.isBlank()) {
+                    GraphStore.Prop old = merged.get(k);
+                    t = old != null && old.t() != null ? old.t() : "text";
+                }
+                merged.put(k, new GraphStore.Prop(k, p.path("v").asText(""), t));
+            }
+        }
+        if (hasRemovals) {
+            for (JsonNode k : removeKeys) {
+                merged.remove(k.asText(""));
+            }
+        }
+        return new ArrayList<>(merged.values());
+    }
+
+    /** KV 属性 → 单行文本（k=v 以「; 」连接）；无属性返回「（无）」 */
+    private static String propsText(List<GraphStore.Prop> props) {
+        if (props == null || props.isEmpty()) {
+            return "（无）";
+        }
+        return props.stream().map(p -> p.k() + "=" + p.v()).collect(Collectors.joining("; "));
+    }
+}

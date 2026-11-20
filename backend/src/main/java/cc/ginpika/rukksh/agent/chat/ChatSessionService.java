@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.dto.ChatDtos;
 import cc.ginpika.rukksh.agent.chat.store.ChatMessageStore;
 import cc.ginpika.rukksh.agent.chat.store.ChatMessageStore.MessageRow;
@@ -23,12 +25,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 会话域：会话的增删改查、转录读取、回退，以及围绕它们的那几条规则。
@@ -54,7 +54,7 @@ public class ChatSessionService {
     /** 列表要带上「该会话此刻是否在生成」，供前端在答完时弹通知 */
     private final ChatLiveStore live;
     /** 删除会话时一并清掉它的待办清单（plan-of-record），免得留下孤儿行 */
-    private final TodoService todo;
+    private final SessionTodoService todo;
     private final ObjectMapper om;
     private final TurnStore turns;
     private final MemoryIngest memoryIngest;
@@ -69,7 +69,7 @@ public class ChatSessionService {
     public void setProjectWorkflows(ProjectWorkflowService workflows) { this.projectWorkflows=workflows; }
 
     public ChatSessionService(HubSessionStore sessions, ChatMessageStore messages,
-                              ChatLiveStore live, TodoService todo, ObjectMapper om,
+                              ChatLiveStore live, SessionTodoService todo, ObjectMapper om,
                               TurnStore turns, MemoryIngest memoryIngest,
                               MemoryRetractionStore memoryRetractions, TaskCheckpointService checkpoints,
                               TaskStore tasks) {
@@ -116,7 +116,7 @@ public class ChatSessionService {
     /** 绑定 / 解绑会话所属项目（切换后记忆读侧立即按新作用域生效；旧项目条目不删除、只是不可见） */
     public ChatDtos.NewSession setProject(String hubId, String projectId) {
         sessions.findById(hubId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在: " + hubId));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "会话不存在: " + hubId));
         String pid = blankToNull(projectId);
         projectWorkflows.bind(hubId, pid);
         return new ChatDtos.NewSession(hubId, pid);
@@ -142,7 +142,7 @@ public class ChatSessionService {
     /** 更新会话配置（「…」菜单在该会话的选择）：仅更新请求中非 null 的项，返回更新后的完整配置 */
     public ChatDtos.SessionConfig updateConfig(String hubId, ChatDtos.ConfigRequest req) {
         HubRow row = sessions.findById(hubId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在: " + hubId));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "会话不存在: " + hubId));
         String modelId = req == null ? null : req.modelId();
         String promptId = req == null ? null : req.promptId();
         String agentId = req == null ? null : req.agentId();
@@ -166,7 +166,7 @@ public class ChatSessionService {
     @Transactional
     public ChatDtos.SessionDeleted delete(String hubId) {
         sessions.findById(hubId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在: " + hubId));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "会话不存在: " + hubId));
         turns.deleteBySession(hubId);
         int removed = messages.deleteBySession(hubId);
         todo.clear(hubId);
@@ -181,7 +181,7 @@ public class ChatSessionService {
      *  打开会话即清未读。 */
     public List<ChatDtos.MessageRow> messages(String hubId) {
         sessions.findById(hubId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在: " + hubId));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "会话不存在: " + hubId));
         sessions.clearUnread(hubId);
         return messages.listBySession(hubId).stream()
                 .filter(m -> "user".equals(m.role()) || "assistant".equals(m.role())
@@ -196,7 +196,7 @@ public class ChatSessionService {
     public ChatAttachments.Content attachment(String hubId, long messageId, int index) {
         var attachments = ChatAttachments.read(om, messages.userAttachments(hubId, messageId));
         if (index < 0 || index >= attachments.size()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "附件不存在");
+            throw new DomainException(DomainException.ErrorKind.NOT_FOUND, "附件不存在");
         }
         return attachments.get(index);
     }
@@ -210,11 +210,11 @@ public class ChatSessionService {
     @Transactional
     public ChatDtos.Rewind rewind(String hubId, Long messageId, Integer keep) {
         var session = sessions.findById(hubId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在: " + hubId));
-        if ("multi-agent".equals(session.mode())) throw new ResponseStatusException(HttpStatus.CONFLICT,
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "会话不存在: " + hubId));
+        if ("multi-agent".equals(session.mode())) throw new DomainException(DomainException.ErrorKind.CONFLICT,
                 "多 Agent 会话请使用协作页的回退入口");
         if (live.isRunning(hubId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "请先停止当前回复再回退");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "请先停止当前回复再回退");
         }
         List<MessageRow> rows = messages.listBySession(hubId);
         MessageRow target;
@@ -227,7 +227,7 @@ public class ChatSessionService {
         }
         /* 只认本会话（rows 即本会话）的一条提问：拿回答或别的会话的 id 一律拒绝，避免误删整段历史 */
         if (target == null || !"user".equals(target.role())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST,
                     "回退位置无效（需为本会话的一条提问）: messageId=" + messageId + ", keep=" + keep);
         }
         List<Long> discarded = rows.stream().filter(m -> m.id() >= target.id()).map(MessageRow::id).toList();
@@ -270,14 +270,14 @@ public class ChatSessionService {
     @Transactional
     public ChatDtos.NewSession branch(String hubId, Long messageId) {
         HubRow src = sessions.findById(hubId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在: " + hubId));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "会话不存在: " + hubId));
         if (messageId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少分支位置 messageId");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "缺少分支位置 messageId");
         }
         boolean found = messages.listBySession(hubId).stream().anyMatch(m -> messageId.equals(m.id())
                 && ("user".equals(m.role()) || "assistant".equals(m.role())));
         if (!found) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST,
                     "分支位置无效（需为本会话的一条消息）: " + messageId);
         }
         String newId = UUID.randomUUID().toString();

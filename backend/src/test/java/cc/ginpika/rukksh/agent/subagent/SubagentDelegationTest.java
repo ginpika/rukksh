@@ -3,9 +3,8 @@ package cc.ginpika.rukksh.agent.subagent;
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore;
 import cc.ginpika.rukksh.agent.context.ContextBuilder;
 import cc.ginpika.rukksh.agent.runtime.*;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.core.tool.*;
-import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolbox;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
@@ -22,16 +21,16 @@ import static org.mockito.Mockito.*;
 class SubagentDelegationTest {
     final ObjectMapper json=new ObjectMapper();
     final AgentRunner runner=mock(AgentRunner.class);
-    final KnowledgeToolbox toolbox=mock(KnowledgeToolbox.class);
+    final AgentToolRouter toolbox=mock(AgentToolRouter.class);
     final ScratchpadStore scratch=mock(ScratchpadStore.class);
     final ApplicationEventPublisher publisher=mock(ApplicationEventPublisher.class);
     SubagentService service;
     @BeforeEach void setup() {
         var context=mock(ContextBuilder.class);
         when(context.build(any())).thenAnswer(i->{var body=json.createObjectNode();body.putArray("messages");return body;});
-        var prompts=mock(PromptManager.class);when(prompts.resolve(anyString())).thenReturn("只读调查，返回证据");
+        var prompts=mock(PromptService.class);when(prompts.resolve(anyString())).thenReturn("只读调查，返回证据");
         service=new SubagentService(runner,mock(ExecStore.class),mock(TaskStore.class),scratch,prompts,
-                new ToolManager(List.of(tool("read_document",ToolRisk.READ),tool("run_command",ToolRisk.EXEC)),json),toolbox,json,context,publisher);
+                new ToolRegistry(List.of(tool("read_document",ToolRisk.READ),tool("run_command",ToolRisk.EXEC)),json),toolbox,json,context,publisher);
         var sessions=mock(HubSessionStore.class);var row=mock(HubSessionStore.HubRow.class);
         when(row.mode()).thenReturn("multi-agent");when(row.projectId()).thenReturn("project");
         when(sessions.findById("session")).thenReturn(Optional.of(row));

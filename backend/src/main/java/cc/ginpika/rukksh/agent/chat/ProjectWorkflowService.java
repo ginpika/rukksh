@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore;
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore.HubRow;
 import cc.ginpika.rukksh.ai.core.MemoryExec;
@@ -13,11 +15,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /** User and Agent entry points share validation, binding and continuation semantics. */
 @Service
@@ -48,7 +48,7 @@ public class ProjectWorkflowService {
 
     @Transactional
     public ProjectRow createVisibleProject(String userId, String name, String kind, Boolean narrative, String note) {
-        if (userId == null || userId.isBlank()) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "需要登录");
+        if (userId == null || userId.isBlank()) throw new DomainException(DomainException.ErrorKind.UNAUTHORIZED, "需要登录");
         return createProject(name, kind, narrative, note, userId);
     }
 
@@ -62,10 +62,10 @@ public class ProjectWorkflowService {
         if (!matches.isEmpty()) {
             ProjectRow p=matches.get(0);
             if (userId != null && p.userId() != null && !userId.equals(p.userId())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "此项目名称不可用，请使用其他名称");
+                throw new DomainException(DomainException.ErrorKind.CONFLICT, "此项目名称不可用，请使用其他名称");
             }
             if (matches.size()>1 || !"active".equals(p.status()) || p.narrative()!=fiction) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,"已有同名项目，请选择已有项目或使用不同名称");
+                throw new DomainException(DomainException.ErrorKind.CONFLICT,"已有同名项目，请选择已有项目或使用不同名称");
             }
             return p;
         }
@@ -105,14 +105,14 @@ public class ProjectWorkflowService {
         session(sessionId);
         if (live!=null && live.isRunning(sessionId) && (MemoryScopeCtx.get()==null
                 || !sessionId.equals(MemoryScopeCtx.get().sessionId()))) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,"当前会话正在生成，请结束本轮后再切换项目");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT,"当前会话正在生成，请结束本轮后再切换项目");
         }
         String pid=blank(projectId);
         if (pid!=null) { project(pid); }
         if (!Objects.equals(session(sessionId).projectId(), pid) && Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT EXISTS(SELECT 1 FROM collaboration_issue WHERE parent_session_id=? OR session_id=?)",
                 Boolean.class, sessionId, sessionId))) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,"任务已包含议题，请保留任务与议题的项目归属");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT,"任务已包含议题，请保留任务与议题的项目归属");
         }
         sessions.setProject(sessionId,pid);
         // A new binding starts a new authorization context; old explicit links do not carry across it.
@@ -287,15 +287,15 @@ public class ProjectWorkflowService {
         if (sessions.memoryOff(id)) { throw bad("临时会话不参与项目整理或记忆续接，请先开启记忆"); }
         return s;
     }
-    private HubRow session(String id) { return sessions.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"会话不存在")); }
+    private HubRow session(String id) { return sessions.findById(id).orElseThrow(()->new DomainException(DomainException.ErrorKind.NOT_FOUND,"会话不存在")); }
     private ProjectRow requireProject(String id) {
-        return projects.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "项目不存在: " + id));
+        return projects.findById(id).orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "项目不存在: " + id));
     }
     private ProjectRow project(String id) {
-        ProjectRow p=projects.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"项目不存在"));
+        ProjectRow p=projects.findById(id).orElseThrow(()->new DomainException(DomainException.ErrorKind.NOT_FOUND,"项目不存在"));
         if (!"active".equals(p.status())) { throw bad("项目已归档"); }
         return p;
     }
     private static String blank(String s) { return s==null || s.isBlank() ? null : s.strip(); }
-    private static ResponseStatusException bad(String s) { return new ResponseStatusException(HttpStatus.BAD_REQUEST,s); }
+    private static DomainException bad(String s) { return new DomainException(DomainException.ErrorKind.BAD_REQUEST,s); }
 }

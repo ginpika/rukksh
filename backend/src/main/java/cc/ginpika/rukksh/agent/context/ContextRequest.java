@@ -19,7 +19,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
  *                     无历史时为空串）
  * @param historyTokenBudget 本次历史最多可占的 token（调用方按「窗口 − 输出预留 − 安全余量 −
  *                     system 与工具面估算」算好）：上下文平面超过它才降级——从最早的轮次整条丢、
- *                     仍超再截断（见 {@code agent.chat.turn.History}）。≤0 表示不限
+ *                     仍超再截断（见 {@code agent.chat.turn.ChatHistoryProvider}）。≤0 表示不限
  * @param toolSchemas  本次可用的工具定义数组（工具面的选择仍在调用方，分层路由见架构文档 STEP 3）
  * @param surface      这次组装属于哪条流（见 {@link Surface}）：各 {@link ContextProvider} 据此早退——
  *                     会话历史 / 在跑子代理 / 知识 / 记忆 / 待办只服务前台会话，子代理面与潜意识面各有

@@ -20,7 +20,7 @@ import cc.ginpika.rukksh.agent.context.ChatProtocol;
 import cc.ginpika.rukksh.agent.runtime.ExecStore;
 import cc.ginpika.rukksh.agent.subagent.SubagentScope;
 import cc.ginpika.rukksh.agent.subagent.SubagentSynthesizer;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.config.ContextProps;
 import cc.ginpika.rukksh.config.ModelTarget;
@@ -51,7 +51,7 @@ class SubagentDeliveryServiceTest {
     private final TurnStore turns = new TurnStore(jdbc);
     private final OpenAiChatClient client = mock(OpenAiChatClient.class);
     private final SettingsService settings = mock(SettingsService.class);
-    private final PromptManager prompts = mock(PromptManager.class);
+    private final PromptService prompts = mock(PromptService.class);
     private final SessionEventBus events = mock(SessionEventBus.class);
     private final SubagentScope scope = mock(SubagentScope.class);
     private final SubagentSynthesis synthesizer = spy(new SubagentSynthesizer(client, new ExecStore(jdbc), om));

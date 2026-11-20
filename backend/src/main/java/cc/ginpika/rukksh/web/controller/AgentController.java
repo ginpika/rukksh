@@ -1,16 +1,17 @@
 package cc.ginpika.rukksh.web.controller;
 
 import cc.ginpika.rukksh.agent.roundtable.RoundtableAgenda;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableChatService;
 import cc.ginpika.rukksh.agent.roundtable.RoundtableDiscussionRuntime;
 import cc.ginpika.rukksh.agent.roundtable.RoundtableLiveBus;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTodoStore;
+import cc.ginpika.rukksh.agent.roundtable.RoundtableSessionService;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
 import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicService;
 import cc.ginpika.rukksh.agent.roundtable.RoundtableWorkRuntime;
 import cc.ginpika.rukksh.agent.roundtable.RoundtableWorkflowService;
 import cc.ginpika.rukksh.agent.member.AgentAnchorService;
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.member.AgentPromptService;
+import cc.ginpika.rukksh.agent.heartbeat.HeartbeatDashboardService;
 import cc.ginpika.rukksh.agent.heartbeat.HeartbeatService;
 import cc.ginpika.rukksh.agent.heartbeat.dto.HeartbeatDtos;
 import cc.ginpika.rukksh.agent.heartbeat.store.PlanStore;
@@ -72,11 +73,9 @@ public class AgentController {
     /** SSE 流最长保持：与 nginx 的 proxy_read_timeout（300s）对齐 */
     private static final long STREAM_TIMEOUT_MS = 300_000L;
 
-    /** 后台观测台快照间隔 / 保活间隔 / 快照批次数 / 每批执行条数 */
+    /** 后台观测台快照间隔 / 保活间隔 */
     private static final long PULSE_MS = 2_000L;
     private static final long PING_MS = 15_000L;
-    private static final int PULSE_RUNS = 8;
-    private static final int PULSE_EXECS = 30;
 
     /** 圆桌流的事件名：这一轮的收尾（成功）与出错——订阅者据此关掉连接 */
     private static final String EVENT_DONE = "done";
@@ -89,13 +88,14 @@ public class AgentController {
     private static final int CHARS_PER_TOKEN = 3;
 
     private final AgentDirectory peers;
-    private final RoundtableChatService chat;
+    private final RoundtableSessionService sessions;
     private final RoundtableTopicService topics;
     private final AgentPromptService peerPrompts;
     private final AgentAnchorService peerAnchors;
     private final ObjectMapper om;
     /** 逐 Agent 后台：心跳调度（开关 / 节拍 / 手动敲 / 单跑职责）与逐 Agent 观测台 */
     private final HeartbeatService heartbeat;
+    private final HeartbeatDashboardService dashboard;
     private final PlanStore plans;
     private final ExecStore execs;
     /** 任务：子代理列表据此把「重跑」接到任务上 */
@@ -117,26 +117,28 @@ public class AgentController {
     /** 共享任务区：干预之后读回那一条（状态 + 优先级）给页面 */
     private final RoundtableTodoStore taskBoard;
     private final cc.ginpika.rukksh.agent.roundtable.CollaborationTaskLifecycle lifecycle;
-    private cc.ginpika.rukksh.coding.CodingFacade coding;
+    private cc.ginpika.rukksh.coding.CodingService coding;
     @org.springframework.beans.factory.annotation.Autowired
-    public void setCoding(@org.springframework.context.annotation.Lazy cc.ginpika.rukksh.coding.CodingFacade coding){this.coding=coding;}
+    public void setCoding(@org.springframework.context.annotation.Lazy cc.ginpika.rukksh.coding.CodingService coding){this.coding=coding;}
 
-    public AgentController(AgentDirectory peers, RoundtableChatService chat, RoundtableTopicService topics,
+    public AgentController(AgentDirectory peers, RoundtableSessionService sessions, RoundtableTopicService topics,
                                 AgentPromptService peerPrompts, AgentAnchorService peerAnchors,
                                 ObjectMapper om,
-                                HeartbeatService heartbeat, PlanStore plans, ExecStore execs,
+                                HeartbeatService heartbeat, HeartbeatDashboardService dashboard,
+                                PlanStore plans, ExecStore execs,
                                 TaskStore tasks, SubagentService subagent, RagRecallStore ragRecalls,
                                 RoundtableDiscussionRuntime runtime, RoundtableLiveBus liveBus,
                                 RoundtableWorkflowService workflowFlow,
                                 RoundtableWorkRuntime workRuntime, RoundtableTodoStore taskBoard,
                                 cc.ginpika.rukksh.agent.roundtable.CollaborationTaskLifecycle lifecycle) {
         this.peers = peers;
-        this.chat = chat;
+        this.sessions = sessions;
         this.topics = topics;
         this.peerPrompts = peerPrompts;
         this.peerAnchors = peerAnchors;
         this.om = om;
         this.heartbeat = heartbeat;
+        this.dashboard = dashboard;
         this.plans = plans;
         this.execs = execs;
         this.tasks = tasks;
@@ -333,7 +335,7 @@ public class AgentController {
         requirePeer(agentId);
         requirePlan(agentId, id);
         return execs.execsByPlan(id, clampLimit(limit)).stream()
-                .map(r -> toExec(r, false, null))
+                .map(r -> dashboard.toExec(r, false, null))
                 .toList();
     }
 
@@ -342,7 +344,7 @@ public class AgentController {
     public List<HeartbeatDtos.RunView> runs(@PathVariable String agentId,
                                             @RequestParam(defaultValue = "30") int limit) {
         requirePeer(agentId);
-        return execs.runs(agentId, clampLimit(limit)).stream().map(AgentController::toRun).toList();
+        return execs.runs(agentId, clampLimit(limit)).stream().map(HeartbeatDashboardService::toRun).toList();
     }
 
     /** 某批里的各次执行 */
@@ -351,7 +353,7 @@ public class AgentController {
                                                  @PathVariable String id) {
         requirePeer(agentId);
         return execs.execsByRun(id).stream().filter(r -> subagent.auditVisibleTo(agentId, r.id()))
-                .map(r -> toExec(r, false, null)).toList();
+                .map(r -> dashboard.toExec(r, false, null)).toList();
     }
 
     /** 某一次执行的完整过程：组装出的上下文、思维链、过程分段、写库清单 */
@@ -362,7 +364,7 @@ public class AgentController {
                 .filter(r -> subagent.auditVisibleTo(agentId, r.id()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "执行记录不存在: " + id));
-        return toExecWithEdits(row);
+        return dashboard.toExecWithEdits(row);
     }
 
     /** 该 Agent 的最近若干条任务（倒序）；kind 缺省看全部 */
@@ -398,7 +400,7 @@ public class AgentController {
                                                   @RequestParam(defaultValue = "30") int limit) {
         requirePeer(agentId);
         return execs.latestExecs(ExecStore.KIND_AGENT, clampLimit(limit), agentId).stream()
-                .map(r -> toExec(r, false, r.id()))
+                .map(r -> dashboard.toExec(r, false, r.id()))
                 .toList();
     }
 
@@ -443,7 +445,7 @@ public class AgentController {
     @GetMapping("/{agentId}/pulse")
     public HeartbeatDtos.PulseView pulse(@PathVariable String agentId) {
         requirePeer(agentId);
-        return pulseView(agentId);
+        return dashboard.agentPulse(agentId);
     }
 
     /** 该 Agent 后台的实时流：变化时推 pulse，无变化时发注释帧保活 */
@@ -457,8 +459,8 @@ public class AgentController {
             long lastPing = System.currentTimeMillis();
             try {
                 while (alive.get()) {
-                    HeartbeatDtos.PulseView pulse = pulseView(agentId);
-                    String key = SystemController.pulseKey(pulse);
+                    HeartbeatDtos.PulseView pulse = dashboard.agentPulse(agentId);
+                    String key = HeartbeatDashboardService.pulseKey(pulse);
                     long now = System.currentTimeMillis();
                     if (!key.equals(last)) {
                         last = key;
@@ -485,19 +487,19 @@ public class AgentController {
 
     @GetMapping("/sessions")
     public List<AgentDtos.SessionView> sessions() {
-        return chat.sessions();
+        return sessions.sessions();
     }
 
     /** 新建会话：body 里带 memberIds 就只让那几位上桌；不带（null） = 全体名册 */
     @PostMapping("/sessions")
     public AgentDtos.NewSession createSession(
             @RequestBody(required = false) AgentDtos.NewSessionRequest req) {
-        return chat.createSession(req == null ? null : req.memberIds(), req == null ? null : req.projectId());
+        return sessions.createSession(req == null ? null : req.memberIds(), req == null ? null : req.projectId());
     }
 
     @GetMapping("/sessions/{id}")
     public AgentDtos.SessionView session(@PathVariable String id) {
-        return chat.session(id);
+        return sessions.session(id);
     }
 
     @DeleteMapping("/sessions/{id}")
@@ -510,7 +512,7 @@ public class AgentController {
     @GetMapping("/sessions/{id}/messages")
     public List<AgentDtos.MessageView> messages(@PathVariable String id,
                                                      @RequestParam(required = false) String topicId) {
-        return chat.messages(id, topicId);
+        return sessions.messages(id, topicId);
     }
 
     /**
@@ -521,7 +523,7 @@ public class AgentController {
      */
     @GetMapping("/messages/{id}/context")
     public AgentDtos.MessageContext messageContext(@PathVariable long id) {
-        return new AgentDtos.MessageContext(id, chat.contextOf(id).orElse(null));
+        return new AgentDtos.MessageContext(id, sessions.contextOf(id).orElse(null));
     }
 
     @GetMapping("/sessions/{id}/topics")
@@ -607,13 +609,13 @@ public class AgentController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "input 为空");
         }
         String sessionId = req.sessionId() == null || req.sessionId().isBlank()
-                ? chat.sessions().stream().findFirst()
+                ? sessions.sessions().stream().findFirst()
                         .map(AgentDtos.SessionView::id)
-                        .orElseGet(() -> chat.createSession(null).sessionId())
+                        .orElseGet(() -> sessions.createSession(null).sessionId())
                 : req.sessionId();
         /* 这一次交互的关联 id：本连接只转发它的事件——同会话并发的两条消息因此互不串台。
            它同时就是将来接上事件正本时的 correlation_id */
-        chat.requireDiscussable(sessionId);
+        sessions.requireDiscussable(sessionId);
         String runId = UUID.randomUUID().toString();
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MS);
         AtomicBoolean alive = new AtomicBoolean(true);
@@ -674,28 +676,7 @@ public class AgentController {
                 "CHAT");
     }
 
-    // ---------- 逐 Agent 后台的映射与快照 ----------
-
-    private HeartbeatDtos.PulseView pulseView(String agentId) {
-        PlanStore.HeartbeatRow hb = heartbeat.heartbeat(agentId);
-        HeartbeatDtos.HeartbeatState state = new HeartbeatDtos.HeartbeatState(agentId,
-                peers.nameOf(agentId), hb.enabled(), hb.tickMs(), hb.lastBeatAt(),
-                heartbeat.running(agentId));
-        List<HeartbeatDtos.RunBundle> recent = execs.runs(agentId, PULSE_RUNS).stream()
-                .map(r -> new HeartbeatDtos.RunBundle(AgentController.toRun(r),
-                        execsOfRun(r.id())))
-                .toList();
-        return new HeartbeatDtos.PulseView(List.of(state), recent);
-    }
-
-    /** 某批的执行（超过 PULSE_EXECS 时只留最近的若干条） */
-    private List<HeartbeatDtos.ExecView> execsOfRun(String runId) {
-        List<ExecStore.ExecRow> rows = execs.execsByRun(runId);
-        if (rows.size() > PULSE_EXECS) {
-            rows = rows.subList(rows.size() - PULSE_EXECS, rows.size());
-        }
-        return rows.stream().map(r -> toExec(r, false, null)).toList();
-    }
+    // ---------- 逐 Agent 后台的映射 ----------
 
     private HeartbeatDtos.HeartbeatView toHeartbeat(PlanStore.HeartbeatRow r) {
         return new HeartbeatDtos.HeartbeatView(r.agentId(), r.content(), r.modelId(), r.enabled(),
@@ -706,27 +687,6 @@ public class AgentController {
         return new HeartbeatDtos.PlanView(r.id(), r.agentId(), r.name(), r.role(), r.content(),
                 names(r.tools()), names(r.channels()), r.intervalMs(), r.input(), r.modelId(),
                 r.sort(), r.lastBeatAt(), r.rationale(), r.enabled());
-    }
-
-    static HeartbeatDtos.RunView toRun(ExecStore.RunRow r) {
-        return new HeartbeatDtos.RunView(r.id(), r.agentId(), r.beat(), r.trigger(), r.status(),
-                r.agentCount(), r.note(), r.startedAt(), r.finishedAt());
-    }
-
-    /** 执行视图（带归属任务）：taskId 只在子代理列表里给（其余场景这次执行没有对应任务） */
-    private HeartbeatDtos.ExecView toExec(ExecStore.ExecRow r, boolean withContext, Long taskId) {
-        return new HeartbeatDtos.ExecView(r.id(), r.runId(), r.kind(), r.planId(), r.title(),
-                r.status(), withContext ? r.context() : null, r.output(), r.reasoning(),
-                traces(r.trace()), List.of(), r.error(), r.startedAt(), r.finishedAt(), taskId);
-    }
-
-    /** 执行详情：带上写库清单 */
-    private HeartbeatDtos.ExecView toExecWithEdits(ExecStore.ExecRow r) {
-        List<HeartbeatDtos.EditView> edits = execs.editsByExec(r.id()).stream()
-                .map(AgentController::toEdit).toList();
-        return new HeartbeatDtos.ExecView(r.id(), r.runId(), r.kind(), r.planId(), r.title(),
-                r.status(), r.context(), r.output(), r.reasoning(), traces(r.trace()), edits,
-                r.error(), r.startedAt(), r.finishedAt(), null);
     }
 
     private static HeartbeatDtos.TaskView toTask(TaskStore.TaskRow r) {
@@ -740,11 +700,7 @@ public class AgentController {
 
     private static String codingOwner(jakarta.servlet.http.HttpServletRequest request){
         Object actor=request.getAttribute(cc.ginpika.rukksh.web.sso.SsoInterceptor.ATTR);
-        return actor instanceof cc.ginpika.rukksh.web.sso.SsoUser user && cc.ginpika.rukksh.coding.CodingFacade.allowsActorAt(user.getId(),request.getRemoteAddr())?user.getId():null;
-    }
-
-    private static HeartbeatDtos.EditView toEdit(ExecStore.EditRow r) {
-        return new HeartbeatDtos.EditView(r.id(), r.tool(), r.args(), r.summary(), r.createdAt());
+        return actor instanceof cc.ginpika.rukksh.web.sso.SsoUser user && cc.ginpika.rukksh.coding.CodingService.allowsActorAt(user.getId(),request.getRemoteAddr())?user.getId():null;
     }
 
     private static HeartbeatDtos.RagRecallView toRagRecall(RagRecallStore.RecallRow r) {
@@ -806,18 +762,6 @@ public class AgentController {
         return plan;
     }
 
-    private List<ChatDtos.TraceSegment> traces(String json) {
-        if (blank(json)) {
-            return List.of();
-        }
-        try {
-            return om.readValue(json, new TypeReference<List<ChatDtos.TraceSegment>>() {
-            });
-        } catch (Exception e) {
-            return List.of();
-        }
-    }
-
     /** JSON 字符串数组文本 → 清单；空/坏数据回退空列表 */
     private List<String> names(String json) {
         if (blank(json)) {
@@ -854,11 +798,5 @@ public class AgentController {
             alive.set(false);
             return false;
         }
-    }
-
-    /** 客户端断开导致写流失败：常态，静默收尾（否则 tomcat 会记一整条 ERROR 堆栈） */
-    @ExceptionHandler(IOException.class)
-    public void clientGone(IOException e) {
-        log.debug("圆桌流客户端已断开，写失败按断开收尾：{}", e.getMessage());
     }
 }

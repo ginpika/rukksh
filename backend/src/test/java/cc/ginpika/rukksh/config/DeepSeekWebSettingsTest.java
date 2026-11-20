@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.config;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import static org.junit.jupiter.api.Assertions.*;
 import cc.ginpika.rukksh.config.store.DeepSeekWebStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,7 +10,6 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
-import org.springframework.web.server.ResponseStatusException;
 
 class DeepSeekWebSettingsTest {
     private SingleConnectionDataSource source;
@@ -37,12 +38,12 @@ class DeepSeekWebSettingsTest {
     }
     @Test void invalidSaveDoesNotOverwriteWorkingConfiguration() {
         settings.save(draft("fixture-secret", false, false));
-        assertThrows(ResponseStatusException.class, () -> settings.save(draft("", true, false)));
-        assertThrows(ResponseStatusException.class, () -> settings.save(draft("bad\nkey", false, false)));
+        assertThrows(DomainException.class, () -> settings.save(draft("", true, false)));
+        assertThrows(DomainException.class, () -> settings.save(draft("bad\nkey", false, false)));
         for (String base : new String[]{"file:///tmp", "https://user:pass@example.com", "https://api.example.com?key=secret"}) {
-            assertThrows(ResponseStatusException.class, () -> settings.save(new DeepSeekWebSettings.Draft(base, null, false, false, true, 5, 15)));
+            assertThrows(DomainException.class, () -> settings.save(new DeepSeekWebSettings.Draft(base, null, false, false, true, 5, 15)));
         }
-        assertThrows(ResponseStatusException.class, () -> settings.save(new DeepSeekWebSettings.Draft("https://api.deepseek.com", null, false, false, true, 51, 15)));
+        assertThrows(DomainException.class, () -> settings.save(new DeepSeekWebSettings.Draft("https://api.deepseek.com", null, false, false, true, 51, 15)));
         assertEquals("fixture-secret", settings.resolve().apiKey());
     }
 }

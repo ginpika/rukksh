@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.coding.engine;
 
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.context.CodingPrompts;
 import cc.ginpika.rukksh.config.SettingsService;
 import java.util.*;

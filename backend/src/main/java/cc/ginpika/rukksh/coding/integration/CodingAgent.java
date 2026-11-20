@@ -3,7 +3,7 @@ package cc.ginpika.rukksh.coding.integration;
 import cc.ginpika.rukksh.ai.core.BuiltinAgents;
 import cc.ginpika.rukksh.agent.member.AgentPromptService;
 import cc.ginpika.rukksh.agent.member.AgentStore;
-import cc.ginpika.rukksh.coding.api.CodingDtos.Agent;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.Agent;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 

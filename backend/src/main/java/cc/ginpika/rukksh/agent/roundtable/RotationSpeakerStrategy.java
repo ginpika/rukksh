@@ -2,7 +2,7 @@ package cc.ginpika.rukksh.agent.roundtable;
 
 import cc.ginpika.rukksh.agent.roundtable.TopicStateMachine.PeerState;
 import cc.ginpika.rukksh.agent.member.AgentStore.AgentRow;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;

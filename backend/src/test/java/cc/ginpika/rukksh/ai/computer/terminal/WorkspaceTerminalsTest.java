@@ -1,11 +1,12 @@
 package cc.ginpika.rukksh.ai.computer.terminal;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore.TargetRow;
 import java.io.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
-import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -40,19 +41,19 @@ class WorkspaceTerminalsTest {
         terminals.input("alice","w",first.id(),"cd /tmp\rexport A=中文\r\u0003");
         assertTrue(shells.getFirst().input.toString(java.nio.charset.StandardCharsets.UTF_8).contains("中文"));assertEquals(0,shells.get(1).input.size());
         terminals.resize("alice","w",first.id(),100,30);assertEquals(100,shells.getFirst().cols);assertEquals(30,shells.getFirst().rows);
-        assertThrows(ResponseStatusException.class,()->terminals.input("bob","w",first.id(),"bad"));
-        assertThrows(ResponseStatusException.class,()->terminals.input("alice","other",first.id(),"bad"));
+        assertThrows(DomainException.class,()->terminals.input("bob","w",first.id(),"bad"));
+        assertThrows(DomainException.class,()->terminals.input("alice","other",first.id(),"bad"));
         assertFalse(shells.getFirst().closed);assertEquals(2,terminals.list("alice","w").size());
         terminals.delete("alice","w",second.id());assertTrue(shells.get(1).closed);assertFalse(shells.getFirst().closed);
     }
     @Test void disablingOrChangingConnectionClosesOldShellAndAllowsCleanup(){
         var terminal=terminals.create("alice","w",80,24);
         when(store.targetById("w")).thenReturn(Optional.of(row(true,"/changed")));
-        assertThrows(ResponseStatusException.class,()->terminals.checkAccess("alice","w",terminal.id(),0));assertTrue(shells.getFirst().closed);
+        assertThrows(DomainException.class,()->terminals.checkAccess("alice","w",terminal.id(),0));assertTrue(shells.getFirst().closed);
         when(store.targetById("w")).thenReturn(Optional.of(row(false,"/changed")));
-        assertThrows(ResponseStatusException.class,()->terminals.create("alice","w",80,24));assertEquals(1,shells.size());
+        assertThrows(DomainException.class,()->terminals.create("alice","w",80,24));assertEquals(1,shells.size());
         when(store.targetById("w")).thenReturn(Optional.empty());
         terminals.delete("alice","w",terminal.id());assertTrue(terminals.list("alice","w").isEmpty());
-        assertThrows(ResponseStatusException.class,()->terminals.create("alice","w",80,24));
+        assertThrows(DomainException.class,()->terminals.create("alice","w",80,24));
     }
 }

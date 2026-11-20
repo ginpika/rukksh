@@ -8,7 +8,7 @@ import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.ai.computer.terminal.ExecTarget;
 import cc.ginpika.rukksh.ai.computer.terminal.TerminalService;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
-import cc.ginpika.rukksh.coding.api.CodingDtos;
+import cc.ginpika.rukksh.coding.dto.CodingDtos;
 import cc.ginpika.rukksh.coding.workspace.WorkspaceProjects;
 import cc.ginpika.rukksh.config.TerminalProps;
 import cc.ginpika.rukksh.project.ProjectStore;

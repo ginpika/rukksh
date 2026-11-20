@@ -3,7 +3,7 @@ package cc.ginpika.rukksh.ai.knowledge.retrieval;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import cc.ginpika.rukksh.ai.knowledge.ingest.ResultTexts;
+import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeResultFormatter;
 import cc.ginpika.rukksh.ai.knowledge.retrieval.GraphExplorer;
 import cc.ginpika.rukksh.ai.knowledge.store.GraphStore;
 
@@ -95,13 +95,13 @@ class GraphRetrievalTest {
         GraphStore.Entity xing = new GraphStore.Entity("x", "ORG", List.of(), "星尘科技", null, null, List.of(), null, null);
         GraphStore.Edge edge = new GraphStore.Edge("e", "z", "任职于", "x",
                 List.of(new GraphStore.Prop("职位", "工程师", "text")), 7L);
-        String text = ResultTexts.graphRelationsText(zhang, List.of(edge), List.of(xing), Map.of(7L, "《2024入职通知》"));
+        String text = KnowledgeResultFormatter.graphRelationsText(zhang, List.of(edge), List.of(xing), Map.of(7L, "《2024入职通知》"));
         assertTrue(text.contains("张伟 --任职于--> 星尘科技"));
         assertTrue(text.contains("属性: 职位=工程师"));
         assertTrue(text.contains("来源: 《2024入职通知》"));
         /* 无 props/来源的边不带空括号后缀 */
         GraphStore.Edge bare = new GraphStore.Edge("e2", "z", "毕业于", "x", List.of(), null);
-        String bareText = ResultTexts.graphRelationsText(zhang, List.of(bare), List.of(xing), Map.of());
+        String bareText = KnowledgeResultFormatter.graphRelationsText(zhang, List.of(bare), List.of(xing), Map.of());
         assertTrue(bareText.contains("- 张伟 --毕业于--> 星尘科技"));
         assertTrue(bareText.lines().noneMatch(l -> l.endsWith("（）")));
     }
@@ -111,10 +111,10 @@ class GraphRetrievalTest {
         GraphStore.Entity zhang = new GraphStore.Entity("z", "PERSON", List.of(), "张伟", null, null, List.of(), null, null);
         GraphStore.Entity xing = new GraphStore.Entity("x", "ORG", List.of(), "星尘科技", null, null, List.of(), null, null);
         GraphStore.Edge edge = new GraphStore.Edge("e", "z", "任职于", "x", List.of(), 7L);
-        String text = ResultTexts.graphTriplesText(new EntityEnricher.Result(
+        String text = KnowledgeResultFormatter.graphTriplesText(new EntityEnricher.Result(
                 List.of(zhang, xing), List.of(zhang, xing), List.of(edge), List.of()));
         assertTrue(text.contains("锚点实体: 张伟（PERSON）、星尘科技（ORG）"));
         assertTrue(text.contains("- 张伟 --任职于--> 星尘科技"));
-        assertTrue(ResultTexts.graphTriplesText(null).isEmpty());
+        assertTrue(KnowledgeResultFormatter.graphTriplesText(null).isEmpty());
     }
 }

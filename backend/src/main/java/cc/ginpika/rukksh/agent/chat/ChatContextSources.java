@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.subagent.SubagentScope;
 import cc.ginpika.rukksh.ai.core.tool.subagent.DelegateSubagentTool;
@@ -16,10 +18,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Current personal-chat evidence. The runner supplies the session and Agent; the model supplies only a reference. */
 @Service
@@ -310,7 +310,7 @@ public class ChatContextSources {
         if (!scope.valid() || taskId <= 0 || !Boolean.TRUE.equals(jdbc.query(SCOPED_ARTIFACTS + """
                 SELECT 1 FROM source_task WHERE id = ? AND status = 'running' LIMIT 1
                 """, rs -> { return rs.next(); }, scope.args(taskId)))) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "本轮上下文已失效，请刷新会话后重试");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "本轮上下文已失效，请刷新会话后重试");
         }
     }
 

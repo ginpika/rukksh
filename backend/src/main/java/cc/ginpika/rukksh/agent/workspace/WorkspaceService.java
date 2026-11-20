@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.workspace;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.computer.terminal.ExecTarget;
 import cc.ginpika.rukksh.ai.computer.terminal.exec.LocalExecTarget;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
@@ -14,9 +16,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 工作空间：把命令行终端模块的「可执行环境」当作 agent 的工作空间来用，并额外提供文件面——
@@ -154,14 +154,14 @@ public class WorkspaceService {
         }
     }
 
-    private static ResponseStatusException downloadTooLarge() {
-        return new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+    private static DomainException downloadTooLarge() {
+        return new DomainException(DomainException.ErrorKind.PAYLOAD_TOO_LARGE,
                 "文件过大（下载上限 " + (DOWNLOAD_MAX_BYTES / 1024 / 1024) + " MB）");
     }
 
     private static void requireSuccess(ExecTarget.ExecOutcome outcome, String path) {
         if (outcome.timedOut()) {
-            throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "文件操作超时");
+            throw new DomainException(DomainException.ErrorKind.GATEWAY_TIMEOUT, "文件操作超时");
         }
         if (outcome.exitCode() != ExecTarget.NO_EXIT_CODE && !outcome.ok()) {
             throw badRequest(failMessage(outcome, path));
@@ -187,10 +187,10 @@ public class WorkspaceService {
 
     private TerminalStore.TargetRow require(String workspaceId) {
         TerminalStore.TargetRow target = store.targetById(workspaceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND,
                         "工作空间不存在：" + workspaceId));
         if (LocalExecTarget.KIND.equals(target.kind()) && !target.enabled()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "请先启用本机工作空间");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "请先启用本机工作空间");
         }
         return target;
     }
@@ -208,7 +208,7 @@ public class WorkspaceService {
             return impl.run(target, command, options);
         } catch (RuntimeException e) {
             log.warn("工作空间文件操作失败（{} {}）：{}", target.kind(), target.name(), e.getMessage());
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+            throw new DomainException(DomainException.ErrorKind.BAD_GATEWAY,
                     "无法连接工作空间「" + target.name() + "」：" + e.getMessage());
         }
     }
@@ -299,7 +299,7 @@ public class WorkspaceService {
         return "无法访问路径：" + rel;
     }
 
-    private static ResponseStatusException badRequest(String message) {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    private static DomainException badRequest(String message) {
+        return new DomainException(DomainException.ErrorKind.BAD_REQUEST, message);
     }
 }

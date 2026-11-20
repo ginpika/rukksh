@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore.HubRow;
 import cc.ginpika.rukksh.agent.context.ContextPlan;
 import cc.ginpika.rukksh.agent.context.ContextFragment.Ref;
@@ -21,8 +23,6 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Single-chat pilot state, scoped to one Turn and independent of the model protocol loop. */
 final class ChatContextRun {
@@ -218,7 +218,7 @@ final class ChatContextRun {
             required.addAll(protectedRefs);
             if (required.stream().anyMatch(ref ->
                     !sources.referenceAvailable(session.id(), agentId, session.projectId(), ref))) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "本轮引用的证据已失效，请刷新会话后重试");
+                throw new DomainException(DomainException.ErrorKind.CONFLICT, "本轮引用的证据已失效，请刷新会话后重试");
             }
             if (usesStage || !protectedRefs.isEmpty()) {
                 usedScopedEvidence.set(true);

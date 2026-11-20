@@ -1,12 +1,15 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicEventStore;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cc.ginpika.rukksh.agent.member.AgentStore.AgentRow;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicStore.TopicRow;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore.TopicRow;
 import cc.ginpika.rukksh.agent.roundtable.TopicStateMachine.PeerState;
 import java.sql.Connection;
 import java.sql.DriverManager;

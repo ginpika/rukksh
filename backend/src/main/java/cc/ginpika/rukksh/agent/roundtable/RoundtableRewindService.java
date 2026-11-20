@@ -1,16 +1,21 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.dto.ChatDtos;
 import cc.ginpika.rukksh.ai.memory.MemoryIngest;
 import cc.ginpika.rukksh.ai.memory.store.MemoryRetractionStore;
 import java.util.HashSet;
 import java.util.List;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Rewind conversation only; project work, issues and already executed effects remain explicit records. */
 @Service
@@ -41,13 +46,13 @@ public class RoundtableRewindService {
 
     @Transactional
     public ChatDtos.Rewind rewind(String sessionId, Long messageId) {
-        sessions.findById(sessionId).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "会话不存在"));
+        sessions.findById(sessionId).orElseThrow(() -> error(DomainException.ErrorKind.NOT_FOUND, "会话不存在"));
         sessions.requireWritable(sessionId);
         var issue = collaboration.issueBySession(sessionId).orElse(null);
-        if (issue != null && !"open".equals(issue.status())) throw error(HttpStatus.CONFLICT, "已形成结论的议题为只读，请在主任务继续");
+        if (issue != null && !"open".equals(issue.status())) throw error(DomainException.ErrorKind.CONFLICT, "已形成结论的议题为只读，请在主任务继续");
         var target = messageId == null ? null : messages.message(messageId).orElse(null);
         if (target == null || !sessionId.equals(target.sessionId()) || !"user".equals(target.role()))
-            throw error(HttpStatus.BAD_REQUEST, "回退位置必须为当前会话的一条用户提问");
+            throw error(DomainException.ErrorKind.BAD_REQUEST, "回退位置必须为当前会话的一条用户提问");
         // Related discussions may still write project results even when this session itself is idle.
         String root = issue == null ? sessionId : issue.parentSessionId();
         var related = new java.util.ArrayList<String>();
@@ -56,7 +61,7 @@ public class RoundtableRewindService {
                 .forEach(i -> related.add(i.sessionId()));
         for (String id : related) {
             if (discussions.snapshot(id).running() || work.workingCount(id) > 0)
-                throw error(HttpStatus.CONFLICT, "请先停止当前任务及议题的讨论和执行，再回退");
+                throw error(DomainException.ErrorKind.CONFLICT, "请先停止当前任务及议题的讨论和执行，再回退");
         }
         var discarded = messages.rewindRows(sessionId, messageId).stream().map(RoundtableMessageStore.MessageRow::id).toList();
         long fromTime = target.createdAt() == null ? 0 : target.createdAt();
@@ -80,5 +85,5 @@ public class RoundtableRewindService {
         return new ChatDtos.Rewind(sessionId, removed);
     }
 
-    private static ResponseStatusException error(HttpStatus status, String text) { return new ResponseStatusException(status, text); }
+    private static DomainException error(DomainException.ErrorKind status, String text) { return new DomainException(status, text); }
 }

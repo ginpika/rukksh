@@ -22,10 +22,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class ToolValidator {
 
-    private final ToolManager tools;
+    private final ToolRegistry tools;
     private final ObjectMapper om;
 
-    public ToolValidator(ToolManager tools, ObjectMapper om) {
+    public ToolValidator(ToolRegistry tools, ObjectMapper om) {
         this.tools = tools;
         this.om = om;
     }

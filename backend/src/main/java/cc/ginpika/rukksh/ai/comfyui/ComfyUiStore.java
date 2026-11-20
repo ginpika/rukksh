@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.ai.comfyui;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -55,6 +57,6 @@ public class ComfyUiStore {
     }
     public ComfyUiClient.ImageData image(String id) {
         return jdbc.query("SELECT media_type,content FROM comfyui_image WHERE id=?", (r,n) -> new ComfyUiClient.ImageData(r.getString(1), r.getBytes(2)), id)
-            .stream().findFirst().orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "图片不存在"));
+            .stream().findFirst().orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "图片不存在"));
     }
 }

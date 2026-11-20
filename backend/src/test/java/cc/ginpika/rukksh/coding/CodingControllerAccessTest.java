@@ -1,8 +1,9 @@
 package cc.ginpika.rukksh.coding;
 
-import cc.ginpika.rukksh.coding.api.CodingController;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.web.controller.CodingController;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.workspace.WorkspaceProjects;
+import cc.ginpika.rukksh.web.advice.WebExceptionAdvice;
 import cc.ginpika.rukksh.web.sso.SsoInterceptor;
 import cc.ginpika.rukksh.web.sso.SsoUser;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,12 +21,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class CodingControllerAccessTest {
-    private final CodingFacade coding = mock(CodingFacade.class);
+    private final CodingService coding = mock(CodingService.class);
     private final WorkspaceProjects projects = mock(WorkspaceProjects.class);
     private MockMvc mvc;
 
     @BeforeEach void setup() {
-        mvc = MockMvcBuilders.standaloneSetup(new CodingController(coding, projects)).build();
+        mvc = MockMvcBuilders.standaloneSetup(new CodingController(coding, projects)).setControllerAdvice(new WebExceptionAdvice()).build();
         when(coding.capabilities()).thenReturn(new Capabilities(true, false, "image", 60, 30, "workspace"));
         when(projects.open(eq("ordinary-user"), any())).thenReturn(
                 new CodingProject("p1", "app", "w1", "workspace", "ssh", "app", null, true, 0));

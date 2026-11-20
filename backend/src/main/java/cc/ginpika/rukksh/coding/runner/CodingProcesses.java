@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.coding.runner;
 
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.repository.CodingWorkspace;
 import cc.ginpika.rukksh.coding.store.CodingStore;

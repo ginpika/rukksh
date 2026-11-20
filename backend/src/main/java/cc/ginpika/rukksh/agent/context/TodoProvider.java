@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.agent.context;
 
-import cc.ginpika.rukksh.agent.runtime.TodoStore;
+import cc.ginpika.rukksh.agent.runtime.SessionTodoStore;
 import cc.ginpika.rukksh.ai.core.AgentScope;
 import java.util.List;
 import org.springframework.core.annotation.Order;
@@ -19,9 +19,9 @@ import org.springframework.stereotype.Component;
 @Order(20)
 public class TodoProvider implements ContextProvider {
 
-    private final TodoStore todos;
+    private final SessionTodoStore todos;
 
-    public TodoProvider(TodoStore todos) {
+    public TodoProvider(SessionTodoStore todos) {
         this.todos = todos;
     }
 
@@ -43,10 +43,10 @@ public class TodoProvider implements ContextProvider {
         if (sessionId == null || sessionId.isBlank()) {
             return "";
         }
-        /* 取「当前 Agent」自己那份：首页 = 内置 Agent，圆桌 = 当前成员——与写入侧（TodoService）同一口径，
+        /* 取「当前 Agent」自己那份：首页 = 内置 Agent，圆桌 = 当前成员——与写入侧（SessionTodoService）同一口径，
            故用 AgentScope#get() 原值、不做内置兜底（兜底会把写入/读取劈成两个 key） */
-        List<TodoStore.TodoItem> items = todos.list(sessionId, AgentScope.get());
-        String rendered = TodoStore.render(items);
+        List<SessionTodoStore.TodoItem> items = todos.list(sessionId, AgentScope.get());
+        String rendered = SessionTodoStore.render(items);
         if (rendered.isBlank()) {
             return "";
         }
@@ -54,7 +54,7 @@ public class TodoProvider implements ContextProvider {
                 "【本轮待办清单】按它推进；做完 / 失败一条就用 write_todos 把整份清单重写一遍"
                         + "（含新状态），别在正文里复述进度：\n").append(rendered);
         /* 再规划触发：有失败项时明确要求先处置它——重试还是调整计划由模型决定，但不得视而不见 */
-        if (items.stream().anyMatch(i -> TodoStore.ST_FAILED.equals(i.status()))) {
+        if (items.stream().anyMatch(i -> SessionTodoStore.ST_FAILED.equals(i.status()))) {
             sb.append("（清单里有失败项：先决定重试还是调整计划——改写该条或重排整份清单，别当作没发生。）");
         }
         return sb.toString();

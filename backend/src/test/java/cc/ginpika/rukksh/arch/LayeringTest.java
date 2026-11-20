@@ -73,6 +73,17 @@ class LayeringTest {
     }
 
     @Test
+    void nonWebPackagesDoNotDependOnWebOrServlet() {
+        noClasses().that().resideOutsideOfPackage("cc.ginpika.rukksh.web..")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "org.springframework.web..",
+                        "org.springframework.http..",
+                        "jakarta.servlet..")
+                .because("HTTP 传输与 Servlet 语义只属于 web 接入层，核心编排与基础设施不得耦合传输协议")
+                .check(CLASSES);
+    }
+
+    @Test
     void contextAssemblyDoesNotExecuteAgentsOrTools() {
         noClasses().that().haveSimpleName("ChatContextService")
                 .should().dependOnClassesThat().haveSimpleName("AgentRuntime")

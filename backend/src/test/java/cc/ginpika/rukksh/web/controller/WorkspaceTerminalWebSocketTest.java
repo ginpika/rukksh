@@ -5,6 +5,7 @@ import cc.ginpika.rukksh.web.terminal.*;
 import cc.ginpika.rukksh.ai.computer.terminal.WorkspaceTerminals;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
 import cc.ginpika.rukksh.config.*;
+import cc.ginpika.rukksh.web.config.WebConfig;
 import cc.ginpika.rukksh.web.desktop.DesktopTokenFilter;
 import cc.ginpika.rukksh.web.sso.*;
 import com.fasterxml.jackson.databind.*;

@@ -7,27 +7,28 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import cc.ginpika.rukksh.agent.roundtable.*;
+import cc.ginpika.rukksh.agent.roundtable.store.*;
 import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.config.DesktopProps;
 import cc.ginpika.rukksh.config.SsoProps;
+import cc.ginpika.rukksh.shared.error.DomainException;
+import cc.ginpika.rukksh.web.advice.WebExceptionAdvice;
 import cc.ginpika.rukksh.web.sso.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.server.ResponseStatusException;
 
 /** The real HTTP boundary must carry SSO identity into workspace ownership and autonomous continuations. */
 class CollaborationControllerAccessTest {
     final CollaborationService service=mock(CollaborationService.class);
     final CollaborationTaskLifecycle lifecycle=mock(CollaborationTaskLifecycle.class);
     final CollaborationController controller=new CollaborationController(service,mock(RoundtableRewindService.class),lifecycle);
-    final MockMvc mvc=MockMvcBuilders.standaloneSetup(controller).build();
+    final MockMvc mvc=MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new WebExceptionAdvice()).build();
     final SsoUser alice=new SsoUser("alice","alice","用户","","user","");
     MockHttpServletRequestBuilder binding() {
         return put("/api/projects/p/collaboration-workspace").contentType(MediaType.APPLICATION_JSON)
@@ -59,7 +60,7 @@ class CollaborationControllerAccessTest {
     }
     @Test void actualSsoInterceptorLocalUserCanBindWithoutAnyPreexistingThreadScope() throws Exception {
         var interceptor=new SsoInterceptor(new SsoProps(),new DesktopProps(),mock(SsoService.class),new ObjectMapper());
-        var localMvc=MockMvcBuilders.standaloneSetup(controller).addInterceptors(interceptor).build();
+        var localMvc=MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new WebExceptionAdvice()).addInterceptors(interceptor).build();
         when(service.bindWorkspace(eq("p"),any())).thenAnswer(inv -> {
             assertEquals("local-dev",UserScope.get());
             return new CollaborationWorkspaceBinding.Location("p","repo","w","环境","apps/new","/workspace/apps/new",true);
@@ -87,7 +88,7 @@ class CollaborationControllerAccessTest {
         assertNull(UserScope.get());
         when(service.bindWorkspace(anyString(),any())).thenAnswer(inv -> {
             assertEquals("alice",UserScope.get());
-            throw new ResponseStatusException(HttpStatus.CONFLICT,"目录需要重新核对");
+            throw DomainException.conflict("目录需要重新核对");
         });
         mvc.perform(binding().requestAttr(SsoInterceptor.ATTR,alice)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("目录需要重新核对"));
@@ -96,8 +97,8 @@ class CollaborationControllerAccessTest {
     @Test void manualTodoInterventionCapturesTheAuthenticatedActorForRescheduling() throws Exception {
         var work=mock(RoundtableWorkRuntime.class);
         var board=mock(RoundtableTodoStore.class);
-        var agents=new AgentController(null,null,null,null,null,new ObjectMapper(),null,null,null,null,null,null,null,null,null,work,board,lifecycle);
-        var agentMvc=MockMvcBuilders.standaloneSetup(agents).build();
+        var agents=new AgentController(null,null,null,null,null,new ObjectMapper(),null,null,null,null,null,null,null,null,null,null,work,board,lifecycle);
+        var agentMvc=MockMvcBuilders.standaloneSetup(agents).setControllerAdvice(new WebExceptionAdvice()).build();
         when(work.checkNow("todo")).thenAnswer(inv -> { assertEquals("alice",UserScope.get()); return true; });
         when(work.drop("todo")).thenAnswer(inv -> { assertEquals("alice",UserScope.get()); return true; });
         when(work.defer("todo")).thenAnswer(inv -> { assertEquals("alice",UserScope.get()); return true; });

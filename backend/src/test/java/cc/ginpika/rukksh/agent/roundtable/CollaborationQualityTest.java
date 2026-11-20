@@ -1,5 +1,10 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import com.fasterxml.jackson.databind.*;
 import org.junit.jupiter.api.*;
 import org.springframework.core.io.ClassPathResource;
@@ -23,7 +28,7 @@ class CollaborationQualityTest {
     @Test void oldTasksRemainReadableAndRecordsCannotCrossSessionBoundaries(){
         assertTrue(quality.find(session,todo).contract().isNull());
         assertTrue(quality.find(session,todo).findings().isArray());
-        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->quality.find("other",todo));
+        assertThrows(DomainException.class,()->quality.find("other",todo));
     }
     @Test void contractsAndReviewSeverityRejectAmbiguousWorkBeforePersistence() throws Exception {
         assertThrows(IllegalArgumentException.class,()->CollaborationQuality.validateContract(json.readTree("{\"outcome\":\"产出\"}")));

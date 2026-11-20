@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 对话身份：对话 system 的第一块。没有代码内置——内置来自 .env 的 LLM_SYSTEM_PROMPT，
- * 故 {@link #builtin()} 返回 null，由 PromptManager 兜底。
+ * 故 {@link #builtin()} 返回 null，由 PromptService 兜底。
  */
 @Component
 public class IdentityBlock implements PromptBlock {

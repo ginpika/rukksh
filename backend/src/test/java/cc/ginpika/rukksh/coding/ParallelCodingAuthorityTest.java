@@ -1,8 +1,9 @@
 package cc.ginpika.rukksh.coding;
 
 import cc.ginpika.rukksh.agent.roundtable.*;
+import cc.ginpika.rukksh.agent.roundtable.store.*;
 import cc.ginpika.rukksh.ai.core.AgentScope;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.store.CodingStore;
 import cc.ginpika.rukksh.project.*;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.web.controller;
 
-import cc.ginpika.rukksh.config.TtsService;
+import cc.ginpika.rukksh.ai.tts.TtsService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 import java.util.Map;
@@ -11,10 +11,6 @@ public class TtsController {
     public TtsController(TtsService tts) { this.tts=tts; }
     public record Selection(String profileId) {}
     public record Speech(String agentId,String text) {}
-    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
-    public ResponseEntity<Map<String,String>> error(org.springframework.web.server.ResponseStatusException e) {
-        return ResponseEntity.status(e.getStatusCode()).body(Map.of("message",e.getReason()==null ? "TTS 请求失败" : e.getReason()));
-    }
     @GetMapping("/api/settings/tts") public TtsService.View view() { return tts.view(); }
     @PostMapping("/api/settings/tts/endpoints") public TtsService.View createEndpoint(@RequestBody TtsService.Endpoint e) { return tts.saveEndpoint(null,e); }
     @PostMapping("/api/settings/tts/endpoints/{id}/test") public Object testEndpoint(@PathVariable String id) { return tts.testEndpoint(id); }

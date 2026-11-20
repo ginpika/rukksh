@@ -2,7 +2,6 @@ package cc.ginpika.rukksh.ai.core.tool.subagent;
 
 import cc.ginpika.rukksh.ai.core.tool.AiTool;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
-import cc.ginpika.rukksh.ai.core.tool.heartbeat.DelegatePlanTool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Set;
@@ -23,7 +22,7 @@ public class ReadSubagentRunTool implements AiTool {
     public String description() {
         return "按执行 id 读取当前作用域内的执行报告。单聊临时上下文使用 offset 和 length 分页回读结论原文，"
                 + "响应包含 next_offset 时可继续。报告是待核对的证据。其他执行面沿用各自的回读权限。"
-                + "id 来自 " + DelegateSubagentTool.NAME + " 或 " + DelegatePlanTool.NAME + " 的返回。";
+                + "id 来自 " + DelegateSubagentTool.NAME + " 或 delegate_heartbeat 的返回。";
     }
 
     @Override

@@ -1,13 +1,13 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 任务段（R1 · chat_scene）：同一会话内显式切换工作内容的机制。
@@ -63,7 +63,7 @@ public class ChatScenes {
         requireSession(hubId);
         requireIdle(hubId);
         if (active(hubId) != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "已有进行中的任务段，请先结束再开始新任务");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "已有进行中的任务段，请先结束再开始新任务");
         }
         long now = System.currentTimeMillis();
         jdbc.update("INSERT INTO chat_scene(session_id, name, role_prompt, constraints, status, "
@@ -105,14 +105,14 @@ public class ChatScenes {
         requireSession(hubId);
         requireIdle(hubId);
         if (active(hubId) != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "已有进行中的任务段，请先结束再恢复其他任务");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "已有进行中的任务段，请先结束再恢复其他任务");
         }
         SceneRow row = find(hubId, sceneId);
         if (row == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务段不存在或不属于该会话");
+            throw new DomainException(DomainException.ErrorKind.NOT_FOUND, "任务段不存在或不属于该会话");
         }
         if (!"ended".equals(row.status())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "该任务段不在可恢复状态");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "该任务段不在可恢复状态");
         }
         long now = System.currentTimeMillis();
         jdbc.update("UPDATE chat_scene SET status = 'active', updated_at = ? WHERE id = ?", now, sceneId);
@@ -157,7 +157,7 @@ public class ChatScenes {
     private SceneRow requireActive(String hubId, long sceneId) {
         SceneRow row = find(hubId, sceneId);
         if (row == null || !"active".equals(row.status())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "该任务段不是当前活动任务段");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "该任务段不是当前活动任务段");
         }
         return row;
     }
@@ -166,14 +166,14 @@ public class ChatScenes {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM hub_session WHERE id = ? AND mode = 'ai'", Integer.class, hubId);
         if (count == null || count == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "单聊会话不存在: " + hubId);
+            throw new DomainException(DomainException.ErrorKind.NOT_FOUND, "单聊会话不存在: " + hubId);
         }
     }
 
     /** 切换只在安全点提交：生成中先让用户结束或取消当前轮。 */
     private void requireIdle(String hubId) {
         if (live.isRunning(hubId)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "该会话正在生成中，请先结束或取消当前轮再切换任务");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "该会话正在生成中，请先结束或取消当前轮再切换任务");
         }
     }
 

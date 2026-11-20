@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashSet;
@@ -16,7 +18,7 @@ public class CollaborationQuality {
     public record Quality(JsonNode contract,JsonNode findings,JsonNode diagnosis) {}
     public Quality find(String session,String todo){
         Integer count=jdbc.queryForObject("SELECT count(*) FROM roundtable_todo WHERE id=? AND session_id=?",Integer.class,todo,session);
-        if(count==null || count!=1)throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,"当前会话中没有这项工作");
+        if(count==null || count!=1)throw new DomainException(DomainException.ErrorKind.NOT_FOUND,"当前会话中没有这项工作");
         return find(todo);
     }
     public Quality find(String todo){

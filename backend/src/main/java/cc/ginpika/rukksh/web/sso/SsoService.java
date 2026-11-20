@@ -52,7 +52,7 @@ public class SsoService {
 
     /** server-url 为空 = 未接入 hostid（本地开发/直通，见 §9-3） */
     public boolean isEnabled() {
-        return props.getServerUrl() != null && !props.getServerUrl().isBlank();
+        return props.isEnabled();
     }
 
     /** 校验登录态：优先缓存，miss 时调 hostid /api/sso/session */

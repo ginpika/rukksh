@@ -3,7 +3,7 @@ package cc.ginpika.rukksh.agent.chat;
 import cc.ginpika.rukksh.agent.chat.store.ChatMessageStore;
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore;
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore.HubRow;
-import cc.ginpika.rukksh.agent.chat.turn.History;
+import cc.ginpika.rukksh.agent.chat.turn.ChatHistoryProvider;
 import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
 import cc.ginpika.rukksh.agent.chat.turn.TurnTrigger;
 import cc.ginpika.rukksh.agent.context.ContextBuilder;
@@ -17,7 +17,7 @@ import cc.ginpika.rukksh.agent.runtime.ToolExecutionRecorder;
 import cc.ginpika.rukksh.agent.runtime.ToolExecutionStore;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEventBus;
 import cc.ginpika.rukksh.ai.computer.terminal.TerminalService;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolResult;
 import cc.ginpika.rukksh.ai.core.tool.ToolValidator;
 import cc.ginpika.rukksh.ai.core.tool.terminal.RunCommandTool;
@@ -78,11 +78,11 @@ class ChatEphemeralContextTest {
         var prompts = mock(AgentPromptService.class);
         when(prompts.builtinSystem(null)).thenReturn("保留对话已确认的约定。");
         var projects = mock(ProjectStore.class);
-        var tools = new ToolManager(List.of(new RunCommandTool()), om);
+        var tools = new ToolRegistry(List.of(new RunCommandTool()), om);
         props.setEphemeralChat(true);
         props.setReserveOutputTokens(512);
         props.setCompressHistory(false); // The off-switch comparison uses unfiltered legacy playback.
-        var history = new History(messages, turns, new ChatLiveStore(), om, props);
+        var history = new ChatHistoryProvider(messages, turns, new ChatLiveStore(), om, props);
         var sources = new ChatContextSources(jdbc, om);
         var context = new ChatContextService(sessions, messages, om, settings, prompts, tools, projects,
                 new ContextBuilder(om, List.of(history)), props, history, sources, turns,
@@ -91,8 +91,8 @@ class ChatEphemeralContextTest {
                 null, null, null, terminal, null, null);
         var recorder = new ToolExecutionRecorder(new ToolExecutionStore(jdbc), mock(RuntimeEventBus.class));
         runner = new ChatTurnRunner(new AgentRuntime(client), recorder, settings, sessions, messages, om, tools,
-                mock(SubagentTool.class), mock(MemoryWriter.class), projects, new ChatTaskRunner(new TaskStore(jdbc)),
-                turns, mock(TodoService.class), context, dispatcher, completion);
+                mock(SubagentToolPort.class), mock(MemoryWriter.class), projects, new ChatTaskRunner(new TaskStore(jdbc)),
+                turns, mock(SessionTodoService.class), context, dispatcher, completion);
         manifests = new ChatContextManifests(sessions, turns);
         runner.setContextPilot(sources, manifests);
     }

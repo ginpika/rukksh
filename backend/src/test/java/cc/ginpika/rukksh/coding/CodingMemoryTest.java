@@ -8,7 +8,7 @@ import cc.ginpika.rukksh.ai.memory.graph.MemoryGraphStore;
 import cc.ginpika.rukksh.ai.memory.recall.MemoryItemRecall;
 import cc.ginpika.rukksh.ai.memory.store.*;
 import cc.ginpika.rukksh.ai.llm.EmbeddingClient;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.integration.CodingMemory;
 import cc.ginpika.rukksh.config.*;
 import com.fasterxml.jackson.databind.ObjectMapper;

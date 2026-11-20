@@ -1,5 +1,6 @@
 package cc.ginpika.rukksh.web.controller;
 
+import cc.ginpika.rukksh.agent.chat.store.HubSessionStore;
 import cc.ginpika.rukksh.agent.runtime.TaskStore;
 import cc.ginpika.rukksh.agent.runtime.WorkingSetRestorer;
 import cc.ginpika.rukksh.ai.core.MemoryExec;
@@ -14,6 +15,9 @@ import cc.ginpika.rukksh.ai.memory.MemoryTemporalService;
 import cc.ginpika.rukksh.ai.memory.MemoryVocabulary;
 import cc.ginpika.rukksh.ai.memory.UserProfileService;
 import cc.ginpika.rukksh.ai.memory.WorkingSetService;
+import cc.ginpika.rukksh.ai.memory.dto.MemoryViews.ItemView;
+import cc.ginpika.rukksh.ai.memory.dto.MemoryViews.WorkingView;
+import cc.ginpika.rukksh.ai.memory.dto.MemoryViews;
 import cc.ginpika.rukksh.ai.memory.recall.MemoryItemRecall;
 import cc.ginpika.rukksh.ai.memory.store.MemoryCandidateStore.CandidateRow;
 import cc.ginpika.rukksh.ai.memory.store.MemoryEdgeStore;
@@ -22,7 +26,7 @@ import cc.ginpika.rukksh.ai.memory.store.MemoryItemStore;
 import cc.ginpika.rukksh.ai.memory.store.MemoryPromotionStore;
 import cc.ginpika.rukksh.ai.memory.store.MemoryRevisionStore;
 import cc.ginpika.rukksh.ai.memory.store.MemoryShareStore.ShareRow;
-import cc.ginpika.rukksh.ai.memory.store.MemoryWorkStore;
+import cc.ginpika.rukksh.project.ProjectStore;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -47,10 +51,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/memory")
 public class MemoryController {
 
-    @org.springframework.beans.factory.annotation.Autowired
-    private cc.ginpika.rukksh.agent.chat.store.HubSessionStore hubSessions;
-    @org.springframework.beans.factory.annotation.Autowired
-    private cc.ginpika.rukksh.project.ProjectStore projects;
+    private final HubSessionStore hubSessions;
+    private final ProjectStore projects;
     private final MemoryItemStore items;
     private final MemoryConsolidator consolidator;
     private final UserProfileService profiles;
@@ -73,13 +75,16 @@ public class MemoryController {
     /** 工作状态恢复（memory-v6 §9.2）：检查点 → 工作集 */
     private final WorkingSetRestorer restorer;
 
-    public MemoryController(MemoryItemStore items, MemoryConsolidator consolidator,
+    public MemoryController(HubSessionStore hubSessions, ProjectStore projects,
+                            MemoryItemStore items, MemoryConsolidator consolidator,
                             UserProfileService profiles, MemoryPublisher publisher,
                             MemoryEdgeStore edges, WorkingSetService workingSet,
                             MemoryHealthService health, TaskStore tasks,
                             MemoryTemporalService temporal, MemoryPurgeService purge,
                             MemoryPromoter promoter, MemoryRevisionStore revisionsStore,
                             WorkingSetRestorer restorer) {
+        this.hubSessions = hubSessions;
+        this.projects = projects;
         this.items = items;
         this.consolidator = consolidator;
         this.profiles = profiles;
@@ -105,7 +110,7 @@ public class MemoryController {
                     .map(ItemView::of).toList();
             groups.add(new ScopeGroup(scope, MemoryItemRecall.scopeLabel(scope), view.size(), view));
         }
-        int active = (int) all.stream().filter(MemoryController::isActive).count();
+        int active = (int) all.stream().filter(MemoryViews::isActive).count();
         int inbox = publisher.inbox(MemoryExec.system(null), 100).size();
         return new SummaryView(groups, active, all.size(), profiles.pending().size(),
                 publisher.published().size(), inbox, workingSet.countOpen());
@@ -485,17 +490,6 @@ public class MemoryController {
         return items.findById(id).orElseThrow(() -> new IllegalArgumentException("条目不存在：" + id));
     }
 
-    private static boolean isActive(MemoryItemStore.ItemRow r) {
-        var temporal=cc.ginpika.rukksh.ai.memory.MemoryTime.decode(r.temporalJson());
-        boolean state=temporal!=null && "state".equals(temporal.kind());
-        return MemoryVocabulary.STATUS_ACTIVE.equals(r.status())
-                && r.supersededBy() == null
-                && (r.validUntil() == null || r.validUntil() > System.currentTimeMillis())
-                && (r.expiresSoft() == null || r.expiresSoft() > System.currentTimeMillis())
-                && (!state || (temporal.start()==null || temporal.start()<=System.currentTimeMillis())
-                    && (r.invalidAt()==null || r.invalidAt()>System.currentTimeMillis()));
-    }
-
     private static boolean eq(String filter, String value) {
         return filter == null || filter.isBlank() || filter.equals(value);
     }
@@ -546,25 +540,6 @@ public class MemoryController {
         return layer;
     }
 
-    /** 一条记忆条目（读侧视图） */
-    public record ItemView(long id, String agentId, String owner, String domain, String layer,
-                           String projectId, String sessionId, Long taskId, String scope,
-                           String scopeLabel, String title, String body, double confidence,
-                           String source, String sourceKind, String evidenceLevel, String status,
-                           String retention, String identity, Long version, boolean pinned,
-                           boolean active, Long validUntil, Long supersededBy, long createdAt,
-                           long updatedAt, String producerAgent, String sourceRefs, Long expiresSoft,
-                           Long promotedFrom, Long learnedAt, Long invalidAt, String temporalJson) {
-        static ItemView of(MemoryItemStore.ItemRow r) {
-            return new ItemView(r.id(), r.agentId(), r.owner(), r.domain(), r.layer(), r.projectId(),
-                    r.sessionId(), r.taskId(), r.scope(), MemoryItemRecall.scopeLabel(r.scope()),
-                    r.title(), r.body(), r.confidence(), r.source(), r.sourceKind(), r.evidenceLevel(),
-                    r.status(), r.retention(), r.identity(), r.version(), r.pinned(), isActive(r),
-                    r.validUntil(), r.supersededBy(), r.createdAt(), r.updatedAt(), r.producerAgent(),
-                    r.sourceRefs(), r.expiresSoft(), r.promotedFrom(), r.learnedAt(), r.invalidAt(), r.temporalJson());
-        }
-    }
-
     /** 某 scope 的一组条目 */
     public record ScopeGroup(String scope, String label, int count, List<ItemView> items) {
     }
@@ -602,17 +577,6 @@ public class MemoryController {
             return new EdgeView(e.id(), e.owner(), e.projectId(), e.agentId(), e.subject(),
                     e.predicate(), e.object(), e.confidence(), e.validAt(), e.invalidAt(),
                     e.learnedAt(), e.invalidAt() == null);
-        }
-    }
-
-    /** 一条工作状态（memory_work · L3）：与长期记忆物理分离，注入时一并呈现 */
-    public record WorkingView(long id, String sessionId, Long taskId, String agentId, String projectId,
-                              String kind, String title, String body, String status, Long expiresAt,
-                              long createdAt, long updatedAt) {
-        static WorkingView of(MemoryWorkStore.WorkRow w) {
-            return new WorkingView(w.id(), w.sessionId(), w.taskId(), w.agentId(), w.projectId(),
-                    w.kind(), w.title(), w.body(), w.status(), w.expiresAt(), w.createdAt(),
-                    w.updatedAt());
         }
     }
 

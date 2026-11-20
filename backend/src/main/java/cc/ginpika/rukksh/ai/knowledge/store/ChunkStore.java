@@ -1,7 +1,7 @@
 package cc.ginpika.rukksh.ai.knowledge.store;
 
 import cc.ginpika.rukksh.ai.knowledge.store.DocumentStore;
-import cc.ginpika.rukksh.ai.knowledge.retrieval.VecMath;
+import cc.ginpika.rukksh.ai.core.util.VectorMath;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -118,7 +118,7 @@ public class ChunkStore {
                 "INSERT INTO chunk_embedding(chunk_id, model, dim, vec, updated_at) VALUES(?,?,?,?,?) "
                         + "ON CONFLICT(chunk_id) DO UPDATE SET model=excluded.model, dim=excluded.dim, "
                         + "vec=excluded.vec, updated_at=excluded.updated_at",
-                chunkId, model, vec.length, VecMath.encode(vec), System.currentTimeMillis());
+                chunkId, model, vec.length, VectorMath.encode(vec), System.currentTimeMillis());
     }
 
     public List<EmbedRow> embeddingsByModel(String model) {
@@ -134,7 +134,7 @@ public class ChunkStore {
         double[][] scored = new double[rows.size()][2];
         int n = 0;
         for (EmbedRow r : rows) {
-            float sim = VecMath.cosine(qvec, VecMath.decode(r.bytes(), r.dim()));
+            float sim = VectorMath.cosine(qvec, VectorMath.decode(r.bytes(), r.dim()));
             if (sim > 0) {
                 scored[n][0] = r.chunkId();
                 scored[n][1] = sim;

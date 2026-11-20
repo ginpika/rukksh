@@ -1,14 +1,14 @@
 package cc.ginpika.rukksh.ai.comfyui;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ComfyUiSettings {
@@ -33,12 +33,12 @@ public class ComfyUiSettings {
     }
     public Endpoint endpoint(String id) {
         return view().endpoints().stream().filter(e -> e.id().equals(id)).findFirst()
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "ComfyUI 端点不存在"));
+            .orElseThrow(() -> new DomainException(DomainException.ErrorKind.BAD_REQUEST, "ComfyUI 端点不存在"));
     }
     public Profile resolve(String id) {
         String selected = text(id).isEmpty() ? store.defaultProfile() : id;
         return view().profiles().stream().filter(p -> p.id().equals(selected)).findFirst()
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "ComfyUI 档案不存在，请先在设置页配置并选择默认档案"));
+            .orElseThrow(() -> new DomainException(DomainException.ErrorKind.BAD_REQUEST, "ComfyUI 档案不存在，请先在设置页配置并选择默认档案"));
     }
     public static Endpoint validateEndpoint(Endpoint e) {
         require(e != null, "请填写 ComfyUI 端点");
@@ -49,7 +49,7 @@ public class ComfyUiSettings {
             require(("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme())) && uri.getHost() != null
                 && uri.getPort() <= 65535
                 && uri.getRawUserInfo() == null && uri.getRawQuery() == null && uri.getRawFragment() == null, "请输入有效的 HTTP(S) 服务根地址");
-        } catch (IllegalArgumentException error) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请输入有效的 HTTP(S) 服务根地址"); }
+        } catch (IllegalArgumentException error) { throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "请输入有效的 HTTP(S) 服务根地址"); }
         String key = text(e.apiKey());
         require(key.chars().allMatch(c -> c >= 32 && c < 127), "API Key 只能包含可打印的 ASCII 字符");
         return new Endpoint(e.id(), text(e.name()), base, key);
@@ -105,5 +105,5 @@ public class ComfyUiSettings {
     public View select(String id) { if (!text(id).isEmpty()) resolve(id); store.select(id); return view(); }
     static String text(String value) { return value == null ? "" : value.strip(); }
     private static String fallback(String value, String fallback) { return text(value).isEmpty() ? fallback : text(value); }
-    static void require(boolean condition, String message) { if (!condition) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message); }
+    static void require(boolean condition, String message) { if (!condition) throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, message); }
 }

@@ -1,5 +1,11 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEvent;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEventBus;
@@ -31,7 +37,7 @@ public class RoundtableTaskTools {
     private final CollaborationPlan plans;
     private final RoundtableMessageStore messages;
     private final CollaborationScopeGuard scopeGuard;
-    private final cc.ginpika.rukksh.coding.CodingFacade coding;
+    private final cc.ginpika.rukksh.coding.CodingService coding;
     private final CollaborationQuality quality;
     private final org.springframework.transaction.support.TransactionTemplate transactions;
     private final cc.ginpika.rukksh.project.ProjectKnowledgeStore knowledge;
@@ -39,7 +45,7 @@ public class RoundtableTaskTools {
     public RoundtableTaskTools(ObjectMapper om, RoundtableTodoStore taskBoard,
                                AgentDirectory directory, RuntimeEventBus runtimeEvents,
                                CollaborationStore collaboration, CollaborationIssueActions issues,
-                               CollaborationPlan plans, RoundtableMessageStore messages, CollaborationScopeGuard scopeGuard,cc.ginpika.rukksh.coding.CodingFacade coding,CollaborationQuality quality,
+                               CollaborationPlan plans, RoundtableMessageStore messages, CollaborationScopeGuard scopeGuard,cc.ginpika.rukksh.coding.CodingService coding,CollaborationQuality quality,
                                org.springframework.transaction.support.TransactionTemplate transactions,
                                cc.ginpika.rukksh.project.ProjectKnowledgeStore knowledge) {
         this.om = om;
@@ -140,7 +146,7 @@ public class RoundtableTaskTools {
                 result=knowledge.save(project,key,request,session,peer);
             }
             return om.writeValueAsString(result);
-        } catch(org.springframework.web.server.ResponseStatusException error) { return error.getReason(); }
+        } catch (DomainException error) { return error.getMessage(); }
         catch(Exception error) { return "项目资料操作失败："+error.getMessage(); }
     }
 

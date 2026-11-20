@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.stats;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.stats.dto.StatsDtos;
 import cc.ginpika.rukksh.stats.store.TokenUsageStore;
 import java.math.BigDecimal;
@@ -11,7 +13,6 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
-import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TokenUsageServiceTest {
@@ -87,16 +88,16 @@ class TokenUsageServiceTest {
         assertEquals(0,new BigDecimal("0.0002").compareTo(service.view(7).total().costs().getFirst().amount()));
         service.deletePrice(store.prices().getFirst().id());
         assertEquals(1,service.view(7).total().unpricedCalls());
-        assertThrows(ResponseStatusException.class,()->service.deletePrice(999));
+        assertThrows(DomainException.class,()->service.deletePrice(999));
     }
     @Test void dateAndPriceValidationDoesNotTreatMissingPricesAsZero() {
-        assertThrows(ResponseStatusException.class,()->service.view(30,LocalDate.parse("2026-10-16"),LocalDate.parse("2026-10-16"),null,null,null));
-        assertThrows(ResponseStatusException.class,()->service.view(30,LocalDate.parse("2025-01-01"),LocalDate.parse("2026-10-15"),null,null,null));
-        assertThrows(ResponseStatusException.class,()->service.view(30,LocalDate.parse("2026-10-01"),null,null,null,null));
-        assertThrows(ResponseStatusException.class,()->service.savePrice(new StatsDtos.PriceRequest("https://a.test/v1","m","2026-10-01","CNY",null,BigDecimal.ZERO,null)));
-        assertThrows(ResponseStatusException.class,()->price("not a url","m","2026-10-01","CNY","1","1",null));
-        assertThrows(ResponseStatusException.class,()->price("","m","2026-10-01","bad","1","1",null));
-        assertThrows(ResponseStatusException.class,()->price("","m","2026-10-01","CNY","-1","1",null));
+        assertThrows(DomainException.class,()->service.view(30,LocalDate.parse("2026-10-16"),LocalDate.parse("2026-10-16"),null,null,null));
+        assertThrows(DomainException.class,()->service.view(30,LocalDate.parse("2025-01-01"),LocalDate.parse("2026-10-15"),null,null,null));
+        assertThrows(DomainException.class,()->service.view(30,LocalDate.parse("2026-10-01"),null,null,null,null));
+        assertThrows(DomainException.class,()->service.savePrice(new StatsDtos.PriceRequest("https://a.test/v1","m","2026-10-01","CNY",null,BigDecimal.ZERO,null)));
+        assertThrows(DomainException.class,()->price("not a url","m","2026-10-01","CNY","1","1",null));
+        assertThrows(DomainException.class,()->price("","m","2026-10-01","bad","1","1",null));
+        assertThrows(DomainException.class,()->price("","m","2026-10-01","CNY","-1","1",null));
         assertEquals("https://api.test/v1",TokenUsageService.providerOf("https://name:secret@API.test/v1/?api_key=secret#secret"));
     }
     @Test void dailyBoundariesWorkAcrossDstAndExcludeBothSidesOfTheRange() {

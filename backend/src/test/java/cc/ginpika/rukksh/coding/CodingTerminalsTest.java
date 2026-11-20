@@ -1,15 +1,15 @@
 package cc.ginpika.rukksh.coding;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.computer.terminal.ExecTarget;
-import cc.ginpika.rukksh.coding.api.CodingDtos.CodingProject;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.CodingProject;
 import cc.ginpika.rukksh.coding.runner.CodingTerminals;
 import cc.ginpika.rukksh.coding.workspace.WorkspaceProjects;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import org.junit.jupiter.api.*;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -52,20 +52,20 @@ class CodingTerminalsTest {
     }
     @Test void projectAndOwnerAreCheckedBeforeTouchingAnotherShell(){
         var terminal=terminals.create("alice","p",80,24);
-        assertEquals(HttpStatus.NOT_FOUND,assertThrows(ResponseStatusException.class,()->terminals.input("bob","p",terminal.id(),"rm x")).getStatusCode());
-        assertThrows(ResponseStatusException.class,()->terminals.read("alice","other-project",terminal.id(),0));
-        assertThrows(ResponseStatusException.class,()->terminals.delete("bob","p",terminal.id()));assertFalse(shells.getFirst().closed);
-        when(projects.project("eve","p")).thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND));
-        assertThrows(ResponseStatusException.class,()->terminals.create("eve","p",80,24));assertEquals(1,shells.size());
+        assertEquals(DomainException.ErrorKind.NOT_FOUND,assertThrows(DomainException.class,()->terminals.input("bob","p",terminal.id(),"rm x")).kind());
+        assertThrows(DomainException.class,()->terminals.read("alice","other-project",terminal.id(),0));
+        assertThrows(DomainException.class,()->terminals.delete("bob","p",terminal.id()));assertFalse(shells.getFirst().closed);
+        when(projects.project("eve","p")).thenThrow(DomainException.notFound("not found"));
+        assertThrows(DomainException.class,()->terminals.create("eve","p",80,24));assertEquals(1,shells.size());
     }
     @Test void invalidSizesInputAndOffsetsAreRejectedAndDisabledTargetsCanStillBeDeleted(){
-        assertThrows(ResponseStatusException.class,()->terminals.create("alice","p",0,24));
+        assertThrows(DomainException.class,()->terminals.create("alice","p",0,24));
         var terminal=terminals.create("alice","p",80,24);
-        assertThrows(ResponseStatusException.class,()->terminals.resize("alice","p",terminal.id(),80,1000));
-        assertThrows(ResponseStatusException.class,()->terminals.input("alice","p",terminal.id(),"x".repeat(65537)));
-        assertThrows(ResponseStatusException.class,()->terminals.read("alice","p",terminal.id(),-1));
+        assertThrows(DomainException.class,()->terminals.resize("alice","p",terminal.id(),80,1000));
+        assertThrows(DomainException.class,()->terminals.input("alice","p",terminal.id(),"x".repeat(65537)));
+        assertThrows(DomainException.class,()->terminals.read("alice","p",terminal.id(),-1));
         when(projects.project("alice","p")).thenReturn(new CodingProject("p","p","w","w","ssh","app",null,false,0));
-        assertThrows(ResponseStatusException.class,()->terminals.input("alice","p",terminal.id(),"echo x"));assertTrue(shells.getFirst().closed);
+        assertThrows(DomainException.class,()->terminals.input("alice","p",terminal.id(),"echo x"));assertTrue(shells.getFirst().closed);
         terminals.delete("alice","p",terminal.id());assertTrue(terminals.list("alice","p").isEmpty());
     }
     @Test void outputIsBoundedAndOverflowHasAnExplicitResetCursor() throws Exception {
@@ -77,7 +77,7 @@ class CodingTerminalsTest {
     }
     @Test void admissionLimitIncludesAllProjectsForTheSameOwner(){
         for(int i=0;i<8;i++){terminals.create("alice","p"+i,80,24);}
-        assertEquals(HttpStatus.TOO_MANY_REQUESTS,assertThrows(ResponseStatusException.class,()->terminals.create("alice","other",80,24)).getStatusCode());
+        assertEquals(DomainException.ErrorKind.TOO_MANY_REQUESTS,assertThrows(DomainException.class,()->terminals.create("alice","other",80,24)).kind());
     }
     private CodingTerminals.Output awaitOutput(String id,long after) throws InterruptedException {
         long deadline=System.currentTimeMillis()+3000;CodingTerminals.Output result;

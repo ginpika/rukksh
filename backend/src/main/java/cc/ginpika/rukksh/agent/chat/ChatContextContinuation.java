@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.ChatContextStages.Excerpt;
 import cc.ginpika.rukksh.agent.chat.ChatContextStages.Stage;
 import cc.ginpika.rukksh.agent.chat.ChatContextStages.State;
@@ -17,8 +19,6 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 /** One Turn's view of the preceding stage and any replacement staged by the model. */
 final class ChatContextContinuation {
@@ -207,8 +207,8 @@ final class ChatContextContinuation {
         return json.createObjectNode().put("status", "error").put("detail", detail).toString();
     }
 
-    private static ResponseStatusException changed() {
-        return new ResponseStatusException(HttpStatus.CONFLICT, "阶段续接的作用域或来源已变化，请刷新会话后重试");
+    private static DomainException changed() {
+        return new DomainException(DomainException.ErrorKind.CONFLICT, "阶段续接的作用域或来源已变化，请刷新会话后重试");
     }
 
     static ObjectNode schema(ObjectMapper json) {

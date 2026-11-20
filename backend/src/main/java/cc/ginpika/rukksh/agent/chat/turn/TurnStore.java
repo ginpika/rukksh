@@ -129,6 +129,14 @@ public class TurnStore {
         jdbc.update("DELETE FROM chat_turn WHERE session_id = ?", sessionId);
     }
 
+    /** 按 Turn id 与 sessionId 查询绑定回复消息的请求上下文 JSON（供记忆快照观察关联）。 */
+    public List<String> replyContexts(String turnId, String sessionId) {
+        return jdbc.query(
+                "SELECT m.context FROM chat_turn t JOIN chat_message m ON m.id=t.reply_message_id "
+                        + "WHERE t.id=? AND t.session_id=?",
+                (rs, n) -> rs.getString(1), turnId, sessionId);
+    }
+
     /** 回退后 Turn 行仍可留痕，只在原提问还存在时接受其后台回报。 */
     public boolean triggerPresent(String sessionId, String turnId) {
         return Boolean.TRUE.equals(jdbc.query("""

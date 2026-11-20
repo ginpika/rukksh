@@ -12,7 +12,7 @@ import cc.ginpika.rukksh.agent.runtime.AgentRuntime;
 import cc.ginpika.rukksh.agent.runtime.ToolExecutionRecorder;
 import cc.ginpika.rukksh.ai.core.AgentScope;
 import cc.ginpika.rukksh.ai.core.MemoryScopeCtx;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.memory.MemoryWriter;
 import cc.ginpika.rukksh.config.ModelTarget;
 import cc.ginpika.rukksh.config.SettingsService;
@@ -41,13 +41,13 @@ class ChatTurnRunnerTest {
     private final ChatMessageStore messages = mock(ChatMessageStore.class);
     private final ChatTaskRunner tasks = mock(ChatTaskRunner.class);
     private final TurnStore turns = mock(TurnStore.class);
-    private final TodoService todos = mock(TodoService.class);
+    private final SessionTodoService todos = mock(SessionTodoService.class);
     private final ChatContextService context = mock(ChatContextService.class);
     private final ChatTurnCompletion completion = mock(ChatTurnCompletion.class);
     private final HubRow row = new HubRow("s", "title", "ai", null, null, "agent", "project",
             true, false, 30, false, false, 1L, 1L);
     private final ChatTurnRunner runner = new ChatTurnRunner(runtime, mock(ToolExecutionRecorder.class),
-            settings, sessions, messages, om, mock(ToolManager.class), mock(SubagentTool.class),
+            settings, sessions, messages, om, mock(ToolRegistry.class), mock(SubagentToolPort.class),
             mock(MemoryWriter.class), mock(ProjectStore.class), tasks, turns, todos, context,
             mock(ChatToolDispatcher.class), completion);
 

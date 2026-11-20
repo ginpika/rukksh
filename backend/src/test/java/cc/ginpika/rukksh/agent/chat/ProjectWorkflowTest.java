@@ -50,7 +50,7 @@ class ProjectWorkflowTest {
 
     @Test void roundtableHistoryCanJoinAProjectWithoutMovingOrRewritingItsMessages() throws Exception {
         try (var f = new Fixture()) {
-            var roundtables = new cc.ginpika.rukksh.agent.roundtable.RoundtableSessionStore(
+            var roundtables = new cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore(
                     f.jdbc);
             String id = roundtables.insert("[\"a\",\"b\"]");
             f.pair(id, "历史目标", "已留存的发言");

@@ -6,7 +6,7 @@ import cc.ginpika.rukksh.agent.chat.store.ChatMessageStore;
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore;
 import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
 import cc.ginpika.rukksh.agent.roundtable.RoundtableChatService;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
 import cc.ginpika.rukksh.agent.runtime.AgentRunner;
 import cc.ginpika.rukksh.agent.runtime.TaskStore;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEvent;

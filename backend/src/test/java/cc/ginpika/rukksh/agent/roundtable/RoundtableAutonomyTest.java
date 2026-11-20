@@ -1,5 +1,13 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicEventStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableWorkRunStore;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -44,7 +52,7 @@ class RoundtableAutonomyTest {
         final RoundtableDiscussionRuntime discussions = mock(RoundtableDiscussionRuntime.class);
         final RoundtableTaskTools tools;
         final CollaborationScopeGuard scopeGuard=mock(CollaborationScopeGuard.class);
-        final cc.ginpika.rukksh.coding.CodingFacade coding=mock(cc.ginpika.rukksh.coding.CodingFacade.class);
+        final cc.ginpika.rukksh.coding.CodingService coding=mock(cc.ginpika.rukksh.coding.CodingService.class);
         final CollaborationQuality quality;
         final String session;
         Fixture() throws Exception {
@@ -88,7 +96,7 @@ class RoundtableAutonomyTest {
             return tools.runTool(name, call, session, peer, null, current);
         }
         RoundtableWorkRuntime worker() {
-            var worker = new RoundtableWorkRuntime(chat, board, directory, events, messages,
+            var worker = new RoundtableWorkRuntime(chat, mock(RoundtableSessionService.class), board, directory, events, messages,
                     mock(RoundtableLiveBus.class), progress, plans);
             workers.add(worker); return worker;
         }
@@ -501,9 +509,9 @@ class RoundtableAutonomyTest {
         var projects=new cc.ginpika.rukksh.project.ProjectStore(f.jdbc);
         projects.insert("project",null,"项目","software",false,"active",null);
         f.jdbc.update("UPDATE hub_session SET project_id='project' WHERE id=?",f.session);
-        var service=new CollaborationService(f.collaboration,f.chat,f.sessions,f.messages,f.directory,projects,
+        var service=new CollaborationService(f.collaboration,mock(RoundtableSessionService.class),f.sessions,f.messages,f.directory,projects,
                 f.discussions,mock(RoundtableWorkRuntime.class),mock(CollaborationIssueActions.class),f.plans,bindings);
-        service.bindWorkspace("project",new cc.ginpika.rukksh.coding.api.CodingDtos.OpenProject("new-workspace","app",null,false,null));
+        service.bindWorkspace("project",new cc.ginpika.rukksh.coding.dto.CodingDtos.OpenProject("new-workspace","app",null,false,null));
         assertEquals("planning",f.plans.find(f.session).orElseThrow().phase());
         assertTrue(f.plans.assignments(f.session).isEmpty());
         assertEquals("blocked",f.status(blocked));assertEquals("dropped",f.status(dropped));

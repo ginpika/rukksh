@@ -24,11 +24,11 @@ import cc.ginpika.rukksh.agent.runtime.TaskStore;
 import cc.ginpika.rukksh.ai.core.MemoryExec;
 import cc.ginpika.rukksh.ai.core.MemoryIdentity;
 import cc.ginpika.rukksh.ai.core.MemoryScopeCtx;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolRisk;
 import cc.ginpika.rukksh.ai.core.tool.ToolValidator;
-import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolbox;
+import cc.ginpika.rukksh.agent.runtime.AgentToolRouter;
 import cc.ginpika.rukksh.ai.memory.MemoryIngest;
 import cc.ginpika.rukksh.ai.memory.MemoryWriter;
 import cc.ginpika.rukksh.config.ModelTarget;
@@ -63,13 +63,13 @@ class ScopedSubagentRunTest {
             var ingest = mock(MemoryIngest.class);
             var runner = new AgentRunner(settings, runtime, execs, tasks, mock(ChangeSetStore.class), om,
                     memory, ingest, mock(ToolValidator.class));
-            var prompts = mock(PromptManager.class);
-            var tools = new ToolManager(List.of(SubagentDelegationTest.tool("read_document", ToolRisk.READ),
+            var prompts = mock(PromptService.class);
+            var tools = new ToolRegistry(List.of(SubagentDelegationTest.tool("read_document", ToolRisk.READ),
                     SubagentDelegationTest.tool("web_browser", ToolRisk.READ),
                     SubagentDelegationTest.tool("recall_memory", ToolRisk.READ),
                     SubagentDelegationTest.tool("run_command", ToolRisk.EXEC)), om);
             var delegate = new ScopedSubagentRun(runner, tasks, scope, sources, new ChatContextManifests(sessions, turns),
-                    settings, prompts, tools, mock(KnowledgeToolbox.class), om);
+                    settings, prompts, tools, mock(AgentToolRouter.class), om);
 
             String agent = AgentDirectory.BUILTIN_ID;
             String sessionId = "parent-session";

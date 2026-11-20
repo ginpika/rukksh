@@ -1,10 +1,12 @@
 package cc.ginpika.rukksh.coding;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.workspace.WorkspaceService;
 import cc.ginpika.rukksh.ai.computer.terminal.ExecTarget;
 import cc.ginpika.rukksh.ai.computer.terminal.TerminalService;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.repository.CodingWorkspace;
 import cc.ginpika.rukksh.coding.runner.WorkspaceCommands;
@@ -52,7 +54,7 @@ class WorkspaceProjectsTest {
         var request=new OpenProject("w1","app",null,false,null);
         var first=projects.open("alice",request);
         assertFalse(first.recentHidden());
-        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->projects.removeRecent("bob",first.id()));
+        assertThrows(DomainException.class,()->projects.removeRecent("bob",first.id()));
         assertFalse(projects.project("alice",first.id()).recentHidden());
         clearInvocations(exec);
         projects.removeRecent("alice",first.id());

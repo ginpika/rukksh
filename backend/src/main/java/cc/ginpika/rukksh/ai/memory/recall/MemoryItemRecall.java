@@ -4,7 +4,7 @@ import cc.ginpika.rukksh.ai.core.MemoryExec;
 import cc.ginpika.rukksh.ai.llm.EmbeddingClient;
 import cc.ginpika.rukksh.ai.memory.store.MemoryItemEmbeddingStore;
 import cc.ginpika.rukksh.ai.memory.store.MemoryItemStore;
-import cc.ginpika.rukksh.ai.memory.store.MemoryVecMath;
+import cc.ginpika.rukksh.ai.core.util.VectorMath;
 import cc.ginpika.rukksh.config.MemoryProps;
 import java.util.ArrayList;
 import java.util.List;
@@ -117,7 +117,7 @@ public class MemoryItemRecall {
         for (MemoryItemStore.ItemRow it : candidates) {
             float[] v = vecs.get(it.id());
             double score = Math.max(lexical.getOrDefault(it.id(),0d),qvec == null || v == null ? 0d
-                    : Math.max(0d, MemoryVecMath.cosine(qvec, v))) * weight(it);
+                    : Math.max(0d, VectorMath.cosine(qvec, v))) * weight(it);
             /* 门控：非固定条目低于阈值不返回——宁可不注入，也不给 system 灌噪声 */
             if (!cc.ginpika.rukksh.ai.memory.MemoryVocabulary.isProtected(it.owner(), it.scope(), it.pinned(), it.retention()) && score < min) {
                 continue;

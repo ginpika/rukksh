@@ -1,9 +1,11 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore.HubRow;
 import cc.ginpika.rukksh.agent.runtime.TaskStore;
-import cc.ginpika.rukksh.agent.runtime.TodoStore;
-import cc.ginpika.rukksh.agent.runtime.TodoStore.CompletionTarget;
+import cc.ginpika.rukksh.agent.runtime.SessionTodoStore;
+import cc.ginpika.rukksh.agent.runtime.SessionTodoStore.CompletionTarget;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEvent;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEventBus;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEventType;
@@ -20,12 +22,10 @@ import java.util.Objects;
 import java.util.function.LongSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 /** A persisted approval safe point for completing one item from the personal-chat checklist. */
 @Service
@@ -74,12 +74,12 @@ public class ChatTodoApprovals {
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
-    private final TodoStore todos;
+    private final SessionTodoStore todos;
     private final RuntimeEventBus runtimeEvents;
     private final SessionEventBus sessionEvents;
     private final TransactionTemplate transactions;
 
-    public ChatTodoApprovals(JdbcTemplate jdbc, ObjectMapper json, TodoStore todos,
+    public ChatTodoApprovals(JdbcTemplate jdbc, ObjectMapper json, SessionTodoStore todos,
                              RuntimeEventBus runtimeEvents, SessionEventBus sessionEvents,
                              PlatformTransactionManager transactionManager) {
         this.jdbc = jdbc;
@@ -220,7 +220,7 @@ public class ChatTodoApprovals {
     public Approval decide(String sessionId, long operationId, String actorId, String decision) {
         requireActor(actorId);
         if (!"approve".equals(decision) && !"reject".equals(decision)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "decision 须为 approve 或 reject");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "decision 须为 approve 或 reject");
         }
         Decision result = transactions.execute(transaction -> decideLocked(sessionId, operationId, actorId, decision));
         if (result.changed()) {
@@ -240,7 +240,7 @@ public class ChatTodoApprovals {
         lock(sessionId);
         Stored row = jdbc.query(VISIBLE_APPROVALS + " AND a.operation_id = ?",
                         ChatTodoApprovals::stored, sessionId, actorId, BuiltinAgents.CORE, BuiltinAgents.CORE, operationId)
-                .stream().findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                .stream().findFirst().orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND,
                         "待办审批不存在或已不在当前会话作用域"));
         Approval approval = row.approval();
         if (!"pending".equals(approval.status())) {
@@ -287,7 +287,7 @@ public class ChatTodoApprovals {
     /** SQLite takes the writer lock before any scope or version read. */
     private void lock(String sessionId) {
         if (jdbc.update("UPDATE hub_session SET id = id WHERE id = ? AND mode = 'ai'", sessionId) != 1) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "单聊会话不存在");
+            throw new DomainException(DomainException.ErrorKind.NOT_FOUND, "单聊会话不存在");
         }
     }
 
@@ -348,11 +348,11 @@ public class ChatTodoApprovals {
 
     private static void requireActor(String actorId) {
         if (actorId == null || actorId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "请先登录");
+            throw new DomainException(DomainException.ErrorKind.UNAUTHORIZED, "请先登录");
         }
     }
 
-    private static ResponseStatusException conflict(String detail) {
-        return new ResponseStatusException(HttpStatus.CONFLICT, detail);
+    private static DomainException conflict(String detail) {
+        return new DomainException(DomainException.ErrorKind.CONFLICT, detail);
     }
 }

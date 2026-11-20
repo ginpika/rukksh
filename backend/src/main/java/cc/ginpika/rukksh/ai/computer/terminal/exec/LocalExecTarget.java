@@ -3,7 +3,7 @@ package cc.ginpika.rukksh.ai.computer.terminal.exec;
 import cc.ginpika.rukksh.ai.computer.terminal.ExecTarget;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
 import cc.ginpika.rukksh.config.DesktopProps;
-import cc.ginpika.rukksh.web.sso.SsoService;
+import cc.ginpika.rukksh.config.SsoProps;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
@@ -33,7 +33,7 @@ public final class LocalExecTarget implements ExecTarget {
     private static final String SQLITE = "jdbc:sqlite:";
 
     private final DesktopProps desktop;
-    private final SsoService sso;
+    private final SsoProps sso;
     private final Environment environment;
     private final ObjectMapper json;
     private final String os = System.getProperty("os.name", "");
@@ -41,7 +41,7 @@ public final class LocalExecTarget implements ExecTarget {
     private volatile String linuxUnavailable = "Linux 沙箱尚未初始化。";
     private boolean closed;
 
-    public LocalExecTarget(DesktopProps desktop, SsoService sso, Environment environment, ObjectMapper json) {
+    public LocalExecTarget(DesktopProps desktop, SsoProps sso, Environment environment, ObjectMapper json) {
         this.desktop = desktop;
         this.sso = sso;
         this.environment = environment;

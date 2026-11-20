@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -24,7 +26,6 @@ import org.springframework.jdbc.datasource.*;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
-import org.springframework.web.server.ResponseStatusException;
 
 class ChatRewindMemoryTest {
     static final class Fixture implements AutoCloseable {
@@ -58,7 +59,7 @@ class ChatRewindMemoryTest {
             extractor = new MemoryExtractor(new MemoryProps(), settings, client, new ObjectMapper(), items,
                     vectors, new UserProfileService(candidates, revocations, items, vectors), revocations, retractions);
             ingest = new MemoryIngest(new MemoryProps(), extractor,new cc.ginpika.rukksh.ai.memory.store.MemoryIngestStore(jdbc,new cc.ginpika.rukksh.ai.memory.graph.MemoryGraphStore(jdbc)));
-            service = transactional(new ChatSessionService(sessions, messages, live, mock(TodoService.class),
+            service = transactional(new ChatSessionService(sessions, messages, live, mock(SessionTodoService.class),
                     new ObjectMapper(), turns, ingest, retractions, new TaskCheckpointService(tasks), tasks));
         }
 
@@ -134,7 +135,7 @@ class ChatRewindMemoryTest {
             assertEquals(0, f.jdbc.queryForObject("SELECT COUNT(*) FROM memory_event_embedding WHERE event_id=?", Integer.class, event));
             assertEquals(List.of(keptItem, otherItem).stream().sorted().toList(),
                     f.items.visible(f.scope("s", null), null, 100).stream().map(MemoryItemStore.ItemRow::id).sorted().toList());
-            assertEquals(1, new History(f.messages, f.turns, f.live, new ObjectMapper(), new ContextProps()).turns("s").size());
+            assertEquals(1, new ChatHistoryProvider(f.messages, f.turns, f.live, new ObjectMapper(), new ContextProps()).turns("s").size());
         }
     }
 
@@ -226,10 +227,10 @@ class ChatRewindMemoryTest {
         try (var f = new Fixture()) {
             long input = f.pair("s", "原对话");
             long other = f.pair("other", "其他对话");
-            assertThrows(ResponseStatusException.class, () -> f.service.rewind("s", input + 1, null));
-            assertThrows(ResponseStatusException.class, () -> f.service.rewind("s", other, null));
+            assertThrows(DomainException.class, () -> f.service.rewind("s", input + 1, null));
+            assertThrows(DomainException.class, () -> f.service.rewind("s", other, null));
             f.live.start("s", input, "原对话");
-            assertEquals(409, assertThrows(ResponseStatusException.class, () -> f.service.rewind("s", input, null)).getStatusCode().value());
+            assertEquals(409, assertThrows(DomainException.class, () -> f.service.rewind("s", input, null)).statusCode());
             assertEquals(2, f.messages.listBySession("s").size());
         }
     }

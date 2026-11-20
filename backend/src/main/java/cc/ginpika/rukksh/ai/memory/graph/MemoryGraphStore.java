@@ -345,4 +345,14 @@ public class MemoryGraphStore {
         try { return JSON.writeValueAsString(value); }
         catch(Exception e) { throw new IllegalArgumentException("图谱对象不能序列化",e); }
     }
+
+    /** 图谱与事件入库状态计数汇总（供管理面板查询）。 */
+    public Map<String, Object> statusSummary() {
+        return Map.of(
+                "claims", jdbc.queryForObject("SELECT count(*) FROM graph_claim", Long.class),
+                "episodes", jdbc.queryForObject("SELECT count(*) FROM graph_episode", Long.class),
+                "relations", jdbc.queryForObject("SELECT count(*) FROM graph_relation", Long.class),
+                "extraction", jdbc.queryForList(
+                        "SELECT state,count(*) AS count,max(attempts) AS maxAttempts FROM graph_ingest_job GROUP BY state"));
+    }
 }

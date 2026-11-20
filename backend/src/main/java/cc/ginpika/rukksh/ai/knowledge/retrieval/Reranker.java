@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import cc.ginpika.rukksh.ai.knowledge.store.ChunkStore;
+import cc.ginpika.rukksh.ai.llm.RerankScorer;
 
 /**
  * RRF 候选精排：取前 candidate 条送 rerank 模型按相关度重排，

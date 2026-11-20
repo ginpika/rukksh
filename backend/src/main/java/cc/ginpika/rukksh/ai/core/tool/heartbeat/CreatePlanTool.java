@@ -2,7 +2,6 @@ package cc.ginpika.rukksh.ai.core.tool.heartbeat;
 
 import cc.ginpika.rukksh.ai.core.tool.AiTool;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
-import cc.ginpika.rukksh.ai.core.tool.subagent.DelegateSubagentTool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Set;
@@ -14,7 +13,7 @@ import org.springframework.stereotype.Component;
  * <p>职责不由人在页面上新建，而是大模型自己攒编制：先立（本工具），再派（{@link DelegatePlanTool}）。
  * 立错了、不用了，用 {@link UpdatePlanTool} 改写或 {@link DeletePlanTool} 撤掉。
  *
- * <p>一次性的活别立编制——那是 {@link DelegateSubagentTool}（子代理）的事。
+ * <p>一次性的活别立编制——那是 {@code delegate_subagent}（子代理）的事。
  */
 @Component
 public class CreatePlanTool implements AiTool {
@@ -32,7 +31,7 @@ public class CreatePlanTool implements AiTool {
                 + "给它起名、写下它该怎么做事的提示词，并决定它能用哪些工具、要不要对人说话。"
                 + "立好后可用 " + DelegatePlanTool.NAME + " 反复派活，每次拿到的都是独立上下文。"
                 + "当一件事需要反复做、或需要一套固定的做事方式时，才值得立一条；"
-                + "一次性的活直接派 " + DelegateSubagentTool.NAME + " 即可。";
+                + "一次性的活直接派 delegate_subagent 即可。";
     }
 
     @Override

@@ -1,17 +1,19 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.memory.MemoryIngest;
 import cc.ginpika.rukksh.ai.memory.store.MemoryRetractionStore;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Lifecycle of a main task and its owned issue sessions. Project files and coding artifacts remain independent. */
 @Service
@@ -71,9 +73,9 @@ public class CollaborationTaskLifecycle {
     }
 
     private List<String> related(String id) {
-        sessions.findById(id).orElseThrow(()->error(HttpStatus.NOT_FOUND,"协作任务不存在"));
+        sessions.findById(id).orElseThrow(()->error(DomainException.ErrorKind.NOT_FOUND,"协作任务不存在"));
         Boolean child=jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM collaboration_issue WHERE session_id=?)",Boolean.class,id);
-        if(Boolean.TRUE.equals(child))throw error(HttpStatus.CONFLICT,"请在主任务上归档或删除，议题随主任务统一管理");
+        if(Boolean.TRUE.equals(child))throw error(DomainException.ErrorKind.CONFLICT,"请在主任务上归档或删除，议题随主任务统一管理");
         var result=new ArrayList<String>();result.add(id);
         result.addAll(jdbc.queryForList("SELECT session_id FROM collaboration_issue WHERE parent_session_id=?",String.class,id));
         return result;
@@ -83,7 +85,7 @@ public class CollaborationTaskLifecycle {
         for(String id:related) {
             Integer active=jdbc.queryForObject("SELECT count(*) FROM task WHERE session_id=? AND status IN ('pending','running')",Integer.class,id);
             if(discussions.snapshot(id).running() || work.workingCount(id)>0 || active!=null && active>0)
-                throw error(HttpStatus.CONFLICT,"任务或关联议题仍在讨论、排队或执行，请先停止后再操作");
+                throw error(DomainException.ErrorKind.CONFLICT,"任务或关联议题仍在讨论、排队或执行，请先停止后再操作");
         }
     }
     private static void afterCommit(Runnable action) {
@@ -91,5 +93,5 @@ public class CollaborationTaskLifecycle {
                 new TransactionSynchronization(){@Override public void afterCommit(){action.run();}});
         else action.run();
     }
-    private static ResponseStatusException error(HttpStatus status,String message){return new ResponseStatusException(status,message);}
+    private static DomainException error(DomainException.ErrorKind status,String message){return new DomainException(status,message);}
 }

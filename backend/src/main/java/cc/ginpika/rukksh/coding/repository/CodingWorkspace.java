@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.coding.repository;
 
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.runner.HostCommands;
 import com.fasterxml.jackson.core.type.TypeReference;

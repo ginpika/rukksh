@@ -3,7 +3,7 @@ package cc.ginpika.rukksh.coding.engine;
 import cc.ginpika.rukksh.ai.core.*;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.ai.runtime.ModelLoop;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.context.*;
 import cc.ginpika.rukksh.coding.repository.CodingWorkspace;

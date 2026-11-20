@@ -3,7 +3,7 @@ package cc.ginpika.rukksh.ai.knowledge.ingest;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient.ChatMessage;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient.Completion;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.core.prompt.block.ChunkerBlock;
 import cc.ginpika.rukksh.stats.TokenUsageService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -38,10 +38,10 @@ public class Chunker {
     private static final Pattern HEADING = Pattern.compile("#{1,6}\\s.*");
 
     private final OpenAiChatClient client;
-    private final PromptManager prompts;
+    private final PromptService prompts;
     private final ObjectMapper objectMapper;
 
-    public Chunker(OpenAiChatClient client, PromptManager prompts, ObjectMapper objectMapper) {
+    public Chunker(OpenAiChatClient client, PromptService prompts, ObjectMapper objectMapper) {
         this.client = client;
         this.prompts = prompts;
         this.objectMapper = objectMapper;

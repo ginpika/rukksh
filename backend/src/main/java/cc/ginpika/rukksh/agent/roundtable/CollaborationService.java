@@ -1,15 +1,19 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.member.AgentDtos;
 import cc.ginpika.rukksh.project.ProjectStore;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /** A task owns a main session; an issue owns a separate discussion and returns its conclusion to that task. */
 @Service
@@ -20,7 +24,7 @@ public class CollaborationService {
     private final CollaborationPlan plans;
     private final CollaborationWorkspaceBinding bindings;
     private final CollaborationStore store;
-    private final RoundtableChatService chat;
+    private final RoundtableSessionService sessionService;
     private final RoundtableSessionStore sessions;
     private final RoundtableMessageStore messages;
     private final AgentDirectory directory;
@@ -29,11 +33,12 @@ public class CollaborationService {
     private final RoundtableWorkRuntime work;
     private final CollaborationIssueActions issueActions;
 
-    public CollaborationService(CollaborationStore store, RoundtableChatService chat, RoundtableSessionStore sessions,
+    public CollaborationService(CollaborationStore store, RoundtableSessionService sessionService,
+                                RoundtableSessionStore sessions,
                                 RoundtableMessageStore messages, AgentDirectory directory, ProjectStore projects,
                                 RoundtableDiscussionRuntime discussions, RoundtableWorkRuntime work,
                                 CollaborationIssueActions issueActions, CollaborationPlan plans, CollaborationWorkspaceBinding bindings) {
-        this.store = store; this.chat = chat; this.sessions = sessions; this.messages = messages;
+        this.store = store; this.sessionService = sessionService; this.sessions = sessions; this.messages = messages;
         this.directory = directory; this.projects = projects; this.discussions = discussions; this.work = work;
         this.issueActions = issueActions;
         this.plans = plans;
@@ -42,10 +47,10 @@ public class CollaborationService {
 
     public Workspace workspace() { return new Workspace(store.issues(), store.projectMembers(), plans.list(), bindings.list(),sessions.archivedIds()); }
 
-    public List<cc.ginpika.rukksh.coding.api.CodingDtos.Workspace> workspaces() { return bindings.workspaces(); }
-    public CollaborationWorkspaceBinding.Location bindWorkspace(String project, cc.ginpika.rukksh.coding.api.CodingDtos.OpenProject request) {
+    public List<cc.ginpika.rukksh.coding.dto.CodingDtos.Workspace> workspaces() { return bindings.workspaces(); }
+    public CollaborationWorkspaceBinding.Location bindWorkspace(String project, cc.ginpika.rukksh.coding.dto.CodingDtos.OpenProject request) {
         if (sessions.listAll().stream().filter(s -> project.equals(s.projectId())).anyMatch(s -> discussions.snapshot(s.id()).running() || work.workingCount(s.id())>0))
-            throw error(HttpStatus.CONFLICT,"项目仍在讨论或执行，请先停止，再调整工作目录");
+            throw error(DomainException.ErrorKind.CONFLICT,"项目仍在讨论或执行，请先停止，再调整工作目录");
         var bound=bindings.bind(project,request);
         for(var session:sessions.listAll()) if(project.equals(session.projectId())) {
             messages.insertNotice(session.id(),null,"项目工作目录已明确为「"+bound.workspaceName()+" / "+bound.directory()
@@ -73,10 +78,10 @@ public class CollaborationService {
         var project = project(projectId);
         String name = required(title, 160, "任务名称");
         List<String> members = validateMembers(memberIds, directory.peers().stream().map(p -> p.id()).toList());
-        if (members.size() < 2) throw error(HttpStatus.BAD_REQUEST, "协作任务至少需要两位成员，分别负责执行与独立检查");
+        if (members.size() < 2) throw error(DomainException.ErrorKind.BAD_REQUEST, "协作任务至少需要两位成员，分别负责执行与独立检查");
         String coordinator = coordinatorId == null || coordinatorId.isBlank() ? members.getFirst() : coordinatorId;
-        if (!members.contains(coordinator)) throw error(HttpStatus.BAD_REQUEST, "主控必须是本任务的参与成员");
-        var created = chat.createSession(members, projectId);
+        if (!members.contains(coordinator)) throw error(DomainException.ErrorKind.BAD_REQUEST, "主控必须是本任务的参与成员");
+        var created = sessionService.createSession(members, projectId);
         plans.create(created.sessionId(), coordinator);
         sessions.touch(created.sessionId(), name);
         messages.insertNotice(created.sessionId(), null, "项目：" + project.name() + "\n工作方向："
@@ -87,12 +92,12 @@ public class CollaborationService {
     @Transactional
     public CollaborationStore.Issue createIssue(String parentId, String title, List<String> memberIds) {
         sessions.requireWritable(parentId);
-        var parent = chat.session(parentId);
+        var parent = sessionService.session(parentId);
         if (store.issues().stream().anyMatch(i -> i.sessionId().equals(parentId)))
-            throw error(HttpStatus.CONFLICT, "请在主任务内发起议题，议题不再嵌套");
+            throw error(DomainException.ErrorKind.CONFLICT, "请在主任务内发起议题，议题不再嵌套");
         String name = required(title, 160, "议题问题");
         List<String> members = validateMembers(memberIds, parent.memberIds());
-        String child = chat.createSession(members, parent.projectId()).sessionId();
+        String child = sessionService.createSession(members, parent.projectId()).sessionId();
         sessions.touch(child, name);
         String id = UUID.randomUUID().toString();
         long messageId = messages.insertNotice(parentId, null, "发起议题：" + name, "issue_open");
@@ -116,29 +121,29 @@ public class CollaborationService {
     @Transactional
     public CollaborationStore.Issue resolve(String id, String text) {
         var issue = store.issue(id)
-                .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "议题不存在"));
+                .orElseThrow(() -> error(DomainException.ErrorKind.NOT_FOUND, "议题不存在"));
         sessions.requireWritable(issue.sessionId());
         if ("resolved".equals(issue.status())) return issue;
         String conclusion = required(text, 8000, "议题结论");
         if (discussions.snapshot(issue.sessionId()).running() || directory.peers(issue.sessionId()).stream()
                 .anyMatch(p -> work.isWorking(issue.sessionId(), p.id())))
-            throw error(HttpStatus.CONFLICT, "议题仍在推进，请等成员结束后提交结论");
+            throw error(DomainException.ErrorKind.CONFLICT, "议题仍在推进，请等成员结束后提交结论");
         issueActions.resolve(issue, conclusion);
         return store.issue(id).orElseThrow();
     }
 
     private ProjectStore.ProjectRow project(String id) {
-        return projects.findById(id).orElseThrow(() -> error(HttpStatus.NOT_FOUND, "项目不存在"));
+        return projects.findById(id).orElseThrow(() -> error(DomainException.ErrorKind.NOT_FOUND, "项目不存在"));
     }
     private List<String> validateMembers(List<String> ids, List<String> allowed) {
         if (ids == null || ids.isEmpty() || !allowed.containsAll(ids))
-            throw error(HttpStatus.BAD_REQUEST, "请选择至少一位有效的参与成员");
+            throw error(DomainException.ErrorKind.BAD_REQUEST, "请选择至少一位有效的参与成员");
         return ids.stream().distinct().toList();
     }
     private static String required(String value, int limit, String label) {
         String text = value == null ? "" : value.strip();
-        if (text.isEmpty() || text.length() > limit) throw error(HttpStatus.BAD_REQUEST, label + "不能为空，且不能超过 " + limit + " 字");
+        if (text.isEmpty() || text.length() > limit) throw error(DomainException.ErrorKind.BAD_REQUEST, label + "不能为空，且不能超过 " + limit + " 字");
         return text;
     }
-    private static ResponseStatusException error(HttpStatus status, String text) { return new ResponseStatusException(status, text); }
+    private static DomainException error(DomainException.ErrorKind status, String text) { return new DomainException(status, text); }
 }

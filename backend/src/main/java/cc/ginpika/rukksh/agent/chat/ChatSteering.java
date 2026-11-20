@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.ChatStream.ChatCancelledException;
 import cc.ginpika.rukksh.agent.context.ContextPlan;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient.CallControl;
@@ -19,8 +21,6 @@ import java.util.function.BiFunction;
 import java.util.function.IntConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Coordinates one turn's input, model cancellation, and replies while an already-started tool finishes. */
 final class ChatSteering implements ModelLoop.Steering {
@@ -114,13 +114,13 @@ final class ChatSteering implements ModelLoop.Steering {
 
     synchronized long submit(long expectedMessageId, String actorId, String input) {
         if (!accepting || stopped.get() || expectedMessageId != initialMessageId) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "本轮回复已结束，请重新发送");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "本轮回复已结束，请重新发送");
         }
         if (!Objects.equals(actorId, sink.actorId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只有本轮发起人可以补充消息");
+            throw new DomainException(DomainException.ErrorKind.FORBIDDEN, "只有本轮发起人可以补充消息");
         }
         if (pending.size() >= MAX_PENDING) {
-            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "待处理消息过多，请稍后发送");
+            throw new DomainException(DomainException.ErrorKind.TOO_MANY_REQUESTS, "待处理消息过多，请稍后发送");
         }
         long messageId = persist.apply("user", input);
         inputVersion++;

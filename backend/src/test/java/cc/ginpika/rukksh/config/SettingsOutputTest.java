@@ -1,19 +1,21 @@
 package cc.ginpika.rukksh.config;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.config.dto.SettingsDtos;
 import cc.ginpika.rukksh.config.store.SettingsStore;
+import cc.ginpika.rukksh.persistence.migration.SchemaColumnPatches;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class SettingsOutputTest {
-    private SettingsService service(SettingsStore store){return new SettingsService(new LlmProps(),store,null,null,null,null,null,null,null,null);}
+    private SettingsService service(SettingsStore store){return new SettingsService(new LlmProps(),store);}
     @Test void legacyModelRowsKeepTheirDataAndNewOutputColumnIsIdempotent(){
         var source=new SingleConnectionDataSource("jdbc:sqlite::memory:",true);var jdbc=new JdbcTemplate(source);
         jdbc.execute("CREATE TABLE llm_model(id TEXT PRIMARY KEY,name TEXT,base_url TEXT,api_key TEXT,model TEXT,context_window INTEGER,created_at INTEGER,updated_at INTEGER)");
@@ -41,6 +43,6 @@ class SettingsOutputTest {
         service.createModel(new SettingsDtos.ModelRequest("model","fixture","key","model",262144,32768));
         var row=ArgumentCaptor.forClass(SettingsStore.ModelRow.class);verify(store).insertModel(row.capture());
         assertEquals(32768,row.getValue().maxOutputTokens());assertEquals(262144,row.getValue().contextWindow());
-        assertThrows(ResponseStatusException.class,()->service.createModel(new SettingsDtos.ModelRequest("model","fixture","key","model",262144,-1)));
+        assertThrows(DomainException.class,()->service.createModel(new SettingsDtos.ModelRequest("model","fixture","key","model",262144,-1)));
     }
 }

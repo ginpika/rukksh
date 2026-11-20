@@ -6,7 +6,7 @@ import cc.ginpika.rukksh.ai.core.prompt.*;
 import cc.ginpika.rukksh.ai.core.prompt.block.*;
 import cc.ginpika.rukksh.ai.core.prompt.skill.CodingSkill;
 import cc.ginpika.rukksh.ai.core.prompt.store.PromptStore;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.context.CodingContext;
 import cc.ginpika.rukksh.coding.store.CodingStore;
@@ -29,7 +29,7 @@ class CodingSkillTest {
         when(peers.peer(BuiltinAgents.CORE)).thenReturn(Optional.of(mock(AgentStore.AgentRow.class)));
         when(peers.peer("member")).thenReturn(Optional.of(mock(AgentStore.AgentRow.class)));
         var prompts = new AgentPromptService(mock(AgentPromptStore.class), composer,
-                new PromptManager(composer, store), peers);
+                new PromptService(composer, store), peers);
 
         assertTrue(prompts.view(BuiltinAgents.CORE).categories().stream().anyMatch(c -> PromptLibrary.CAT_SKILLS.equals(c.key())));
         assertFalse(prompts.view("member").categories().stream().anyMatch(c -> PromptLibrary.CAT_SKILLS.equals(c.key())));

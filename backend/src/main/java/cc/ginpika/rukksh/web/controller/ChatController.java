@@ -8,8 +8,9 @@ import cc.ginpika.rukksh.agent.chat.ChatScenes;
 import cc.ginpika.rukksh.agent.chat.ChatSessionService;
 import cc.ginpika.rukksh.agent.chat.ChatLiveStore;
 import cc.ginpika.rukksh.agent.chat.ChatStream;
-import cc.ginpika.rukksh.agent.chat.TodoService;
+import cc.ginpika.rukksh.agent.chat.SessionTodoService;
 import cc.ginpika.rukksh.agent.chat.dto.ChatDtos;
+import cc.ginpika.rukksh.web.support.ChatAttachmentParser;
 import cc.ginpika.rukksh.web.sso.SsoInterceptor;
 import cc.ginpika.rukksh.web.sso.SsoUser;
 
@@ -62,14 +63,14 @@ public class ChatController {
     private final ChatContextManifests manifests;
     private final ChatSessionService sessions;
     private final ChatLiveStore live;
-    private final TodoService todo;
+    private final SessionTodoService todo;
     private final ChatScenes sceneService;
     private final ObjectMapper om;
     /** 流式会话在独立线程里跑（虚拟线程）：边收 LLM 边推前端，不占请求线程 */
     private final ExecutorService streamExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     public ChatController(ChatTurnRunner turns, ChatContextService context, ChatSessionService sessions,
-                          ChatLiveStore live, TodoService todo, ChatScenes sceneService, ObjectMapper om,
+                          ChatLiveStore live, SessionTodoService todo, ChatScenes sceneService, ObjectMapper om,
                           ChatContextManifests manifests) {
         this.turns = turns;
         this.context = context;
@@ -119,7 +120,7 @@ public class ChatController {
             @RequestPart("files") List<MultipartFile> files, HttpServletRequest http) {
         List<ChatAttachments.Content> attachments;
         try {
-            attachments = ChatAttachmentUpload.read(files);
+            attachments = ChatAttachmentParser.read(files);
         } catch (IllegalArgumentException error) {
             throw new RejectedAttachment(error.getMessage());
         }
@@ -507,21 +508,9 @@ public class ChatController {
         }
     }
 
-    /**
-     * 向已断开的客户端写流而失败：这不是业务错误，收下即可。
-     *
-     * <p>Spring 会把流写失败当成异步请求错误再派发回来走异常解析，若无人处理，tomcat 便以
-     * ERROR 记一整条堆栈（Windows 上是「你的主机中的软件中止了一个已建立的连接」）。
-     * 用户切页、停止生成时都会发生，属常态，故按断开静默收尾，不打 ERROR 刷屏。
-     */
-    @ExceptionHandler(IOException.class)
-    public void clientGone(IOException e) {
-        log.debug("会话流客户端已断开，写失败按断开收尾：{}", e.getMessage());
-    }
-
     private static String codingOwner(jakarta.servlet.http.HttpServletRequest request) {
         String actor = actorId(request);
-        return cc.ginpika.rukksh.coding.CodingFacade.allowsActorAt(actor, request.getRemoteAddr()) ? actor : null;
+        return cc.ginpika.rukksh.coding.CodingService.allowsActorAt(actor, request.getRemoteAddr()) ? actor : null;
     }
 
     private static String actorId(jakarta.servlet.http.HttpServletRequest request) {

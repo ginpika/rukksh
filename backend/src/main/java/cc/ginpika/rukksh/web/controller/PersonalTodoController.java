@@ -2,6 +2,7 @@ package cc.ginpika.rukksh.web.controller;
 
 import static cc.ginpika.rukksh.todo.TodoDtos.*;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
 import cc.ginpika.rukksh.todo.TodoService;
 import cc.ginpika.rukksh.web.sso.SsoInterceptor;
 import cc.ginpika.rukksh.web.sso.SsoUser;
@@ -60,6 +61,11 @@ public class PersonalTodoController {
     private static String owner(HttpServletRequest request) {
         if(request.getAttribute(SsoInterceptor.ATTR) instanceof SsoUser user && user.getId()!=null&&!user.getId().isBlank()) return user.getId();
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"需要登录");
+    }
+
+    @ExceptionHandler(DomainException.class)
+    public org.springframework.http.ResponseEntity<Map<String,String>> domainFailure(DomainException error) {
+        return org.springframework.http.ResponseEntity.status(error.statusCode()).body(Map.of("error",error.getMessage()==null?"操作未完成":error.getMessage()));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

@@ -1,9 +1,11 @@
 package cc.ginpika.rukksh.coding;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.core.*;
 import cc.ginpika.rukksh.ai.runtime.ModelLoop;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.context.CodingContext;
 import cc.ginpika.rukksh.coding.engine.CodingTools;
@@ -55,7 +57,7 @@ class CodingAgentGatewayTest {
         verify(facade,never()).submit(anyString(),any(),anyString());
     }
     private final cc.ginpika.rukksh.project.ProjectWorkspaceStore projectWorkspaces=mock(cc.ginpika.rukksh.project.ProjectWorkspaceStore.class);
-    private final CodingFacade facade=spy(new CodingFacade(new CodingProps(),store,files,mock(CodingProcesses.class),
+    private final CodingService facade=spy(new CodingService(new CodingProps(),store,files,mock(CodingProcesses.class),
             tools,context,loop,settings,json,projects,agent,projectWorkspaces,mock(cc.ginpika.rukksh.project.ProjectWorkExecution.class)));
     private final Run run=new Run("r1",1,"alice","p1","goal","agent-model",Mode.PLAN,Runner.WORKSPACE,"QUEUED",1,0,null,null,"NOT_RUN",null,0,0);
 
@@ -111,7 +113,7 @@ class CodingAgentGatewayTest {
         when(store.repository("p1","alice")).thenReturn(new Repository("p1","alice","project","/fixture",null,null,0));
         when(settings.chatModelId(null)).thenReturn("saved-default");
         when(settings.resolveChatModel("saved-default")).thenReturn(new ModelTarget("fixture","","not-configured"));
-        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->facade.submit("alice",new StartRun("p1","goal",null,Mode.PLAN,Runner.DOCKER,10)));
+        assertThrows(DomainException.class,()->facade.submit("alice",new StartRun("p1","goal",null,Mode.PLAN,Runner.DOCKER,10)));
         verify(settings).resolveChatModel("saved-default");verify(store,never()).create(anyString(),any(),anyInt(),any(),any(),any());
     }
 

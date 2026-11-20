@@ -1,8 +1,10 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.store.ChatMessageStore;
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore;
-import cc.ginpika.rukksh.agent.chat.turn.History;
+import cc.ginpika.rukksh.agent.chat.turn.ChatHistoryProvider;
 import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
 import cc.ginpika.rukksh.agent.context.ContextBuilder;
 import cc.ginpika.rukksh.agent.member.AgentPromptService;
@@ -12,7 +14,7 @@ import cc.ginpika.rukksh.agent.runtime.ToolExecutionRecorder;
 import cc.ginpika.rukksh.agent.runtime.ToolExecutionStore;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEventBus;
 import cc.ginpika.rukksh.ai.computer.terminal.TerminalService;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolValidator;
 import cc.ginpika.rukksh.ai.core.tool.terminal.RunCommandTool;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
@@ -72,10 +74,10 @@ class ChatSceneSwitchTest {
         var prompts = mock(AgentPromptService.class);
         when(prompts.builtinSystem(null)).thenReturn("保留对话已确认的约定。");
         var projects = mock(ProjectStore.class);
-        var tools = new ToolManager(List.of(new RunCommandTool()), om);
+        var tools = new ToolRegistry(List.of(new RunCommandTool()), om);
         props.setEphemeralChat(true);
         props.setReserveOutputTokens(512);
-        var history = new History(messages, turns, live = new ChatLiveStore(), om, props);
+        var history = new ChatHistoryProvider(messages, turns, live = new ChatLiveStore(), om, props);
         var sources = new ChatContextSources(jdbc, om);
         scenes = new ChatScenes(jdbc, live, mock(SessionEventBus.class));
         var context = new ChatContextService(sessions, messages, om, settings, prompts, tools, projects,
@@ -84,8 +86,8 @@ class ChatSceneSwitchTest {
                 null, null, null, terminal, null, null);
         var recorder = new ToolExecutionRecorder(new ToolExecutionStore(jdbc), mock(RuntimeEventBus.class));
         runner = new ChatTurnRunner(new AgentRuntime(client), recorder, settings, sessions, messages, om, tools,
-                mock(SubagentTool.class), mock(MemoryWriter.class), projects, new ChatTaskRunner(new TaskStore(jdbc)),
-                turns, mock(TodoService.class), context, dispatcher, completion);
+                mock(SubagentToolPort.class), mock(MemoryWriter.class), projects, new ChatTaskRunner(new TaskStore(jdbc)),
+                turns, mock(SessionTodoService.class), context, dispatcher, completion);
         manifests = new ChatContextManifests(sessions, turns);
         runner.setContextPilot(sources, manifests);
     }
@@ -159,16 +161,16 @@ class ChatSceneSwitchTest {
         assertNotNull(scenes.active(SESSION));
 
         // 已有活动任务段时不能再开始 / 恢复
-        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+        assertThrows(DomainException.class,
                 () -> scenes.start(SESSION, "任务B", null, null));
         var other = scenes.start(SESSION + "-x", "other", null, null); // 另一会话不受影响
         scenes.end(SESSION + "-x", other.id());
-        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+        assertThrows(DomainException.class,
                 () -> scenes.resume(SESSION, other.id()));
 
         // 生成中拒绝切换（安全点）
         var run = live.start(SESSION, 1L, "in-flight");
-        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+        assertThrows(DomainException.class,
                 () -> scenes.end(SESSION, scene.id()));
         live.finish(run, "done");
 

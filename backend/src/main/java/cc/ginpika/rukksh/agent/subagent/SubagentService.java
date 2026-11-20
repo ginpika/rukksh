@@ -1,15 +1,17 @@
 package cc.ginpika.rukksh.agent.subagent;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolbox;
+import cc.ginpika.rukksh.agent.runtime.AgentToolRouter;
 import cc.ginpika.rukksh.agent.chat.ChatTrace;
 import cc.ginpika.rukksh.agent.chat.SubagentBatchDoneEvent;
 import cc.ginpika.rukksh.agent.chat.SubagentReportEvent;
-import cc.ginpika.rukksh.agent.chat.SubagentTool;
+import cc.ginpika.rukksh.agent.chat.SubagentToolPort;
 import cc.ginpika.rukksh.agent.chat.dto.ChatDtos;
 import cc.ginpika.rukksh.agent.context.ContextBuilder;
 import cc.ginpika.rukksh.agent.context.ContextRequest;
@@ -21,9 +23,9 @@ import cc.ginpika.rukksh.ai.core.MemorySurface;
 import cc.ginpika.rukksh.agent.runtime.ExecStore;
 import cc.ginpika.rukksh.agent.runtime.TaskStore;
 import cc.ginpika.rukksh.agent.runtime.ToolBatch;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.core.prompt.block.SubagentBlock;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
 import cc.ginpika.rukksh.ai.core.tool.subagent.DelegateSubagentTool;
 import cc.ginpika.rukksh.ai.core.tool.subagent.ReadSubagentRunTool;
@@ -47,7 +49,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 子代理：被当场交代去独立干一件活的<b>匿名 worker</b>——不建档案、跑完即逝。
@@ -73,7 +74,7 @@ import org.springframework.web.server.ResponseStatusException;
  * 这件事本身是一样的：计划被派出的那一次，跑的就是一个带着常驻正文的匿名实例。
  */
 @Service
-public class SubagentService implements SubagentTool {
+public class SubagentService implements SubagentToolPort {
 
     private static final Logger log = LoggerFactory.getLogger(SubagentService.class);
 
@@ -102,9 +103,9 @@ public class SubagentService implements SubagentTool {
     private final TaskStore tasks;
     /** 共享黑板：子代理结论沉淀于此，供后续子代理开工时参考（见 {@link ScratchpadStore}） */
     private final ScratchpadStore scratchpad;
-    private final PromptManager prompts;
-    private final ToolManager tools;
-    private final KnowledgeToolbox toolbox;
+    private final PromptService prompts;
+    private final ToolRegistry tools;
+    private final AgentToolRouter toolbox;
     private final ObjectMapper om;
     /** 上下文平面：子代理的 system 由它 + {@code SubagentContextProvider} 组装（见 STEP 6-③） */
     private final ContextBuilder context;
@@ -131,8 +132,8 @@ public class SubagentService implements SubagentTool {
     private final ConcurrentHashMap<String, Set<Long>> running = new ConcurrentHashMap<>();
 
     public SubagentService(AgentRunner runner, ExecStore store, TaskStore tasks,
-                           ScratchpadStore scratchpad, PromptManager prompts,
-                           ToolManager tools, KnowledgeToolbox toolbox, ObjectMapper om,
+                           ScratchpadStore scratchpad, PromptService prompts,
+                           ToolRegistry tools, AgentToolRouter toolbox, ObjectMapper om,
                            @Lazy ContextBuilder context, ApplicationEventPublisher publisher) {
         this.runner = runner;
         this.store = store;
@@ -453,7 +454,7 @@ public class SubagentService implements SubagentTool {
                 return scopedRun.run(handoff, batchId, execId);
             } catch (RuntimeException error) {
                 String reason = switch (error) {
-                    case ResponseStatusException response -> response.getReason();
+                    case DomainException response -> response.getMessage();
                     case IllegalArgumentException invalid -> invalid.getMessage();
                     default -> "子代理执行失败";
                 };

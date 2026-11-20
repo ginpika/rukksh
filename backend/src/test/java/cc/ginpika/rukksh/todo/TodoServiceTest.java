@@ -21,7 +21,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
+import cc.ginpika.rukksh.shared.error.DomainException;
 
 class TodoServiceTest {
     static class Time extends Clock {
@@ -55,9 +55,9 @@ class TodoServiceTest {
             var t=f.create("me","我的事情"); var active=f.start("me",t.id(),null);
             assertTrue(f.service.overview("other","Asia/Shanghai",null).items().isEmpty());
             assertNull(f.service.overview("other","UTC",null).active());
-            assertThrows(ResponseStatusException.class,()->f.service.detail("other",t.id()));
-            assertThrows(ResponseStatusException.class,()->f.write(()->f.service.stop("other",active.id())));
-            assertThrows(ResponseStatusException.class,()->f.write(()->f.service.replace("other",t.id(),new ItemRequest("偷改","",null,null,null,0L))));
+            assertThrows(DomainException.class,()->f.service.detail("other",t.id()));
+            assertThrows(DomainException.class,()->f.write(()->f.service.stop("other",active.id())));
+            assertThrows(DomainException.class,()->f.write(()->f.service.replace("other",t.id(),new ItemRequest("偷改","",null,null,null,0L))));
             assertTrue(f.service.review("other","2026-10","UTC",null).allocations().isEmpty());
         }
     }
@@ -69,7 +69,7 @@ class TodoServiceTest {
             var second=f.start("me",b.id(),first.id()); f.clock.advance(300);
             assertEquals(600_000,f.service.detail("me",a.id()).item().spentMillis());
             assertEquals(second.id(),new TodoService(f.store,f.projects,f.clock).overview("me","UTC",null).active().id());
-            assertThrows(ResponseStatusException.class,()->f.start("me",a.id(),first.id()));
+            assertThrows(DomainException.class,()->f.start("me",a.id(),first.id()));
             assertEquals(second.id(),f.service.overview("me","UTC",null).active().id());
             f.write(()->f.service.stop("me",second.id())); f.clock.advance(3600);
             assertEquals(300_000,f.service.detail("me",b.id()).item().spentMillis());
@@ -99,13 +99,13 @@ class TodoServiceTest {
         try(var f=new Fixture()) {
             var t=f.create("me","工作");
             var first=f.log(t,"2026-10-16T00:00:00Z","2026-10-16T01:00:00Z");
-            assertThrows(ResponseStatusException.class,()->f.log(t,"2026-10-16T00:30:00Z","2026-10-16T01:30:00Z"));
-            assertThrows(ResponseStatusException.class,()->f.log(t,"2026-10-16T07:00:00Z","2026-10-16T08:00:00Z"));
-            assertThrows(ResponseStatusException.class,()->f.log(t,"2026-10-16T01:00:00Z","2026-10-16T00:00:00Z"));
+            assertThrows(DomainException.class,()->f.log(t,"2026-10-16T00:30:00Z","2026-10-16T01:30:00Z"));
+            assertThrows(DomainException.class,()->f.log(t,"2026-10-16T07:00:00Z","2026-10-16T08:00:00Z"));
+            assertThrows(DomainException.class,()->f.log(t,"2026-10-16T01:00:00Z","2026-10-16T00:00:00Z"));
             var second=f.log(t,"2026-10-16T01:00:00Z","2026-10-16T02:00:00Z"); // adjacent is allowed
             var fixed=f.write(()->f.service.editFocus("me",first.id(),new FocusRequest(t.id(),Instant.parse("2026-10-16T00:15:00Z").toEpochMilli(),first.endedAt(),"修正",first.version())));
             assertEquals(1,fixed.version());
-            assertThrows(ResponseStatusException.class,()->f.write(()->f.service.deleteFocus("me",first.id(),0)));
+            assertThrows(DomainException.class,()->f.write(()->f.service.deleteFocus("me",first.id(),0)));
             f.write(()->f.service.deleteFocus("me",second.id(),second.version()));
             assertEquals(45*60_000,f.service.detail("me",t.id()).item().spentMillis());
             assertTrue(f.service.detail("me",t.id()).events().stream().anyMatch(e->e.kind().equals("focus_deleted")));
@@ -147,7 +147,7 @@ class TodoServiceTest {
             f.clock.value=Instant.parse("2025-11-02T16:00:00Z");
             var autumn=f.service.overview("me","America/New_York",null);
             assertEquals(25*3_600_000L,autumn.dayEnd()-autumn.dayStart());
-            assertThrows(ResponseStatusException.class,()->f.service.overview("me","bad-zone",null));
+            assertThrows(DomainException.class,()->f.service.overview("me","bad-zone",null));
         }
     }
 
@@ -190,8 +190,8 @@ class TodoServiceTest {
             assertTrue(f.service.day("other",null,"Asia/Shanghai",null).items().isEmpty());
             assertTrue(f.service.day("me",null,"Asia/Shanghai","other-project").focus().isEmpty());
             assertTrue(f.service.day("me",null,"Asia/Shanghai","other-project").items().isEmpty());
-            assertThrows(ResponseStatusException.class,()->f.service.day("me","2026-10-17","Asia/Shanghai",null));
-            assertThrows(ResponseStatusException.class,()->f.service.day("me","2026-02-30","UTC",null));
+            assertThrows(DomainException.class,()->f.service.day("me","2026-10-17","Asia/Shanghai",null));
+            assertThrows(DomainException.class,()->f.service.day("me","2026-02-30","UTC",null));
             for(String date:java.util.List.of("2026-03-08","2025-11-02")) {
                 var dst=f.service.day("me",date,"America/New_York",null);
                 assertEquals(date.equals("2026-03-08")?23:25,dst.hours().size());
@@ -220,10 +220,10 @@ class TodoServiceTest {
             var t=f.create("me","想法");
             var updated=f.write(()->f.service.replace("me",t.id(),new ItemRequest("准备做","",null,"2026-10-16",null,t.version())));
             assertEquals("ready",updated.state());
-            assertThrows(ResponseStatusException.class,()->f.write(()->f.service.replace("me",t.id(),new ItemRequest("旧窗口","",null,null,null,t.version()))));
+            assertThrows(DomainException.class,()->f.write(()->f.service.replace("me",t.id(),new ItemRequest("旧窗口","",null,null,null,t.version()))));
             var note=f.write(()->f.service.saveNote("me","2026-10-16","UTC",new NoteRequest("今天留下了什么",-1L)));
             assertEquals(0,note.version());
-            assertThrows(ResponseStatusException.class,()->f.write(()->f.service.saveNote("me","2026-10-16","UTC",new NoteRequest("过时内容",-1L))));
+            assertThrows(DomainException.class,()->f.write(()->f.service.saveNote("me","2026-10-16","UTC",new NoteRequest("过时内容",-1L))));
             assertEquals("今天留下了什么",f.service.overview("me","UTC",null).dayNote().body());
             new ResourceDatabasePopulator(new ClassPathResource("todo/schema.sql")).execute(f.ds);
             assertEquals("准备做",f.service.detail("me",t.id()).item().title());
@@ -244,12 +244,12 @@ class TodoServiceTest {
             java.util.concurrent.Callable<Integer> left=()->{
                 gate.await();
                 try { tx.execute(s->service.start("me",a.id(),new StartRequest(null))); return 200; }
-                catch(ResponseStatusException e) { return e.getStatusCode().value(); }
+                catch(DomainException e) { return e.statusCode(); }
             };
             java.util.concurrent.Callable<Integer> right=()->{
                 gate.await();
                 try { tx.execute(s->service.start("me",b.id(),new StartRequest(null))); return 200; }
-                catch(ResponseStatusException e) { return e.getStatusCode().value(); }
+                catch(DomainException e) { return e.statusCode(); }
             };
             var first=pool.submit(left); var second=pool.submit(right); gate.countDown();
             assertEquals(java.util.Set.of(200,409),java.util.Set.of(first.get(10,TimeUnit.SECONDS),second.get(10,TimeUnit.SECONDS)));

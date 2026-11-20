@@ -46,8 +46,4 @@ public class ProjectKnowledgeController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"需要登录");
         return user.getId();
     }
-    @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Map<String,String>> error(ResponseStatusException error) {
-        return ResponseEntity.status(error.getStatusCode()).body(Map.of("message",error.getReason()==null?"请求失败":error.getReason()));
-    }
 }

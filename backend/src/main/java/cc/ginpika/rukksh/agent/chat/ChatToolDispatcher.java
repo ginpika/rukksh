@@ -1,13 +1,13 @@
 package cc.ginpika.rukksh.agent.chat;
 
-import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolbox;
+import cc.ginpika.rukksh.agent.runtime.AgentToolRouter;
 import cc.ginpika.rukksh.ai.computer.terminal.TerminalService;
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.peer.AgentMessageService;
 import cc.ginpika.rukksh.ai.core.AgentScope;
 import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.ai.core.tool.ToolDomain;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolRisk;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
 import cc.ginpika.rukksh.ai.core.tool.ToolValidator;
@@ -19,7 +19,6 @@ import cc.ginpika.rukksh.ai.core.tool.subagent.DelegateSubagentTool;
 import cc.ginpika.rukksh.ai.core.tool.heartbeat.DeletePlanTool;
 import cc.ginpika.rukksh.ai.core.tool.subagent.ReadSubagentRunTool;
 import cc.ginpika.rukksh.ai.core.tool.heartbeat.UpdatePlanTool;
-import cc.ginpika.rukksh.todo.PersonalTodoTools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -35,18 +34,18 @@ import org.springframework.stereotype.Service;
 public class ChatToolDispatcher {
     private final ObjectMapper om;
     private final ToolValidator validator;
-    private final TodoService todo;
-    private final HeartbeatTool heartbeat;
-    private final SubagentTool subagent;
+    private final SessionTodoService todo;
+    private final HeartbeatToolPort heartbeat;
+    private final SubagentToolPort subagent;
     private final TerminalService terminal;
-    private final KnowledgeToolbox toolbox;
+    private final AgentToolRouter toolbox;
     private final ProjectWorkflowService projectWorkflows;
-    private cc.ginpika.rukksh.coding.CodingFacade coding;
+    private cc.ginpika.rukksh.coding.CodingService coding;
     private cc.ginpika.rukksh.ai.computer.integration.ComputerTools computer;
     private AgentMessageService agentMessages;
     private ProjectTools workProjects;
     private PersonalTodoTools personalTodos;
-    private ToolManager workToolDefinitions;
+    private ToolRegistry workToolDefinitions;
 
     @Autowired
     public void setAgentMessages(AgentMessageService agentMessages) {
@@ -54,7 +53,7 @@ public class ChatToolDispatcher {
     }
 
     @Autowired
-    public void setWorkTools(@Lazy ProjectTools workProjects, PersonalTodoTools personalTodos, ToolManager definitions) {
+    public void setWorkTools(@Lazy ProjectTools workProjects, PersonalTodoTools personalTodos, ToolRegistry definitions) {
         this.workProjects = workProjects;
         this.personalTodos = personalTodos;
         this.workToolDefinitions = definitions;
@@ -64,7 +63,7 @@ public class ChatToolDispatcher {
     public void setComputer(cc.ginpika.rukksh.ai.computer.integration.ComputerTools computer) { this.computer = computer; }
 
     @org.springframework.beans.factory.annotation.Autowired
-    public void setCoding(@org.springframework.context.annotation.Lazy cc.ginpika.rukksh.coding.CodingFacade coding) { this.coding=coding; }
+    public void setCoding(@org.springframework.context.annotation.Lazy cc.ginpika.rukksh.coding.CodingService coding) { this.coding=coding; }
     private static final Set<String> PLAN_TOOLS = Set.of(
             DelegatePlanTool.NAME, CreatePlanTool.NAME, UpdatePlanTool.NAME, DeletePlanTool.NAME);
 
@@ -74,11 +73,11 @@ public class ChatToolDispatcher {
 
     public ChatToolDispatcher(ObjectMapper om,
             ToolValidator validator,
-            TodoService todo,
-            HeartbeatTool heartbeat,
-            SubagentTool subagent,
+            SessionTodoService todo,
+            HeartbeatToolPort heartbeat,
+            SubagentToolPort subagent,
             TerminalService terminal,
-            KnowledgeToolbox toolbox,
+            AgentToolRouter toolbox,
             ProjectWorkflowService projectWorkflows) {
         this.om = om;
         this.validator = validator;
@@ -139,7 +138,7 @@ public class ChatToolDispatcher {
                 return "项目工具参数无效：" + e.getMessage();
             }
         }
-        if (TodoService.TOOLS.contains(name)) {
+        if (SessionTodoService.TOOLS.contains(name)) {
             /* 个人清单归属当前 Agent：首页 = 内置 Agent，圆桌执行态 = 当前发言成员（见 AgentScope）。
                刻意与下方 agentId（含内置兜底）分开——TodoProvider 回灌时用同一口径 AgentScope#get()，
                两边必须逐字一致，否则写进去的清单读不回来 */

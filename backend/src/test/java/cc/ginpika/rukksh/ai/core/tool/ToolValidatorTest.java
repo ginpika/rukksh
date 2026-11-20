@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 class ToolValidatorTest {
 
     private final ObjectMapper om = new ObjectMapper();
-    private final ToolValidator validator = new ToolValidator(new ToolManager(List.of(
+    private final ToolValidator validator = new ToolValidator(new ToolRegistry(List.of(
             new SearchDocumentsTool(), new UpsertNodeTool(), new CreateDocumentTool(),
             new DeleteGraphItemTool(), new RunCommandTool(), new WriteTodosTool()), om), om);
 

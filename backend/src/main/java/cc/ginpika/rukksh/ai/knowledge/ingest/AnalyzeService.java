@@ -2,12 +2,12 @@ package cc.ginpika.rukksh.ai.knowledge.ingest;
 
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient.ChatMessage;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.core.prompt.block.AnalyzeBlock;
 import cc.ginpika.rukksh.ai.core.prompt.block.ChunkSummaryBlock;
 import cc.ginpika.rukksh.ai.core.prompt.block.CommitBlock;
 import cc.ginpika.rukksh.ai.core.prompt.block.QuestionsBlock;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
 import cc.ginpika.rukksh.ai.core.tool.analyze.SubmitTriplesTool;
 import cc.ginpika.rukksh.ai.core.tool.graph.UpsertEdgeTool;
@@ -52,13 +52,13 @@ public class AnalyzeService {
     private final DocumentStore documents;
     private final DocSummaryService docSummary;
     private final ObjectMapper om;
-    private final PromptManager prompts;
-    private final ToolManager tools;
+    private final PromptService prompts;
+    private final ToolRegistry tools;
 
     public AnalyzeService(OpenAiChatClient chat, GraphStore graph, ChunkStore chunks,
                           EmbeddingClient embedding, DocumentStore documents,
                           DocSummaryService docSummary, ObjectMapper om,
-                          PromptManager prompts, ToolManager tools) {
+                          PromptService prompts, ToolRegistry tools) {
         this.chat = chat;
         this.graph = graph;
         this.chunks = chunks;

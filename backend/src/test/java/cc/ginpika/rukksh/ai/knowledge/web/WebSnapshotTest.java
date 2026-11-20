@@ -138,7 +138,7 @@ class WebSnapshotTest {
             new ResourceDatabasePopulator(new ClassPathResource("schema.sql")).execute(ds);
             var jdbc=new JdbcTemplate(ds);var om=new ObjectMapper();var chunks=new ChunkStore(jdbc);var graph=new GraphStore(jdbc,om);
             var evidence=new SnapshotEvidenceStore(jdbc);
-            var docs=new DocumentStore(jdbc,chunks,graph,new Chunker(mock(cc.ginpika.rukksh.ai.llm.OpenAiChatClient.class),mock(cc.ginpika.rukksh.ai.core.prompt.PromptManager.class),om),"unused",evidence);
+            var docs=new DocumentStore(jdbc,chunks,graph,new Chunker(mock(cc.ginpika.rukksh.ai.llm.OpenAiChatClient.class),mock(cc.ginpika.rukksh.ai.core.prompt.PromptService.class),om),"unused",evidence);
             var store=new WebSnapshotStore(jdbc,chunks,docs,om,evidence);
             var first=capture("<p>Original source facts, numbers and conditions.</p>");
             var request=new WebDtos.SaveRequest(first.captureId(),first.title(),"Generated summary","High quality original source",List.of(new WebDtos.Claim("Original source facts","fact",List.of("p1"))),"test-model");

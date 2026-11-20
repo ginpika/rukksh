@@ -1,16 +1,20 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.chat.ChatStream;
 import cc.ginpika.rukksh.agent.roundtable.TopicStateMachine.PeerState;
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.member.AgentDtos;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
 import cc.ginpika.rukksh.agent.member.AgentStore.AgentRow;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableSessionStore;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicEventStore;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicEventStore.EventRow;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicStore;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicStore.TopicRow;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicEventStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicEventStore.EventRow;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore.TopicRow;
 import cc.ginpika.rukksh.config.RoundtableProps;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -18,9 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 圆桌的推进器：人的一次发言进来，从这里开始由成员轮流说话。
@@ -175,7 +177,7 @@ public class RoundtableTopicService {
         /* 这一次的选人规则：请求指定了就用它，没指定 / 不认识就用缺省（见 SpeakerPicker#resolve） */
         SpeakerStrategy strategy = picker.resolve(speakerStrategy);
         RoundtableSessionStore.SessionRow session = sessions.findById(sessionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND,
                         "多智能体会话不存在: " + sessionId));
         if (modelId != null) {
             sessions.updateModel(sessionId, modelId);

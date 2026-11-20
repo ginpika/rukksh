@@ -2,7 +2,6 @@ package cc.ginpika.rukksh.ai.core.tool.heartbeat;
 
 import cc.ginpika.rukksh.ai.core.tool.AiTool;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
-import cc.ginpika.rukksh.ai.core.tool.subagent.DelegateSubagentTool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Set;
@@ -13,9 +12,9 @@ import org.springframework.stereotype.Component;
  *
  * <p>心跳职责是常驻编制：它有自己的正文（管「你是谁、怎么做事」）与工具权限，这一轮要做什么由
  * {@code instruction} 补上。职责每被派出一次，就是起一个匿名实例跑一遍——与
- * {@link DelegateSubagentTool} 共用同一个执行引擎，区别只在「这次有没有带一份常驻档案」。
+ * {@code delegate_subagent} 共用同一个执行引擎，区别只在「这次有没有带一份常驻档案」。
  *
- * <p>只想干一件一次性的活、不值得立编制时，用 {@link DelegateSubagentTool}。
+ * <p>只想干一件一次性的活、不值得立编制时，用 {@code delegate_subagent}。
  */
 @Component
 public class DelegatePlanTool implements AiTool {
@@ -32,7 +31,7 @@ public class DelegatePlanTool implements AiTool {
         return "把一条「心跳职责」派出去干一件具体的事：职责自带正文（它是谁、怎么做事）与工具权限，"
                 + "你只需说清这一轮做什么。适合已经立好编制、要反复跑的活；"
                 + "名册里没有合适的职责时，先用 " + CreatePlanTool.NAME + " 立一条，"
-                + "或对一次性的活改用 " + DelegateSubagentTool.NAME + "。";
+                + "或对一次性的活改用 delegate_subagent。";
     }
 
     @Override

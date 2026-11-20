@@ -5,7 +5,7 @@ import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.ai.core.tool.*;
 import cc.ginpika.rukksh.agent.member.*;
 import cc.ginpika.rukksh.agent.roundtable.RoundtableAgenda;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.context.CodingContext;
 import cc.ginpika.rukksh.coding.integration.CodingAgent;
@@ -85,12 +85,12 @@ class CodingAgentIntegrationTest {
     }
 
     @Test void codingGatewayIsGrantableButNotAPassivelyGrantedReadOnlyTool(){
-        CodingTaskTool tool=new CodingTaskTool();ToolManager manager=new ToolManager(List.of(tool),json);
+        CodingTaskTool tool=new CodingTaskTool();ToolRegistry manager=new ToolRegistry(List.of(tool),json);
         assertTrue(manager.readOnlyToolsOf(ToolSurface.CHAT).isEmpty());
         assertEquals(1,manager.toolsOf(List.of("coding_task"),ToolSurface.CHAT).size());
         assertEquals(ToolDomain.CODING,tool.domain());
         assertNull(tool.validate(json.createObjectNode().put("action","start").put("repositoryId","p1").put("prompt","build").put("mode","EXECUTE")),
-                "syntax accepts EXECUTE; CodingFacade verifies live project dispatch before granting it");
+                "syntax accepts EXECUTE; CodingService verifies live project dispatch before granting it");
         assertNotNull(tool.validate(json.createObjectNode().put("action","start").put("repositoryId","p1").put("prompt","build").put("mode","ROOT")));
         assertNull(tool.validate(json.createObjectNode().put("action","resume").put("runId","r1")));
     }

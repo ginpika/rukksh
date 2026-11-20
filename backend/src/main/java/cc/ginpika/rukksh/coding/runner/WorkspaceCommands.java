@@ -2,7 +2,7 @@ package cc.ginpika.rukksh.coding.runner;
 
 import cc.ginpika.rukksh.ai.computer.terminal.TerminalService;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
-import cc.ginpika.rukksh.coding.api.CodingDtos.Run;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.Run;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.repository.CodingWorkspace;
 import cc.ginpika.rukksh.coding.store.CodingStore;

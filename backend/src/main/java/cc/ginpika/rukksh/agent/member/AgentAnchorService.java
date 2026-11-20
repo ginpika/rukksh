@@ -5,7 +5,7 @@ import cc.ginpika.rukksh.agent.member.AgentStore;
 import cc.ginpika.rukksh.agent.member.AgentStore.AgentRow;
 import cc.ginpika.rukksh.ai.knowledge.anchor.GraphAnchors;
 import cc.ginpika.rukksh.ai.knowledge.dto.SearchDtos;
-import cc.ginpika.rukksh.ai.knowledge.ingest.ResultTexts;
+import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeResultFormatter;
 import cc.ginpika.rukksh.ai.knowledge.store.ChunkStore;
 import cc.ginpika.rukksh.ai.knowledge.store.GraphStore;
 import java.util.ArrayList;
@@ -112,7 +112,7 @@ public class AgentAnchorService {
         GraphStore.Entity anchor = found.get(0);
         List<GraphStore.Edge> edges = graph.edgesTouching(List.of(anchor.id()));
         List<GraphStore.Entity> related = graph.entitiesByIds(graph.neighborsOf(List.of(anchor.id())));
-        return ResultTexts.graphRelationsText(anchor, edges, related, chunkLabels(edgeChunkIds(edges)));
+        return KnowledgeResultFormatter.graphRelationsText(anchor, edges, related, chunkLabels(edgeChunkIds(edges)));
     }
 
     /** 边集合中的非空 source_chunk id（去重） */

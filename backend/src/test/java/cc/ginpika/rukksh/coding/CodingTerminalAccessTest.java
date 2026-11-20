@@ -1,9 +1,10 @@
 package cc.ginpika.rukksh.coding;
 
-import cc.ginpika.rukksh.coding.api.CodingDtos.Capabilities;
-import cc.ginpika.rukksh.coding.api.CodingTerminalController;
-import cc.ginpika.rukksh.coding.api.CodingTerminalTickets;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.Capabilities;
+import cc.ginpika.rukksh.web.controller.CodingTerminalController;
+import cc.ginpika.rukksh.web.terminal.CodingTerminalTickets;
 import cc.ginpika.rukksh.coding.runner.CodingTerminals;
+import cc.ginpika.rukksh.web.advice.WebExceptionAdvice;
 import cc.ginpika.rukksh.web.sso.*;
 import org.junit.jupiter.api.*;
 import org.springframework.test.web.servlet.MockMvc;
@@ -15,11 +16,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class CodingTerminalAccessTest {
     private final CodingTerminals terminals=mock(CodingTerminals.class);
-    private final CodingFacade coding=mock(CodingFacade.class);
+    private final CodingService coding=mock(CodingService.class);
     private final CodingTerminalTickets tickets=mock(CodingTerminalTickets.class);
     private MockMvc mvc;
     private final SsoUser user=new SsoUser("alice","alice","Alice","","user","");
-    @BeforeEach void setup(){mvc=MockMvcBuilders.standaloneSetup(new CodingTerminalController(terminals,coding,tickets)).build();when(coding.capabilities()).thenReturn(new Capabilities(true,false,"",60,30,"workspace"));}
+    @BeforeEach void setup(){mvc=MockMvcBuilders.standaloneSetup(new CodingTerminalController(terminals,coding,tickets)).setControllerAdvice(new WebExceptionAdvice()).build();when(coding.capabilities()).thenReturn(new Capabilities(true,false,"",60,30,"workspace"));}
     @Test void allTerminalOperationsRequireAuthentication() throws Exception {
         for(var request:java.util.List.of(get("/api/coding/projects/p/terminals"),get("/api/coding/projects/p/terminals/t"),post("/api/coding/projects/p/terminals").contentType(MediaType.APPLICATION_JSON).content("{\"cols\":80,\"rows\":24}"),post("/api/coding/projects/p/terminals/t/input").contentType(MediaType.APPLICATION_JSON).content("{\"data\":\"pwd\\r\"}"),post("/api/coding/projects/p/terminals/t/resize").contentType(MediaType.APPLICATION_JSON).content("{\"cols\":80,\"rows\":24}"),delete("/api/coding/projects/p/terminals/t"))){mvc.perform(request).andExpect(status().isUnauthorized());}
         verifyNoInteractions(terminals);

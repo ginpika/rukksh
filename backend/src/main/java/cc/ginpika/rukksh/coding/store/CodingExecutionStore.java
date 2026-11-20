@@ -1,7 +1,7 @@
 package cc.ginpika.rukksh.coding.store;
 
 import cc.ginpika.rukksh.ai.core.BuiltinAgents;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.sql.ResultSet;
 import java.sql.SQLException;

@@ -4,6 +4,7 @@ import cc.ginpika.rukksh.ai.core.BuiltinAgents;
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.member.AgentStore;
 import cc.ginpika.rukksh.agent.runtime.TaskStore;
+import cc.ginpika.rukksh.web.advice.WebExceptionAdvice;
 import cc.ginpika.rukksh.web.controller.AgentController;
 import cc.ginpika.rukksh.web.sso.SsoInterceptor;
 import cc.ginpika.rukksh.web.sso.SsoUser;
@@ -21,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CodingAgentDirectoryAccessTest {
     private final AgentDirectory directory=mock(AgentDirectory.class);
     private final TaskStore tasks=mock(TaskStore.class);
-    private final CodingFacade coding=mock(CodingFacade.class);
+    private final CodingService coding=mock(CodingService.class);
     private MockMvc mvc;
 
     @BeforeEach void setup(){
@@ -30,8 +31,8 @@ class CodingAgentDirectoryAccessTest {
         when(directory.declaredTerminals(row)).thenReturn(List.of());
         when(tasks.recent(BuiltinAgents.CORE,null,100)).thenReturn(List.of(task(1,"coding","r1"),task(2,"coding","r2"),task(3,"agent",null)));
         when(coding.ownsTask("alice",1)).thenReturn(true);
-        var controller=new AgentController(directory,null,null,null,null,new ObjectMapper(),null,null,null,tasks,null,null,null,null,null,null,null,null);
-        controller.setCoding(coding);mvc=MockMvcBuilders.standaloneSetup(controller).build();
+        var controller=new AgentController(directory,null,null,null,null,new ObjectMapper(),null,null,null,null,tasks,null,null,null,null,null,null,null,null);
+        controller.setCoding(coding);mvc=MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new WebExceptionAdvice()).build();
     }
     private TaskStore.TaskRow task(long id,String origin,String payload){return new TaskStore.TaskRow(id,null,"coding".equals(origin)?"code":"subagent","pending","task "+id,null,BuiltinAgents.CORE,null,"p1",null,payload,origin,0,0);}
 

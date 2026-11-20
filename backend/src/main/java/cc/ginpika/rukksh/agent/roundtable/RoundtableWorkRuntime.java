@@ -1,8 +1,11 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.member.AgentStore.AgentRow;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTodoStore.TodoRow;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore.TodoRow;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEvent;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEventBus;
 import cc.ginpika.rukksh.agent.runtime.event.RuntimeEventType;
@@ -38,6 +41,7 @@ public class RoundtableWorkRuntime {
     private static final Logger log = LoggerFactory.getLogger(RoundtableWorkRuntime.class);
 
     private final RoundtableChatService chat;
+    private final RoundtableSessionService sessionService;
     private final RoundtableTodoStore taskBoard;
     private final AgentDirectory directory;
     private final RuntimeEventBus events;
@@ -58,12 +62,14 @@ public class RoundtableWorkRuntime {
     private final Set<String> allDoneNotified = ConcurrentHashMap.newKeySet();
     private volatile boolean closing;
 
-    public RoundtableWorkRuntime(RoundtableChatService chat, RoundtableTodoStore taskBoard,
+    public RoundtableWorkRuntime(RoundtableChatService chat, RoundtableSessionService sessionService,
+                                 RoundtableTodoStore taskBoard,
                                  AgentDirectory directory,
                                  RuntimeEventBus events, RoundtableMessageStore messages,
                                  RoundtableLiveBus liveBus,
                                  RoundtableProgress progress, CollaborationPlan plans) {
         this.chat = chat;
+        this.sessionService = sessionService;
         this.taskBoard = taskBoard;
         this.directory = directory;
         this.events = events;
@@ -160,7 +166,7 @@ public class RoundtableWorkRuntime {
      */
     public boolean drop(String todoId) {
         TodoRow todo = taskBoard.todo(todoId).orElse(null);
-        if(todo!=null)chat.requireDiscussable(todo.sessionId());
+        if(todo!=null)sessionService.requireDiscussable(todo.sessionId());
         if (todo == null || RoundtableTodoStore.STATUS_DROPPED.equals(todo.status())) {
             return false;
         }
@@ -178,7 +184,7 @@ public class RoundtableWorkRuntime {
      */
     public boolean defer(String todoId) {
         TodoRow todo = taskBoard.todo(todoId).orElse(null);
-        if(todo!=null)chat.requireDiscussable(todo.sessionId());
+        if(todo!=null)sessionService.requireDiscussable(todo.sessionId());
         if (todo == null) {
             return false;
         }
@@ -209,7 +215,7 @@ public class RoundtableWorkRuntime {
      */
     public boolean checkNow(String todoId) {
         TodoRow todo = taskBoard.todo(todoId).orElse(null);
-        if(todo!=null)chat.requireDiscussable(todo.sessionId());
+        if(todo!=null)sessionService.requireDiscussable(todo.sessionId());
         if (todo == null) {
             return false;
         }

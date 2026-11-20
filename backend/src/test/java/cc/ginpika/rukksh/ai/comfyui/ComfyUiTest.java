@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.ai.comfyui;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -8,8 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import cc.ginpika.rukksh.ai.comfyui.integration.GenerateImageTool;
 import cc.ginpika.rukksh.ai.comfyui.integration.GeneratedImageReply;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
+import cc.ginpika.rukksh.web.advice.WebExceptionAdvice;
 import cc.ginpika.rukksh.web.controller.ComfyUiController;
 import cc.ginpika.rukksh.web.desktop.DesktopTokenFilter;
 import cc.ginpika.rukksh.config.DesktopProps;
@@ -25,12 +28,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.*;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.server.ResponseStatusException;
 
 class ComfyUiTest {
     private final ObjectMapper json = new ObjectMapper();
@@ -120,7 +121,7 @@ class ComfyUiTest {
         var second = save(endpoint.id(),"模型 B");
         assertEquals(first.id(),settings.resolve(null).id());
         assertEquals(first.endpointId(),second.endpointId());
-        assertThrows(ResponseStatusException.class, () -> settings.deleteEndpoint(endpoint.id()));
+        assertThrows(DomainException.class, () -> settings.deleteEndpoint(endpoint.id()));
         settings.select(second.id());
         var result = service.generate(null,"a fox");
         settings.deleteProfile(second.id());
@@ -129,7 +130,7 @@ class ComfyUiTest {
         settings.deleteEndpoint(endpoint.id());
         assertTrue(settings.view().profiles().isEmpty());
         assertArrayEquals(png,service.image(result.images().getFirst().id()).bytes());
-        assertThrows(ResponseStatusException.class, () -> settings.resolve("missing"));
+        assertThrows(DomainException.class, () -> settings.resolve("missing"));
     }
 
     @Test void submitsCopiesPollsQueueAndSavesOnlyFinalOutputWithEncodedViewParameters() throws Exception {
@@ -172,13 +173,13 @@ class ComfyUiTest {
         var endpoint = endpoint("https://gpu.example");
         var p = draft(endpoint.id(),"bad");
         var canvas = json.createObjectNode(); canvas.putArray("nodes");
-        assertThrows(ResponseStatusException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),canvas,"6","text","","","",30)));
-        assertThrows(ResponseStatusException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),workflow(),"6","clip","","","",30)));
-        assertThrows(ResponseStatusException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),workflow(),"6","text","3","positive","",30)));
-        assertThrows(ResponseStatusException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),workflow(),"6","text","","","missing",30)));
-        assertThrows(ResponseStatusException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),workflow(),"6","text","","","",1)));
+        assertThrows(DomainException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),canvas,"6","text","","","",30)));
+        assertThrows(DomainException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),workflow(),"6","clip","","","",30)));
+        assertThrows(DomainException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),workflow(),"6","text","3","positive","",30)));
+        assertThrows(DomainException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),workflow(),"6","text","","","missing",30)));
+        assertThrows(DomainException.class, () -> settings.saveProfile(null,new ComfyUiSettings.Profile(null,p.name(),"",endpoint.id(),workflow(),"6","text","","","",1)));
         assertTrue(settings.view().profiles().isEmpty());
-        assertThrows(ResponseStatusException.class, () -> service.generate(null,"hello"));
+        assertThrows(DomainException.class, () -> service.generate(null,"hello"));
     }
 
     @Test void testsEndpointWithoutGeneratingAndAllowsNoAuthentication() throws Exception {
@@ -187,16 +188,16 @@ class ComfyUiTest {
         assertTrue(result.ok());
         assertNull(auth.get());
         assertEquals(0,submissions.get());
-        assertThrows(ResponseStatusException.class, () -> endpoint("file:///etc/test"));
-        assertThrows(ResponseStatusException.class, () -> endpoint("https://key@host/path"));
-        assertThrows(ResponseStatusException.class, () -> endpoint("https://host/?token=key"));
+        assertThrows(DomainException.class, () -> endpoint("file:///etc/test"));
+        assertThrows(DomainException.class, () -> endpoint("https://key@host/path"));
+        assertThrows(DomainException.class, () -> endpoint("https://host/?token=key"));
     }
 
     @Test void rejectsUpstreamAuthenticationFailureWithoutRetryOrCredentialDisclosure() throws Exception {
         promptStatus = 401;
         var p = save(endpoint(remote()).id(),"model");
-        var error = assertThrows(ResponseStatusException.class, () -> service.generate(p.id(),"hello"));
-        assertTrue(error.getReason().contains("认证失败"));
+        var error = assertThrows(DomainException.class, () -> service.generate(p.id(),"hello"));
+        assertTrue(error.getMessage().contains("认证失败"));
         assertFalse(error.getMessage().contains("secret-key"));
         assertEquals(1,submissions.get());
         assertEquals("failed",jdbc.queryForObject("SELECT status FROM comfyui_generation",String.class));
@@ -206,8 +207,8 @@ class ComfyUiTest {
     @Test void failsOnExecutionErrorEvenWhenCompletedAndDoesNotFetchImages() throws Exception {
         history = "{\"remote-id\":{\"status\":{\"completed\":true,\"status_str\":\"error\"},\"outputs\":{}}}";
         var p = save(endpoint(remote()).id(),"model");
-        var error = assertThrows(ResponseStatusException.class, () -> service.generate(p.id(),"hello"));
-        assertTrue(error.getReason().contains("执行失败"));
+        var error = assertThrows(DomainException.class, () -> service.generate(p.id(),"hello"));
+        assertTrue(error.getMessage().contains("执行失败"));
         assertNull(query.get());
         assertEquals("remote-id",jdbc.queryForObject("SELECT prompt_id FROM comfyui_generation",String.class));
     }
@@ -215,7 +216,7 @@ class ComfyUiTest {
     @Test void doesNotReplaySubmissionEvenWhenGatewayRequestsImmediateRetry() throws Exception {
         promptStatus = 503;
         var p = save(endpoint(remote()).id(),"model");
-        assertThrows(ResponseStatusException.class, () -> service.generate(p.id(),"hello"));
+        assertThrows(DomainException.class, () -> service.generate(p.id(),"hello"));
         assertEquals(1,submissions.get());
         assertEquals(0,historyCalls.get());
     }
@@ -224,21 +225,21 @@ class ComfyUiTest {
         String base = remote();
         var p = save(endpoint(base).id(),"model");
         imageBody = "<html>proxy error</html>".getBytes(StandardCharsets.UTF_8);
-        assertTrue(assertThrows(ResponseStatusException.class, () -> service.generate(p.id(),"hello")).getReason().contains("有效"));
+        assertTrue(assertThrows(DomainException.class, () -> service.generate(p.id(),"hello")).getMessage().contains("有效"));
         history = "{\"remote-id\":{\"status\":{\"completed\":true,\"status_str\":\"success\"},\"outputs\":{}}}";
-        assertTrue(assertThrows(ResponseStatusException.class, () -> service.generate(p.id(),"hello")).getReason().contains("没有图片"));
+        assertTrue(assertThrows(DomainException.class, () -> service.generate(p.id(),"hello")).getMessage().contains("没有图片"));
         assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM comfyui_image",Integer.class));
     }
 
     @Test void timeoutIsBoundedAndFailedGenerationKeepsRemoteId() throws Exception {
         var endpoint = endpoint("https://gpu.example");
         var p = save(endpoint.id(),"model");
-        var error = assertThrows(ResponseStatusException.class, () -> client.awaitImages(endpoint,"remote-id","",System.nanoTime() - 1));
-        assertEquals(HttpStatus.GATEWAY_TIMEOUT,error.getStatusCode());
+        var error = assertThrows(DomainException.class, () -> client.awaitImages(endpoint,"remote-id","",System.nanoTime() - 1));
+        assertEquals(DomainException.ErrorKind.GATEWAY_TIMEOUT, error.kind());
         var fake = mock(ComfyUiClient.class);
         when(fake.submit(any(),any(),anyLong())).thenReturn("submitted-id");
         when(fake.awaitImages(any(),anyString(),anyString(),anyLong())).thenThrow(error);
-        assertThrows(ResponseStatusException.class, () -> new ComfyUiService(settings,fake,store).generate(p.id(),"hello"));
+        assertThrows(DomainException.class, () -> new ComfyUiService(settings,fake,store).generate(p.id(),"hello"));
         assertEquals("submitted-id",jdbc.queryForObject("SELECT prompt_id FROM comfyui_generation",String.class));
         assertEquals("failed",jdbc.queryForObject("SELECT status FROM comfyui_generation",String.class));
         verify(fake,times(1)).submit(any(),any(),anyLong());
@@ -247,7 +248,7 @@ class ComfyUiTest {
     @Test void registersToolWithProfilesAndNoSecretsThenReturnsPersistedImageUrls() throws Exception {
         var p = save(endpoint(remote()).id(),"绘画模型");
         var tool = new GenerateImageTool(settings,service,json);
-        var manager = new ToolManager(List.of(tool),json);
+        var manager = new ToolRegistry(List.of(tool),json);
         String schema = manager.toolsOf(ToolSurface.CHAT).toString();
         assertTrue(schema.contains(p.id()));
         assertTrue(schema.contains("绘画模型"));
@@ -264,7 +265,7 @@ class ComfyUiTest {
         var p = save(endpoint(remote()).id(),"model");
         var image = service.generate(p.id(),"hello").images().getFirst();
         var desktop = new DesktopProps(); desktop.setEnabled(true); desktop.setLocalToken("desktop-token");
-        var mvc = MockMvcBuilders.standaloneSetup(new ComfyUiController(settings,service)).addFilters(new DesktopTokenFilter(desktop)).build();
+        var mvc = MockMvcBuilders.standaloneSetup(new ComfyUiController(settings,service)).setControllerAdvice(new WebExceptionAdvice()).addFilters(new DesktopTokenFilter(desktop)).build();
         mvc.perform(get(image.url())).andExpect(status().isUnauthorized());
         mvc.perform(get(image.url()).header("X-Rukksh-Token","desktop-token")).andExpect(status().isOk())
             .andExpect(content().contentType("image/png")).andExpect(content().bytes(png))

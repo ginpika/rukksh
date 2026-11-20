@@ -10,7 +10,7 @@ import java.util.Set;
  * 一个工具：OpenAI 兼容 function calling 里的单条工具定义。
  *
  * <p>每个工具单独成类——工具是开发者亲手写下的编程契约（名字、描述、参数 schema、可出现的工具面），
- * 各自独立演进、互不干扰；由 {@link ToolManager} 汇总成各工具面的 tools 数组。
+ * 各自独立演进、互不干扰；由 {@link ToolRegistry} 汇总成各工具面的 tools 数组。
  *
  * <p>这里只表达「工具长什么样」：工具调用的<b>执行</b>不在这里，LLM 看到的是定义，
  * 调用落地到业务仍由各业务服务负责（见 {@code KnowledgeToolbox} / {@code AnalyzeService}）。

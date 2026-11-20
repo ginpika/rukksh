@@ -34,5 +34,4 @@ public class WorkspaceTerminalController {
         return socket.ticket(owner,workspace,id,input.after(),origin);
     }
     @DeleteMapping("/{id}") public Map<String,Boolean> delete(HttpServletRequest req,@PathVariable String workspace,@PathVariable String id){terminals.delete(owner(req),workspace,id);return Map.of("ok",true);}
-    @ExceptionHandler(ResponseStatusException.class) public org.springframework.http.ResponseEntity<Map<String,String>> error(ResponseStatusException error){return org.springframework.http.ResponseEntity.status(error.getStatusCode()).body(Map.of("message",error.getReason()==null?"请求失败":error.getReason()));}
 }

@@ -1,5 +1,12 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.project.ProjectKnowledgeStore;
 import cc.ginpika.rukksh.project.ProjectStore;
 import java.util.List;
@@ -8,7 +15,6 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
-import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ProjectKnowledgeTest {
@@ -46,10 +52,10 @@ class ProjectKnowledgeTest {
             assertEquals(2,f.knowledge.read("p1","overview",null).version());
             assertEquals(2,f.knowledge.history("p1","overview").size());
             assertTrue(f.knowledge.history("p1","overview").getFirst().content().isEmpty());
-            var conflict=assertThrows(ResponseStatusException.class,()->f.knowledge.save("p1","overview",f.write("覆盖新内容",1),source,"a"));
-            assertEquals(409,conflict.getStatusCode().value());
-            assertThrows(ResponseStatusException.class,()->f.knowledge.save("p1","foreign",f.write("错误归属",0),foreign,"b"));
-            assertThrows(ResponseStatusException.class,()->f.knowledge.read("p2","overview",null));
+            var conflict=assertThrows(DomainException.class,()->f.knowledge.save("p1","overview",f.write("覆盖新内容",1),source,"a"));
+            assertEquals(409,conflict.statusCode());
+            assertThrows(DomainException.class,()->f.knowledge.save("p1","foreign",f.write("错误归属",0),foreign,"b"));
+            assertThrows(DomainException.class,()->f.knowledge.read("p2","overview",null));
             assertTrue(f.knowledge.context(foreign).contains("项目文档 0 份"));
             assertFalse(f.knowledge.context(foreign).contains("已验证接口与客户端"));
             f.jdbc.update("UPDATE hub_session SET project_id='p2' WHERE id=?",source);

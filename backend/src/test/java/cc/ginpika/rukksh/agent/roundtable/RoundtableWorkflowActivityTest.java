@@ -1,5 +1,8 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableWorkRunStore;
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.member.AgentDtos;
 import cc.ginpika.rukksh.agent.member.AgentStore.AgentRow;
@@ -14,7 +17,7 @@ import static org.mockito.Mockito.*;
 
 class RoundtableWorkflowActivityTest {
     @Test void workingMemberCanSpeakWithoutLosingExecutionStatus() {
-        when(chat.sessions()).thenReturn(List.of(new AgentDtos.SessionView("session-1", "task", null, null, null, null, List.of(coding.id()), 0, 0L)));
+        when(sessionService.sessions()).thenReturn(List.of(new AgentDtos.SessionView("session-1", "task", null, null, null, null, List.of(coding.id()), 0, 0L)));
         when(directory.peer(coding.id())).thenReturn(java.util.Optional.of(coding));
         when(runtime.isWorking("session-1", coding.id())).thenReturn(true);
         when(chat.isConversing("session-1", coding.id())).thenReturn(true);
@@ -25,10 +28,11 @@ class RoundtableWorkflowActivityTest {
     }
     private final AgentDirectory directory=mock(AgentDirectory.class);
     private final RoundtableChatService chat=mock(RoundtableChatService.class);
+    private final RoundtableSessionService sessionService=mock(RoundtableSessionService.class);
     private final RoundtableWorkRuntime runtime=mock(RoundtableWorkRuntime.class);
     private final AgentActivitySource activity=mock(AgentActivitySource.class);
     private final RoundtableWorkRunStore workRuns=mock(RoundtableWorkRunStore.class);
-    private final RoundtableWorkflowService service=new RoundtableWorkflowService(chat,directory,
+    private final RoundtableWorkflowService service=new RoundtableWorkflowService(chat,sessionService,directory,
             mock(RoundtableTodoStore.class),mock(TopicStateMachine.class),runtime,
             workRuns,new ObjectMapper(),List.of(activity),mock(RoundtableActivity.class));
     private final AgentRow coding=new AgentRow(BuiltinAgents.CODING,"编码 Agent",true,"[]",null,1,null,null,null,0,0,null,null);
@@ -63,7 +67,7 @@ class RoundtableWorkflowActivityTest {
     }
 
     @Test void taskViewIncludesOnlyCodingWorkLinkedToTheSelectedSession() {
-        when(chat.sessions()).thenReturn(List.of(new AgentDtos.SessionView("session-1","task",null,null,null,null,List.of(coding.id()),0,0L)));
+        when(sessionService.sessions()).thenReturn(List.of(new AgentDtos.SessionView("session-1","task",null,null,null,null,List.of(coding.id()),0,0L)));
         when(directory.peer(coding.id())).thenReturn(java.util.Optional.of(coding));
         when(activity.activities("alice","session-1")).thenReturn(List.of(new AgentActivitySource.Activity(coding.id(),0,1,0)));
         var agent=service.view("session-1","alice").agents().getFirst();
@@ -74,7 +78,7 @@ class RoundtableWorkflowActivityTest {
     @Test void speakingCountsAsWorkingInBothViewsWithoutAWorkThread() {
         when(directory.peers()).thenReturn(List.of(coding));
         when(directory.peer(coding.id())).thenReturn(java.util.Optional.of(coding));
-        when(chat.sessions()).thenReturn(List.of(new AgentDtos.SessionView("session-1", "discussion",
+        when(sessionService.sessions()).thenReturn(List.of(new AgentDtos.SessionView("session-1", "discussion",
                 null, null, "open", coding.id(), List.of(coding.id()), 0, 0L)));
         assertTrue(service.overview("alice").agents().getFirst().working());
         assertTrue(service.view("session-1", "alice").agents().getFirst().working());

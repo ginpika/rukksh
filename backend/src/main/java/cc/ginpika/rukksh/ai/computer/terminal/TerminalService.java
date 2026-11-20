@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.ai.computer.terminal;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.core.tool.ToolResult;
 import cc.ginpika.rukksh.ai.core.tool.terminal.ListTerminalsTool;
 import cc.ginpika.rukksh.ai.core.tool.terminal.RunCommandTool;
@@ -24,9 +26,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 命令行终端的入口：模型侧的一次工具调用、设置页的目标维护与试跑，都从这里进出。
@@ -232,12 +232,12 @@ public class TerminalService {
      * @return 拒绝理由；放行返回 null
      */
     public String commandRejection(String targetId,String command) {
-        var target=store.targetById(targetId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"工作空间不存在"));
+        var target=store.targetById(targetId).orElseThrow(()->new DomainException(DomainException.ErrorKind.NOT_FOUND,"工作空间不存在"));
         if(!target.enabled()){return "工作空间未启用";}
         return guard(target,command);
     }
     public ExecTarget.ExecOptions executionOptions(String targetId) {
-        return options(store.targetById(targetId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"工作空间不存在")));
+        return options(store.targetById(targetId).orElseThrow(()->new DomainException(DomainException.ErrorKind.NOT_FOUND,"工作空间不存在")));
     }
     private String guard(TerminalStore.TargetRow target, String command) {
         List<String> deny = read(target.denyPatterns());
@@ -260,7 +260,7 @@ public class TerminalService {
         try {
             return Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
         } catch (PatternSyntaxException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST,
                     "目标「" + targetName + "」的规则正则非法：/" + regex + "/");
         }
     }
@@ -309,7 +309,7 @@ public class TerminalService {
     public TerminalDtos.TargetView create(TerminalDtos.TargetRequest req) {
         TerminalStore.TargetRow row = fromRequest(req, null);
         if (store.nameTaken(row.name(), null)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标名已存在：" + row.name());
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "目标名已存在：" + row.name());
         }
         return toView(store.save(row));
     }
@@ -320,21 +320,21 @@ public class TerminalService {
 
     public TerminalDtos.TargetView update(String id, TerminalDtos.TargetRequest req) {
         TerminalStore.TargetRow existing = store.targetById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "目标不存在: " + id));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "目标不存在: " + id));
         if (req != null
                 && LocalExecTarget.KIND.equals(existing.kind()) != LocalExecTarget.KIND.equals(trim(req.kind()))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "要更换为其他类型，请新建工作空间");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "要更换为其他类型，请新建工作空间");
         }
         TerminalStore.TargetRow row = fromRequest(req, existing.id());
         if (store.nameTaken(row.name(), id)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标名已存在：" + row.name());
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "目标名已存在：" + row.name());
         }
         return toView(store.save(row));
     }
 
     public void delete(String id) {
         if (store.delete(id) == 0) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "目标不存在: " + id);
+            throw new DomainException(DomainException.ErrorKind.NOT_FOUND, "目标不存在: " + id);
         }
     }
 
@@ -360,11 +360,11 @@ public class TerminalService {
     public TerminalDtos.CommandView runManual(String id, String command) {
         TerminalStore.TargetRow target = require(id);
         if (command == null || command.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "command 不能为空");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "command 不能为空");
         }
         ExecTarget impl = impls.get(target.kind());
         if (impl == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未知的目标类型：" + target.kind());
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "未知的目标类型：" + target.kind());
         }
         ExecTarget.ExecOptions options = options(target);
         String rejected = guard(target, command);
@@ -416,7 +416,7 @@ public class TerminalService {
 
     private TerminalStore.TargetRow require(String id) {
         return store.targetById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "目标不存在: " + id));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "目标不存在: " + id));
     }
 
     /** 记一行审计（并顺带裁剪旧的）；返回落库前的那条，便于设置页试跑直接回显 */
@@ -441,12 +441,12 @@ public class TerminalService {
     /** 请求 → 行：校验 + 归一（只保留该 kind 用得到的字段，避免切换类型后残留脏值） */
     private TerminalStore.TargetRow fromRequest(TerminalDtos.TargetRequest req, String id) {
         if (req == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求体不能为空");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "请求体不能为空");
         }
         /* kind 用实现注册表校验：以后加实现时这里自动认得，不必再改一处 switch */
         String kind = trim(req.kind());
         if (!impls.containsKey(kind)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST,
                     "kind 只能是 " + String.join(" / ", impls.keySet()));
         }
         boolean isDocker = DockerExecTarget.KIND.equals(kind);
@@ -457,7 +457,7 @@ public class TerminalService {
             name = "docker-" + UUID.randomUUID().toString().substring(0, 8);
         }
         if (name.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "name 不能为空");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "name 不能为空");
         }
         String image = blankToNull(req.image());
         String container = blankToNull(req.container());
@@ -473,10 +473,10 @@ public class TerminalService {
             requireValidRegex(rule);
         }
         if (req.timeoutMs() != null && req.timeoutMs() <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "timeoutMs 需为正数");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "timeoutMs 需为正数");
         }
         if (req.maxOutput() != null && req.maxOutput() <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "maxOutput 需为正数");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "maxOutput 需为正数");
         }
         String sshAuth = SshExecTarget.AUTH_KEY.equals(trim(req.sshAuth()))
                 ? SshExecTarget.AUTH_KEY : SshExecTarget.AUTH_PASSWORD;
@@ -485,33 +485,33 @@ public class TerminalService {
         if (isDocker) {
             if (container == null && image == null) image = "ubuntu:24.04";
             if (hostWorkdir != null && container != null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                throw new DomainException(DomainException.ErrorKind.BAD_REQUEST,
                         "已有容器不能追加目录绑定，请使用容器已有的挂载，或从镜像新建工作空间");
             }
             if (hostWorkdir != null && !(hostWorkdir.startsWith("/")
                     || hostWorkdir.matches("^[A-Za-z]:[\\\\/].*") || hostWorkdir.startsWith("\\\\"))) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "宿主机目录必须是绝对路径");
+                throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "宿主机目录必须是绝对路径");
             }
             if (container == null && workdir == null) workdir = "/workspace";
             if (hostWorkdir != null && (!workdir.startsWith("/")
                     || List.of(workdir.split("/")).stream().allMatch(part -> part.isEmpty() || part.equals("."))
                     || workdir.contains("\\") || List.of(workdir.split("/")).contains(".."))) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "绑定路径须为容器内绝对路径，不能为根目录或包含 ..");
+                throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "绑定路径须为容器内绝对路径，不能为根目录或包含 ..");
             }
         } else if (isSsh) {
             if (trim(req.sshHost()).isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ssh 目标需指定 sshHost");
+                throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "ssh 目标需指定 sshHost");
             }
             if (SshExecTarget.AUTH_KEY.equals(sshAuth) && trim(req.sshPrivateKey()).isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "私钥认证需提供 sshPrivateKey");
+                throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "私钥认证需提供 sshPrivateKey");
             }
             if (SshExecTarget.AUTH_PASSWORD.equals(sshAuth) && trim(req.sshPassword()).isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码认证需提供 sshPassword");
+                throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "密码认证需提供 sshPassword");
             }
         } else if (isLocal) {
             String unavailable = localUnavailableReason();
             if (unavailable != null) {
-                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, unavailable);
+                throw new DomainException(DomainException.ErrorKind.SERVICE_UNAVAILABLE, unavailable);
             }
             try {
                 var directory = LocalSandbox.resolveDirectory(workdir);
@@ -519,9 +519,9 @@ public class TerminalService {
                 ((LocalExecTarget) impls.get(kind)).validateConfiguration(directory, writePaths);
                 workdir = directory.toString();
             } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+                throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, e.getMessage(), e);
             } catch (IllegalStateException e) {
-                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), e);
+                throw new DomainException(DomainException.ErrorKind.SERVICE_UNAVAILABLE, e.getMessage(), e);
             }
         }
         return new TerminalStore.TargetRow(id, name, kind, Boolean.TRUE.equals(req.enabled()),
@@ -547,7 +547,7 @@ public class TerminalService {
         try {
             Pattern.compile(regex);
         } catch (PatternSyntaxException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "规则正则非法：/" + regex + "/");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "规则正则非法：/" + regex + "/");
         }
     }
 
@@ -616,7 +616,7 @@ public class TerminalService {
         try {
             return om.writeValueAsString(list);
         } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "规则序列化失败: " + e.getMessage());
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "规则序列化失败: " + e.getMessage());
         }
     }
 

@@ -1,7 +1,7 @@
 package cc.ginpika.rukksh.ai.knowledge.ingest;
 
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.knowledge.dto.AnalyzeDtos.Triple;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,7 +15,7 @@ import static org.mockito.Mockito.*;
 
 class AnalyzeLoopTest {
     @Test void commitContinuesPastTheFormerEightRoundLimitUntilAnAnswer(){
-        var json=new ObjectMapper();var client=mock(OpenAiChatClient.class);var tools=mock(ToolManager.class);
+        var json=new ObjectMapper();var client=mock(OpenAiChatClient.class);var tools=mock(ToolRegistry.class);
         when(client.configured()).thenReturn(true);when(tools.toolsOf(any())).thenReturn(json.createArrayNode());
         var calls=new AtomicInteger();
         when(client.chatRaw(any(ObjectNode.class),anyString())).thenAnswer(inv->{
@@ -24,7 +24,7 @@ class AnalyzeLoopTest {
             else message.put("content","completed");
             return new OpenAiChatClient.RawResult(message,"raw");
         });
-        var service=new AnalyzeService(client,null,null,null,null,null,json,mock(PromptManager.class),tools);
+        var service=new AnalyzeService(client,null,null,null,null,null,json,mock(PromptService.class),tools);
         var result=service.commit(List.of(new Triple("subject","relates_to","object",null,null,null,null,null,null)));
         assertEquals(10,result.toolCalls().size());assertEquals("completed",result.finish());assertEquals(11,calls.get());
     }

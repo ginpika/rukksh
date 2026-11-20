@@ -3,7 +3,7 @@ package cc.ginpika.rukksh.ai.memory.recall;
 import cc.ginpika.rukksh.ai.llm.EmbeddingClient;
 import cc.ginpika.rukksh.ai.memory.store.MemoryEventEmbeddingStore;
 import cc.ginpika.rukksh.ai.memory.store.MemoryEventStore;
-import cc.ginpika.rukksh.ai.memory.store.MemoryVecMath;
+import cc.ginpika.rukksh.ai.core.util.VectorMath;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
@@ -98,7 +98,7 @@ public class MemoryRecall {
             float[] v = vecs.get(e.id());
             /* 候选没向量（欠账/旧模型）＝无分，跟在全分事件之后按时间序垫底 */
             float score = qvec == null || v == null ? 0f
-                    : Math.max(0f, MemoryVecMath.cosine(qvec, v));
+                    : Math.max(0f, VectorMath.cosine(qvec, v));
             if(qvec==null && query!=null && !query.isBlank() && (java.util.Objects.toString(e.title(),"")+" "+java.util.Objects.toString(e.payload(),"")).toLowerCase(java.util.Locale.ROOT).contains(query.toLowerCase(java.util.Locale.ROOT))) score=0.7f;
             best.add(new Hit(e,score));if(best.size()>cap) best.poll();
             after=e.id();

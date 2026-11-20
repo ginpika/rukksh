@@ -118,10 +118,4 @@ public class TerminalController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "管理本机工作空间需要管理员身份");
         }
     }
-
-    @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Map<String, String>> error(ResponseStatusException error) {
-        return ResponseEntity.status(error.getStatusCode())
-                .body(Map.of("message", error.getReason() == null ? "请求失败" : error.getReason()));
-    }
 }

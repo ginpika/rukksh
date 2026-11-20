@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.context;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.context.ContextFragment.Layer;
 import cc.ginpika.rukksh.agent.context.ContextFragment.Ref;
 import cc.ginpika.rukksh.agent.context.ContextFragment.Trust;
@@ -24,8 +26,6 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Single-chat pilot selection. Canonical input remains available to steering and the transcript. */
 public final class ContextPlan {
@@ -502,7 +502,7 @@ public final class ContextPlan {
 
     private void checkBudget(long estimated, long allowance) {
         if (estimated > allowance) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST,
                     "上下文预算不足，无法容纳本轮输入、必要约束或当前工具往返（估算输入 " + estimated
                             + " token，可用 " + Math.max(0, allowance) + " token，模型窗口 "
                             + contextWindow + " token）");

@@ -153,7 +153,7 @@ public class WebSnapshotStore {
                 SELECT c.id,?,?,?,? FROM chunks c JOIN web_snapshot s ON s.doc_id=c.doc_id
                 WHERE s.id=? AND s.enabled=1 AND c.id=? AND c.status!='disabled'
                 ON CONFLICT(chunk_id) DO UPDATE SET model=excluded.model,dim=excluded.dim,vec=excluded.vec,updated_at=excluded.updated_at
-                """, model,vector.length,cc.ginpika.rukksh.ai.knowledge.retrieval.VecMath.encode(vector),System.currentTimeMillis(),id,chunkId);
+                """, model,vector.length,cc.ginpika.rukksh.ai.core.util.VectorMath.encode(vector),System.currentTimeMillis(),id,chunkId);
     }
     private String json(Object value) {
         try { return om.writeValueAsString(value); } catch (Exception e) { throw new IllegalStateException(e); }

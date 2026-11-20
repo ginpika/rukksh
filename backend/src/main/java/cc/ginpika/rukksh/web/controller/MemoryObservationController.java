@@ -1,15 +1,16 @@
 package cc.ginpika.rukksh.web.controller;
 
+import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
 import cc.ginpika.rukksh.ai.core.*;
 import cc.ginpika.rukksh.ai.memory.MemoryEditService;
 import cc.ginpika.rukksh.ai.memory.MemoryPolicy;
 import cc.ginpika.rukksh.ai.memory.MemoryLiveContext;
 import cc.ginpika.rukksh.ai.memory.WorkingSetService;
+import cc.ginpika.rukksh.ai.memory.dto.MemoryViews;
 import cc.ginpika.rukksh.ai.memory.store.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.*;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
@@ -22,16 +23,16 @@ public class MemoryObservationController {
     private final MemoryShareStore shares;
     private final MemorySnapshotStore snapshots;
     private final MemoryWorkStore works;
-    private final JdbcTemplate jdbc;
+    private final TurnStore turns;
     private final ObjectMapper json;
     private final WorkingSetService workingSet;
     public MemoryObservationController(MemoryItemStore items, MemoryShareStore shares,
-            MemorySnapshotStore snapshots, MemoryWorkStore works, JdbcTemplate jdbc, ObjectMapper json, WorkingSetService workingSet) {
-        this.items=items; this.shares=shares; this.snapshots=snapshots; this.works=works; this.jdbc=jdbc; this.json=json;
+            MemorySnapshotStore snapshots, MemoryWorkStore works, TurnStore turns, ObjectMapper json, WorkingSetService workingSet) {
+        this.items=items; this.shares=shares; this.snapshots=snapshots; this.works=works; this.turns=turns; this.json=json;
         this.workingSet=workingSet;
     }
     public record Access(long itemId, List<String> reasons, boolean editableByAgent) { }
-    public record Visibility(MemoryExec context, long checkedAt, List<Access> entries, List<MemoryController.WorkingView> work) { }
+    public record Visibility(MemoryExec context, long checkedAt, List<Access> entries, List<MemoryViews.WorkingView> work) { }
 
     @GetMapping("/visibility")
     public Visibility visibility(@RequestParam String agentId, @RequestParam(required=false) String projectId,
@@ -62,7 +63,7 @@ public class MemoryObservationController {
             }
             access.add(new Access(it.id(),List.copyOf(reasons),MemoryEditService.canEdit(exec,it)));
         }
-        return new Visibility(exec,System.currentTimeMillis(),access,workingSet.open(exec,200).stream().map(MemoryController.WorkingView::of).toList());
+        return new Visibility(exec,System.currentTimeMillis(),access,workingSet.open(exec,200).stream().map(MemoryViews.WorkingView::of).toList());
     }
 
     public record SnapshotSummary(String turnId, String sessionId, String agentId, String projectId,
@@ -92,8 +93,7 @@ public class MemoryObservationController {
         List<RequestMemory> requests = new ArrayList<>();
         String note = "该执行没有可关联的逐次模型请求留痕；启动快照不能证明最终发送内容。";
         if (turnId.matches("[0-9]+") && row.sessionId()!=null && !row.sessionId().isBlank()) {
-            List<String> records = jdbc.query("SELECT m.context FROM chat_turn t JOIN chat_message m ON m.id=t.reply_message_id "
-                    + "WHERE t.id=? AND t.session_id=?", (rs,n)->rs.getString(1), turnId,row.sessionId());
+            List<String> records = turns.replyContexts(turnId, row.sessionId());
             JsonNode calls = records.isEmpty() ? null : parse(records.get(0));
             if (calls!=null && calls.isArray()) {
                 for (JsonNode call : calls) {
@@ -109,8 +109,8 @@ public class MemoryObservationController {
         return new SnapshotDetail(summary,complete ? content : null,row.itemIds(),requests,note);
     }
     @GetMapping("/working")
-    public List<MemoryController.WorkingView> observedWork(@RequestParam(defaultValue="200") int limit) {
-        return works.recentObserved(limit).stream().map(MemoryController.WorkingView::of).toList();
+    public List<MemoryViews.WorkingView> observedWork(@RequestParam(defaultValue="200") int limit) {
+        return works.recentObserved(limit).stream().map(MemoryViews.WorkingView::of).toList();
     }
     private String memorySection(JsonNode request) {
         if (request==null) { return null; }

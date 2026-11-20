@@ -9,7 +9,7 @@ import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
 import cc.ginpika.rukksh.agent.chat.turn.TurnTrigger;
 import cc.ginpika.rukksh.agent.context.ChatProtocol;
 import cc.ginpika.rukksh.agent.subagent.SubagentScope;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.core.prompt.block.SubagentSummaryBlock;
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.config.ContextProps;
@@ -57,7 +57,7 @@ public class SubagentDeliveryService {
     /** Turn 正本：子代理投回也要落一条 Turn，历史配对才完整 */
     private final TurnStore turnStore;
     private final ObjectMapper om;
-    private final PromptManager prompts;
+    private final PromptService prompts;
     private final SessionEventBus events;
     private final SubagentSynthesis synthesizer;
     private final SubagentScope scope;
@@ -74,7 +74,7 @@ public class SubagentDeliveryService {
     public SubagentDeliveryService(SettingsService settings, OpenAiChatClient client,
                                    HubSessionStore sessions, ChatMessageStore messages,
                                    TurnStore turnStore,
-                                   ObjectMapper om, PromptManager prompts, SessionEventBus events,
+                                   ObjectMapper om, PromptService prompts, SessionEventBus events,
                                    SubagentSynthesis synthesizer, SubagentScope scope,
                                    ContextProps contextProps, TransactionTemplate transactions) {
         this.settings = settings;

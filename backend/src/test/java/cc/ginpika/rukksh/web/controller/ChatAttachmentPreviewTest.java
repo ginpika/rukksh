@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import cc.ginpika.rukksh.agent.chat.ChatAttachments.Content;
 import cc.ginpika.rukksh.agent.chat.ChatSessionService;
 import cc.ginpika.rukksh.agent.chat.store.ChatMessageStore;
+import cc.ginpika.rukksh.web.advice.WebExceptionAdvice;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -49,7 +50,7 @@ class ChatAttachmentPreviewTest {
         messageId = messages.insert("first", "user", "读取附件", null, null, null, null, null, stored);
         oldMessageId = messages.insert("first", "user", "早期消息", null, null, null, null, null);
         var sessions = new ChatSessionService(null, messages, null, null, json, null, null, null, null, null);
-        mvc = MockMvcBuilders.standaloneSetup(new ChatController(null, null, sessions, null, null, null, json, null)).build();
+        mvc = MockMvcBuilders.standaloneSetup(new ChatController(null, null, sessions, null, null, null, json, null)).setControllerAdvice(new WebExceptionAdvice()).build();
     }
 
     @AfterEach

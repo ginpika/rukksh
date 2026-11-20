@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.context;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.core.MemoryExec;
 import cc.ginpika.rukksh.ai.core.MemoryScopeCtx;
 import cc.ginpika.rukksh.ai.core.MemorySurface;
@@ -38,7 +40,7 @@ public class ContextBuilder {
     public ContextBuilder(ObjectMapper om, List<ContextProvider> providers) {
         this.om = om;
         /* 顺序即拼装顺序：Spring 已按 @Order 排好，这里保留注入顺序——
-           与 ToolManager 不同，上下文源的顺序有语义，不能按名字重排 */
+           与 ToolRegistry 不同，上下文源的顺序有语义，不能按名字重排 */
         this.providers = providers;
     }
 
@@ -127,8 +129,7 @@ public class ContextBuilder {
             MemoryLiveContext.takeCaptured();
         }
         if (currentUserId > 0 && current == null) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.CONFLICT, "本轮用户消息已不在会话中");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "本轮用户消息已不在会话中");
         }
         if (extras != null) {
             // R1：任务段的角色与约束先于续接摘录，均属必带片段，随任务段退出默认回放。

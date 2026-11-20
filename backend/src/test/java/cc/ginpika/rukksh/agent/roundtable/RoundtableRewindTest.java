@@ -1,5 +1,13 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -13,7 +21,6 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
-import org.springframework.web.server.ResponseStatusException;
 
 class RoundtableRewindTest {
     static class Fixture implements AutoCloseable {
@@ -78,7 +85,7 @@ class RoundtableRewindTest {
         try (var f = new Fixture()) {
             long peer = f.peer(f.root); String other = f.sessions.insert("[]"); long foreign = f.user(other, "其他会话");
             for (Long id : java.util.Arrays.asList(peer, foreign, null)) {
-                assertEquals(400, assertThrows(ResponseStatusException.class, () -> f.service.rewind(f.root, id)).getStatusCode().value());
+                assertEquals(400, assertThrows(DomainException.class, () -> f.service.rewind(f.root, id)).statusCode());
             }
             assertEquals(1, f.messages.bySession(f.root).size());
             verifyNoInteractions(f.memories, f.ingest);
@@ -89,12 +96,12 @@ class RoundtableRewindTest {
         try (var f = new Fixture()) {
             long target = f.user(f.root, "问题"); var issue = f.issue();
             when(f.work.workingCount(issue.sessionId())).thenReturn(1);
-            assertEquals(409, assertThrows(ResponseStatusException.class, () -> f.service.rewind(f.root, target)).getStatusCode().value());
+            assertEquals(409, assertThrows(DomainException.class, () -> f.service.rewind(f.root, target)).statusCode());
             assertTrue(f.messages.message(target).isPresent()); verifyNoInteractions(f.memories);
             when(f.work.workingCount(issue.sessionId())).thenReturn(0);
             when(f.discussions.snapshot(f.root)).thenReturn(new RoundtableDiscussionRuntime.ConversationSnapshot(
                     f.root, "multi-agent", true, null, null, null, Map.of(), Map.of()));
-            assertThrows(ResponseStatusException.class, () -> f.service.rewind(f.root, target));
+            assertThrows(DomainException.class, () -> f.service.rewind(f.root, target));
         }
     }
 
@@ -105,7 +112,7 @@ class RoundtableRewindTest {
             assertEquals(2, f.service.rewind(issue.sessionId(), target).removed());
             assertTrue(f.messages.message(parent).isPresent()); assertTrue(f.progress.allowed(f.root));
             long next = f.user(issue.sessionId(), "新的问题"); f.issues.resolve(issue.id(), "结论");
-            assertEquals(409, assertThrows(ResponseStatusException.class, () -> f.service.rewind(issue.sessionId(), next)).getStatusCode().value());
+            assertEquals(409, assertThrows(DomainException.class, () -> f.service.rewind(issue.sessionId(), next)).statusCode());
             assertTrue(f.messages.message(next).isPresent());
         }
     }
@@ -139,7 +146,7 @@ class RoundtableRewindTest {
         when(sessions.findById("session")).thenReturn(java.util.Optional.of(row));
         var service = new cc.ginpika.rukksh.agent.chat.ChatSessionService(
                 sessions, null, null, null, null, null, null, null, null, null);
-        assertEquals(409, assertThrows(ResponseStatusException.class, () -> service.rewind("session", 1L, null)).getStatusCode().value());
+        assertEquals(409, assertThrows(DomainException.class, () -> service.rewind("session", 1L, null)).statusCode());
     }
 
     @Test void retractsExecutionMemoryAndCheckpointsWithoutDeletingAuditOrOtherSessions() throws Exception {

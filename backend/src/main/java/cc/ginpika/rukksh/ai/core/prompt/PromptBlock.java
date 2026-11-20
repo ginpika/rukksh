@@ -7,13 +7,13 @@ import java.util.Set;
  *
  * <p>块是开发者亲手写下的编程契约（key、名称、说明、内置正文、可出现的上下文），各自独立演进、
  * 互不干扰——与工具侧的 {@code AiTool} 每工具一类完全同构。按上下文把块组装成最终 system 由
- * {@link PromptComposer} 负责（经 {@link PromptManager} 对外提供），用户版本/绑定/顺序的写操作
- * 也在 {@link PromptManager}。
+ * {@link PromptComposer} 负责（经 {@link PromptService} 对外提供），用户版本/绑定/顺序的写操作
+ * 也在 {@link PromptService}。
  *
  * <p>内置正文只是缺省值：用户可在「潜意识 · 提示词」页为任意块保存多份版本
  * （{@code prompt_version}）并选定一份覆盖内置（{@code prompt_binding}）。
  * 注意：{@code identity} 块没有代码内置（来自 .env 的 {@code LLM_SYSTEM_PROMPT}），
- * 其 {@link #builtin()} 返回 null，由 {@link PromptManager} 兜底。
+ * 其 {@link #builtin()} 返回 null，由 {@link PromptService} 兜底。
  */
 public interface PromptBlock {
 

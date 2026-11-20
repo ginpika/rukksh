@@ -2,7 +2,7 @@ package cc.ginpika.rukksh.ai.core.prompt.dto;
 
 import java.util.List;
 
-/** 提示词页请求/响应对（ai.core.prompt.PromptManager ↔ 前端） */
+/** 提示词页请求/响应对（ai.core.prompt.PromptService ↔ 前端） */
 public final class PromptDtos {
 
     /** 用户保存的一份提示词版本 */

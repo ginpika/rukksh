@@ -1,7 +1,7 @@
 package cc.ginpika.rukksh.coding;
 
 import cc.ginpika.rukksh.coding.integration.*;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.store.CodingStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;

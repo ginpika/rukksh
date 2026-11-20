@@ -1,10 +1,10 @@
 package cc.ginpika.rukksh.config;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.config.store.DeepSeekWebStore;
 import java.net.URI;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Search/Fetch credentials are independent of the selected chat model. Views never return the key. */
 @Service
@@ -38,7 +38,7 @@ public class DeepSeekWebSettings {
             require(("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
                     && uri.getHost() != null && uri.getPort() <= 65535 && uri.getRawUserInfo() == null
                     && uri.getRawQuery() == null && uri.getRawFragment() == null, "请输入有效的 HTTP(S) API 根地址");
-        } catch (IllegalArgumentException e) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请输入有效的 HTTP(S) API 根地址"); }
+        } catch (IllegalArgumentException e) { throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "请输入有效的 HTTP(S) API 根地址"); }
         String key = d.apiKey() == null ? resolve().apiKey() : d.apiKey().strip();
         require(key.chars().allMatch(c -> c >= 33 && c < 127), "API Key 不能包含空白或非 ASCII 字符");
         require(!(requireKey || d.fastEnabled() || d.ragEnabled()) || !key.isBlank(), "请先填写 DeepSeek API Key");
@@ -48,6 +48,6 @@ public class DeepSeekWebSettings {
     }
     public View save(Draft d) { Config c = validate(d, false); store.save(c); return view(c); }
     private static void require(boolean condition, String message) {
-        if (!condition) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        if (!condition) throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, message);
     }
 }

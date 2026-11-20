@@ -1,5 +1,9 @@
 package cc.ginpika.rukksh.agent.roundtable;
 
+
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableMessageStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -22,7 +26,7 @@ class RoundtableTaskToolsTest {
     private final AgentDirectory directory = mock(AgentDirectory.class);
     private final RuntimeEventBus events = mock(RuntimeEventBus.class);
     private final RoundtableTaskTools tools = new RoundtableTaskTools(om, board, directory, events,
-            mock(CollaborationStore.class), mock(CollaborationIssueActions.class), mock(CollaborationPlan.class), mock(RoundtableMessageStore.class),mock(CollaborationScopeGuard.class),mock(cc.ginpika.rukksh.coding.CodingFacade.class),mock(CollaborationQuality.class),mock(org.springframework.transaction.support.TransactionTemplate.class),mock(cc.ginpika.rukksh.project.ProjectKnowledgeStore.class));
+            mock(CollaborationStore.class), mock(CollaborationIssueActions.class), mock(CollaborationPlan.class), mock(RoundtableMessageStore.class),mock(CollaborationScopeGuard.class),mock(cc.ginpika.rukksh.coding.CodingService.class),mock(CollaborationQuality.class),mock(org.springframework.transaction.support.TransactionTemplate.class),mock(cc.ginpika.rukksh.project.ProjectKnowledgeStore.class));
     private final RoundtableTodoStore.TodoRow todo = new RoundtableTodoStore.TodoRow(
             "todo", "session", "topic", "peer", "work", null, null, 0, "doing", "peer",
             null, null, null, 1, 1L, 1L);

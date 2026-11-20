@@ -1,6 +1,7 @@
 package cc.ginpika.rukksh.web.terminal;
 
 import cc.ginpika.rukksh.ai.computer.terminal.InteractiveTerminals;
+import cc.ginpika.rukksh.shared.error.DomainException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
@@ -40,7 +41,8 @@ public class TerminalSocket extends TextWebSocketHandler implements HandshakeInt
             enabled();String path=request.getURI().getPath();String token=path.substring(path.lastIndexOf('/')+1);
             var grant=tickets.redeem(token,request.getHeaders().getOrigin());
             terminals.checkAccess(grant.owner(),grant.project(),grant.terminal(),grant.after());attributes.put(GRANT,grant);return true;
-        }catch(ResponseStatusException error){response.setStatusCode(error.getStatusCode());return false;}
+        }catch(DomainException error){response.setStatusCode(HttpStatus.valueOf(error.statusCode()));return false;}
+        catch(ResponseStatusException error){response.setStatusCode(error.getStatusCode());return false;}
     }
     @Override public void afterHandshake(ServerHttpRequest request,ServerHttpResponse response,WebSocketHandler handler,Exception error) {}
     @Override public synchronized void afterConnectionEstablished(WebSocketSession socket) throws Exception {
@@ -89,7 +91,9 @@ public class TerminalSocket extends TextWebSocketHandler implements HandshakeInt
     private void send(Connection connection,Object value) throws IOException {synchronized(connection.socket){if(connection.socket.isOpen()){connection.socket.sendMessage(new TextMessage(json.writeValueAsString(value)));}}}
     private void fail(Connection connection,Exception error){
         try{
-            if(error instanceof ResponseStatusException status && (status.getStatusCode().value()==404 || status.getStatusCode().value()==409)){send(connection,Map.of("type","exit","error",status.getStatusCode().value()==404?"":String.valueOf(status.getReason())));}
+            if(error instanceof DomainException domain && (domain.statusCode()==404 || domain.statusCode()==409)){send(connection,Map.of("type","exit","error",domain.statusCode()==404?"":String.valueOf(domain.getMessage())));}
+            else if(error instanceof DomainException domain){send(connection,Map.of("type","error","message",domain.getMessage()==null?"终端连接失败":domain.getMessage()));}
+            else if(error instanceof ResponseStatusException status && (status.getStatusCode().value()==404 || status.getStatusCode().value()==409)){send(connection,Map.of("type","exit","error",status.getStatusCode().value()==404?"":String.valueOf(status.getReason())));}
             else{String reason=error instanceof ResponseStatusException status?status.getReason():error.getMessage();send(connection,Map.of("type","error","message",reason==null?"终端连接失败":reason));}
             connection.socket.close(CloseStatus.SERVER_ERROR);
         }catch(IOException ignored){}finally{connections.remove(connection.socket.getId(),connection);connection.stop();}

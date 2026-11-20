@@ -1,8 +1,8 @@
 package cc.ginpika.rukksh.coding.store;
 
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.ai.core.BuiltinAgents;
-import cc.ginpika.rukksh.coding.context.CodingExecutionScope;
+import cc.ginpika.rukksh.coding.store.CodingExecutionScope;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;

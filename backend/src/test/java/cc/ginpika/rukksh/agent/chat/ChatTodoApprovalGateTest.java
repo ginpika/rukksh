@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cc.ginpika.rukksh.agent.chat.store.HubSessionStore;
-import cc.ginpika.rukksh.agent.runtime.TodoStore;
+import cc.ginpika.rukksh.agent.runtime.SessionTodoStore;
 import cc.ginpika.rukksh.config.ContextProps;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -29,8 +29,8 @@ class ChatTodoApprovalGateTest {
     private final JdbcTemplate jdbc = new JdbcTemplate(ds);
     private final ObjectMapper om = new ObjectMapper();
     private final ContextProps props = new ContextProps();
-    private final TodoStore todos = new TodoStore(jdbc);
-    private final TodoService service = new TodoService(todos, new HubSessionStore(jdbc), om,
+    private final SessionTodoStore todos = new SessionTodoStore(jdbc);
+    private final SessionTodoService service = new SessionTodoService(todos, new HubSessionStore(jdbc), om,
             mockEvents());
 
     private static SessionEventBus mockEvents() {
@@ -121,7 +121,7 @@ class ChatTodoApprovalGateTest {
     private String statusOf(String content) {
         return todos.list(SESSION, OWNER).stream()
                 .filter(item -> item.content().equals(content))
-                .map(TodoStore.TodoItem::status)
+                .map(SessionTodoStore.TodoItem::status)
                 .findFirst().orElse(null);
     }
 }

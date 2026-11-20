@@ -2,7 +2,6 @@ package cc.ginpika.rukksh.agent.member;
 
 import cc.ginpika.rukksh.agent.member.AgentStore;
 import cc.ginpika.rukksh.agent.member.AgentStore.AgentRow;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableSessionStore;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
 import cc.ginpika.rukksh.ai.core.BuiltinAgents;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -57,13 +56,13 @@ public class AgentDirectory {
     private static final String AVATAR_PREFIX = "data:image/";
 
     private final AgentStore store;
-    private final RoundtableSessionStore sessions;
+    private final SessionMemberLookup sessions;
     private final AgentPromptService peerPrompts;
     /** 绑定工作空间时按 id 校验目标确实存在（删除的目标会自然失效，见 {@link #declaredTerminals}） */
     private final TerminalStore terminals;
     private final ObjectMapper om;
 
-    public AgentDirectory(AgentStore store, RoundtableSessionStore sessions, AgentPromptService peerPrompts,
+    public AgentDirectory(AgentStore store, SessionMemberLookup sessions, AgentPromptService peerPrompts,
                          TerminalStore terminals, ObjectMapper om) {
         this.store = store;
         this.sessions = sessions;
@@ -239,8 +238,7 @@ public class AgentDirectory {
         if (sessionId == null || sessionId.isBlank()) {
             return List.of();
         }
-        String raw = sessions.findById(sessionId).map(RoundtableSessionStore.SessionRow::memberIds)
-                .orElse(null);
+        String raw = sessions.memberIdsJson(sessionId).orElse(null);
         if (raw == null || raw.isBlank()) {
             return List.of();
         }

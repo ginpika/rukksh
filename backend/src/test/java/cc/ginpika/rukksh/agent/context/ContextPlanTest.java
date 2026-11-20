@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.context;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -14,7 +16,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
 
 class ContextPlanTest {
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -46,10 +47,10 @@ class ContextPlanTest {
         int required = requiredWindow(current);
         var plan = plan(required - 1, current);
 
-        var failure = assertThrows(ResponseStatusException.class, () -> plan.fit(plan.body()));
-        assertEquals(400, failure.getStatusCode().value());
-        assertTrue(failure.getReason().contains("上下文预算不足"));
-        assertTrue(failure.getReason().contains("模型窗口 " + (required - 1)));
+        var failure = assertThrows(DomainException.class, () -> plan.fit(plan.body()));
+        assertEquals(400, failure.statusCode());
+        assertTrue(failure.getMessage().contains("上下文预算不足"));
+        assertTrue(failure.getMessage().contains("模型窗口 " + (required - 1)));
     }
 
     @Test

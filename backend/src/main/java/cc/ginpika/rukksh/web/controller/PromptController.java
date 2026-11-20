@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.web.controller;
 
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.core.prompt.dto.PromptDtos;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,16 +15,16 @@ import org.springframework.web.bind.annotation.RestController;
  * 提示词页（潜意识 · 提示词）：内置提示词的用户版本、生效选择与拼装顺序。
  *
  * <p>对话 / 圆桌提示词已逐 Agent 化（见 {@code AgentController} 的 {@code /peers/{id}/prompts}），
- * 故本页只展示<b>开发者选项</b>（流水线上的自动环节）——读写统一经 {@link PromptManager}
+ * 故本页只展示<b>开发者选项</b>（流水线上的自动环节）——读写统一经 {@link PromptService}
  * （提示词子系统的唯一门面）；所有写操作后都返回最新全量视图，前端直接覆盖即可。
  */
 @RestController
 @RequestMapping("/api/prompts")
 public class PromptController {
 
-    private final PromptManager prompts;
+    private final PromptService prompts;
 
-    public PromptController(PromptManager prompts) {
+    public PromptController(PromptService prompts) {
         this.prompts = prompts;
     }
 

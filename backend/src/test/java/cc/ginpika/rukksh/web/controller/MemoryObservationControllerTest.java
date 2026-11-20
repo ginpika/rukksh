@@ -1,8 +1,10 @@
 package cc.ginpika.rukksh.web.controller;
 
 import static org.junit.jupiter.api.Assertions.*;
+import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
 import cc.ginpika.rukksh.ai.core.*;
 import cc.ginpika.rukksh.ai.memory.*;
+import cc.ginpika.rukksh.ai.memory.dto.MemoryViews;
 import cc.ginpika.rukksh.ai.memory.store.*;
 import cc.ginpika.rukksh.config.MemoryProps;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,7 +31,7 @@ class MemoryObservationControllerTest {
             ScriptUtils.executeSqlScript(ds.getConnection(),new ClassPathResource("schema.sql"));
             items=new MemoryItemStore(jdbc,new MemoryRevisionStore(jdbc));
             shares=new MemoryShareStore(jdbc); snapshots=new MemorySnapshotStore(jdbc); works=new MemoryWorkStore(jdbc);
-            controller=new MemoryObservationController(items,shares,snapshots,works,jdbc,json,new WorkingSetService(works,null,new MemoryProps()));
+            controller=new MemoryObservationController(items,shares,snapshots,works,new TurnStore(jdbc),json,new WorkingSetService(works,null,new MemoryProps()));
         }
         long item(String owner,String layer,String project,String agent,String session) {
             return items.insert(new MemoryItemStore.Ownership(null,owner,owner.equals("USER") ? "USER_PROFILE" : owner.equals("TASK") ? "TASK_EPISODIC" : owner,layer,project,session,null,agent),
@@ -106,7 +108,7 @@ class MemoryObservationControllerTest {
             f.works.add("s",null,"a","other","progress",null,"其他项目",null,null,null);
             f.works.add("s",null,"a","p","progress",null,"过期",null,null,1L);
             assertEquals(4,f.controller.observedWork(200).size());
-            assertEquals(List.of(live),f.controller.visibility("a","p","s",null).work().stream().map(MemoryController.WorkingView::id).toList());
+            assertEquals(List.of(live),f.controller.visibility("a","p","s",null).work().stream().map(MemoryViews.WorkingView::id).toList());
             assertTrue(f.controller.visibility("a","p",null,null).work().isEmpty());
         }
     }

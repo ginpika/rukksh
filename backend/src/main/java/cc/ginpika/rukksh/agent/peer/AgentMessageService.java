@@ -15,7 +15,7 @@ import cc.ginpika.rukksh.ai.core.MemorySurface;
 import cc.ginpika.rukksh.ai.core.tool.AiTool;
 import cc.ginpika.rukksh.ai.core.tool.NowTool;
 import cc.ginpika.rukksh.ai.core.tool.ToolDomain;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolResult;
 import cc.ginpika.rukksh.ai.core.tool.ToolRisk;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
@@ -23,7 +23,7 @@ import cc.ginpika.rukksh.ai.core.tool.agentmessage.ListAgentsTool;
 import cc.ginpika.rukksh.ai.core.tool.agentmessage.ReadAgentMessageTool;
 import cc.ginpika.rukksh.ai.core.tool.agentmessage.SendAgentMessageTool;
 import cc.ginpika.rukksh.ai.core.tool.doc.WebBrowserTool;
-import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolbox;
+import cc.ginpika.rukksh.agent.runtime.AgentToolRouter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,8 +46,8 @@ public class AgentMessageService {
 
     private final AgentDirectory directory;
     private final AgentPromptService prompts;
-    private final ToolManager tools;
-    private final KnowledgeToolbox toolbox;
+    private final ToolRegistry tools;
+    private final AgentToolRouter toolbox;
     private final AgentRunner runner;
     private final TaskStore tasks;
     private final ExecStore execs;
@@ -59,8 +59,8 @@ public class AgentMessageService {
     private final ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
     private final Object acceptance = new Object();
 
-    public AgentMessageService(AgentDirectory directory, AgentPromptService prompts, ToolManager tools,
-                               KnowledgeToolbox toolbox, AgentRunner runner, TaskStore tasks, ExecStore execs,
+    public AgentMessageService(AgentDirectory directory, AgentPromptService prompts, ToolRegistry tools,
+                               AgentToolRouter toolbox, AgentRunner runner, TaskStore tasks, ExecStore execs,
                                HubSessionStore sessions, AgentMessageDelivery delivery,
                                AgentMessageReceipt receipts, ObjectMapper om) {
         this.directory = directory;

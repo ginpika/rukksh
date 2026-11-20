@@ -3,6 +3,7 @@ package cc.ginpika.rukksh.todo;
 import static cc.ginpika.rukksh.todo.TodoDtos.*;
 
 import cc.ginpika.rukksh.project.ProjectStore;
+import cc.ginpika.rukksh.shared.error.DomainException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -18,13 +19,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Personal state is authoritative here; memory and Agent runtimes cannot infer effort. */
-@Service("personalTodoService")
+@Service
 public class TodoService {
     private static final Set<String> STATES = Set.of("idea", "ready", "doing", "done", "dropped");
     private final TodoStore store;
@@ -284,8 +283,8 @@ public class TodoService {
     private static boolean matches(Item t,String project) {
         return project==null||project.isBlank()||("unassigned".equals(project)?t.projectId()==null:project.equals(t.projectId()));
     }
-    private Item item(String owner,String id) { return store.find(owner,id,clock.millis()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"事项不存在")); }
-    private Focus focus(String owner,String id) { return store.focusById(owner,id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"投入记录不存在")); }
+    private Item item(String owner,String id) { return store.find(owner,id,clock.millis()).orElseThrow(()->DomainException.notFound("事项不存在")); }
+    private Focus focus(String owner,String id) { return store.focusById(owner,id).orElseThrow(()->DomainException.notFound("投入记录不存在")); }
     private static boolean isOpen(Item t) { return !List.of("done","dropped").contains(t.state()); }
     private String project(String owner, String id, Item existing) {
         if(id==null) return null;
@@ -324,6 +323,6 @@ public class TodoService {
     }
     private static String text(String value,int max,String label) { String s=value==null?"":value; if(s.length()>max) throw bad(label+"最多 "+max+" 字"); return s; }
     private static String blank(String s) { return s==null||s.isBlank()?null:s.trim(); }
-    private static ResponseStatusException bad(String text) { return new ResponseStatusException(HttpStatus.BAD_REQUEST,text); }
-    private static ResponseStatusException conflict(String text) { return new ResponseStatusException(HttpStatus.CONFLICT,text); }
+    private static DomainException bad(String text) { return DomainException.badRequest(text); }
+    private static DomainException conflict(String text) { return DomainException.conflict(text); }
 }

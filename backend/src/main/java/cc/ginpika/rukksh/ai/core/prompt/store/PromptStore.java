@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 /**
  * 提示词「用户版本」持久化：prompt_version（每个提示词位下多份用户版本）+ prompt_binding
  * （每个提示词位选定哪一份覆盖内置）。内置提示词不入库，由
- * {@link cc.ginpika.rukksh.ai.core.prompt.PromptManager} 按 {@code PromptLibrary} 与 .env 合成。
+ * {@link cc.ginpika.rukksh.ai.core.prompt.PromptService} 按 {@code PromptLibrary} 与 .env 合成。
  */
 @Repository
 public class PromptStore {

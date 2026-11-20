@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cc.ginpika.rukksh.agent.roundtable.TopicStateMachine.PeerState;
 import cc.ginpika.rukksh.agent.member.AgentStore.AgentRow;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicEventStore;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicStore;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTopicStore.TopicRow;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicEventStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTopicStore.TopicRow;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;

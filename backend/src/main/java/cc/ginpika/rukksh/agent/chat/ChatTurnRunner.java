@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.llm.OpenAiChatClient;
 import cc.ginpika.rukksh.ai.memory.MemoryWriter;
 import cc.ginpika.rukksh.agent.chat.ChatStream.ChatCancelledException;
@@ -13,7 +15,7 @@ import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.ai.core.MemoryIdentity;
 import cc.ginpika.rukksh.ai.core.MemoryScopeCtx;
 import cc.ginpika.rukksh.ai.memory.MemoryStage;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.chat.RequestTodoCompletionTool;
 import cc.ginpika.rukksh.ai.core.tool.chat.RequestUserInputTool;
 import cc.ginpika.rukksh.ai.core.tool.doc.FetchWebTool;
@@ -48,9 +50,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /** 单次会话执行：协调任务、流式过程、停止与结果落库；模型循环由 AgentRuntime 执行。 */
 @Service
@@ -69,13 +69,13 @@ public class ChatTurnRunner implements ChatExecution {
     private final HubSessionStore sessions;
     private final ChatMessageStore messages;
     private final ObjectMapper om;
-    private final ToolManager tools;
-    private final SubagentTool subagent;
+    private final ToolRegistry tools;
+    private final SubagentToolPort subagent;
     private final MemoryWriter memory;
     private final ProjectStore projects;
     private final ChatTaskRunner chatTasks;
     private final TurnStore turnStore;
-    private final TodoService todo;
+    private final SessionTodoService todo;
     private final ChatContextService chatContext;
     private final ChatToolDispatcher toolDispatcher;
     private final ChatTurnCompletion completion;
@@ -101,13 +101,13 @@ public class ChatTurnRunner implements ChatExecution {
             HubSessionStore sessions,
             ChatMessageStore messages,
             ObjectMapper om,
-            ToolManager tools,
-            SubagentTool subagent,
+            ToolRegistry tools,
+            SubagentToolPort subagent,
             MemoryWriter memory,
             ProjectStore projects,
             ChatTaskRunner chatTasks,
             TurnStore turnStore,
-            TodoService todo,
+            SessionTodoService todo,
             ChatContextService chatContext,
             ChatToolDispatcher toolDispatcher,
             ChatTurnCompletion completion) {
@@ -202,7 +202,7 @@ public class ChatTurnRunner implements ChatExecution {
     public long steer(String hubId, long messageId, String input, String actorId) {
         ChatSteering steering = activeSteering.get(hubId);
         if (steering == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "本轮回复已结束，请重新发送");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "本轮回复已结束，请重新发送");
         }
         return steering.submit(messageId, actorId, input);
     }
@@ -255,18 +255,18 @@ public class ChatTurnRunner implements ChatExecution {
                             + "LLM_BASE_URL / LLM_API_KEY / LLM_CHAT_MODEL");
         }
         if (!ChatAttachments.supportsImages(target.model()) && attachments.stream().anyMatch(ChatAttachments.Content::image)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前模型不支持图片，请切换到支持图片的模型");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "当前模型不支持图片，请切换到支持图片的模型");
         }
         String effort = reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.strip();
         if (effort != null && !ModelReasoning.efforts(target.model(), target.apiFormat()).contains(effort)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该模型不支持所选的思考强度");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST, "该模型不支持所选的思考强度");
         }
         /* 在途锁（STEP 4）：同一会话同一时刻只允许一次生成。重复触发（双击发送 / 两个标签页同时发）
            在这里被后端挡住，不再单靠前端 sendingRef；被拒的这次不落库、不动历史。
            圆桌那条流自管节拍（singleFlight=false），不受此锁约束——保持旧行为零变化 */
         boolean locked = exec.singleFlight() && inflight.add(row.id());
         if (exec.singleFlight() && !locked) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
+            throw new DomainException(DomainException.ErrorKind.CONFLICT,
                     "该会话正在生成中，请等它答完或先点停止。");
         }
         boolean steerable = exec == this && locked && sink != null && sink.steerable();
@@ -291,7 +291,7 @@ public class ChatTurnRunner implements ChatExecution {
                 inflight.remove(row.id());
             }
             /* 生成收尾（成功 / 取消 / 异常都走这里）：把该会话遗留的「进行中」收敛为「未开始」，
-               于是清单不会因中断 / 超限长期卡在 in_progress（见 TodoService#settle）。
+               于是清单不会因中断 / 超限长期卡在 in_progress（见 SessionTodoService#settle）。
                归属口径与写入侧一致：圆桌在外层设了成员作用域就用它，否则按会话绑定的 Agent */
             if (exec.settleTodosOnFinish()) {
                 todo.settle(row.id(), AgentScope.get() != null ? AgentScope.get() : agentOf(row));
@@ -622,7 +622,7 @@ public class ChatTurnRunner implements ChatExecution {
             if (continuation != null && !partial.isBlank()) {
                 try {
                     contextRun.verifyContinuation();
-                } catch (ResponseStatusException stale) {
+                } catch (DomainException stale) {
                     partial = "";
                 }
             }
@@ -888,7 +888,7 @@ public class ChatTurnRunner implements ChatExecution {
             return sessions.latest().orElseGet(this::insertNew);
         }
         return sessions.findById(hubId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在: " + hubId));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "会话不存在: " + hubId));
     }
 
     @Override

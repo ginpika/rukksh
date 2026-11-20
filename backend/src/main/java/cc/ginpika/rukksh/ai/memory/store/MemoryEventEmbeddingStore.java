@@ -1,5 +1,6 @@
 package cc.ginpika.rukksh.ai.memory.store;
 
+import cc.ginpika.rukksh.ai.core.util.VectorMath;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,7 +32,7 @@ public class MemoryEventEmbeddingStore {
                         + "SELECT id,?,?,?,? FROM memory_event WHERE id=? "
                         + "ON CONFLICT(event_id) DO UPDATE SET model=excluded.model, "
                         + "dim=excluded.dim, vec=excluded.vec, updated_at=excluded.updated_at",
-                model, vec.length, MemoryVecMath.encode(vec), System.currentTimeMillis(),eventId);
+                model, vec.length, VectorMath.encode(vec), System.currentTimeMillis(),eventId);
     }
 
     /** 指定事件集里当前模型的向量（已解码；缺向量/模型不符的事件不在结果里） */
@@ -45,7 +46,7 @@ public class MemoryEventEmbeddingStore {
                         + "WHERE model = ? AND event_id IN (" + in + ")",
                 rs -> {
                     out.put(rs.getLong("event_id"),
-                            MemoryVecMath.decode(rs.getBytes("vec"), rs.getInt("dim")));
+                            VectorMath.decode(rs.getBytes("vec"), rs.getInt("dim")));
                 },
                 model);
         return out;

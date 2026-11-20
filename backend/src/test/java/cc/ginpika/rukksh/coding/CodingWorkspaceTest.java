@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.coding;
 
-import cc.ginpika.rukksh.coding.api.CodingDtos.Repository;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.Repository;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.repository.CodingWorkspace;
 import com.fasterxml.jackson.databind.ObjectMapper;

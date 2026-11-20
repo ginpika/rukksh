@@ -1,11 +1,13 @@
 package cc.ginpika.rukksh.coding.workspace;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.workspace.WorkspaceDtos;
 import cc.ginpika.rukksh.agent.workspace.WorkspaceService;
 import cc.ginpika.rukksh.ai.computer.terminal.ExecTarget;
 import cc.ginpika.rukksh.ai.computer.terminal.exec.LocalExecTarget;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.coding.config.CodingProps;
 import cc.ginpika.rukksh.coding.repository.CodingWorkspace;
 import cc.ginpika.rukksh.coding.store.CodingStore;
@@ -13,11 +15,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Workspace identity/credentials are owned by the existing terminal domain, never copied here. */
 @Service
@@ -64,7 +64,7 @@ public class WorkspaceProjects {
     }
     public CodingProject project(String owner,String id){
         Repository repo=store.repository(id,owner);Binding binding=binding(id);
-        if(repo==null || binding==null){throw new ResponseStatusException(HttpStatus.NOT_FOUND,"编程项目不存在");}
+        if(repo==null || binding==null){throw new DomainException(DomainException.ErrorKind.NOT_FOUND,"编程项目不存在");}
         var target=terminals.targetById(binding.workspaceId()).orElse(null);
         boolean recentHidden=jdbc.queryForObject("SELECT COUNT(*) FROM coding_hidden_recent_project WHERE repository_id=?",Integer.class,id)>0;
         return new CodingProject(id,repo.name(),binding.workspaceId(),target==null?"工作空间已删除":target.name(),target==null?"unknown":target.kind(),binding.directory(),repo.validationCommand(),target!=null && target.enabled() && !LocalExecTarget.KIND.equals(target.kind()) && fingerprint(target).equals(binding.fingerprint()),repo.createdAt(),recentHidden);
@@ -329,5 +329,5 @@ public class WorkspaceProjects {
     }
     private static String join(String parent,String relative){return parent.equals(".")?relative:relative.equals(".")?parent:parent+"/"+relative;}
     public static String q(String text){return ExecTarget.quote(text);}
-    private static ResponseStatusException bad(String text){return new ResponseStatusException(HttpStatus.BAD_REQUEST,text);}
+    private static DomainException bad(String text){return new DomainException(DomainException.ErrorKind.BAD_REQUEST,text);}
 }

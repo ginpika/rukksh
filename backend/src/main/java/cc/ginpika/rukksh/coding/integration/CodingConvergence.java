@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.coding.integration;
 
-import cc.ginpika.rukksh.coding.api.CodingDtos.Run;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.Run;
 import cc.ginpika.rukksh.coding.store.CodingStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;

@@ -3,6 +3,7 @@ package cc.ginpika.rukksh.ai.memory;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import cc.ginpika.rukksh.ai.core.*;
+import cc.ginpika.rukksh.ai.core.util.VectorMath;
 import cc.ginpika.rukksh.ai.knowledge.store.GraphStore;
 import cc.ginpika.rukksh.ai.llm.EmbeddingClient;
 import cc.ginpika.rukksh.ai.memory.graph.MemoryGraphStore;
@@ -41,7 +42,7 @@ class UnifiedMemoryGraphTest {
                     +"SELECT 'method','irrelevant payload '||n,'noise',1,1,1,'PROJECT','PROJECT','L2','p','a','active',0,'REAL' FROM seq");
             var vectors=new MemoryItemEmbeddingStore(f.jdbc);
             vectors.saveVersion(target,"m",new float[]{1,0},0);
-            f.jdbc.update("INSERT INTO memory_item_embedding(item_id,model,dim,vec,updated_at,item_version) SELECT id,'m',2,?,1,0 FROM graph_claim WHERE id<>?",MemoryVecMath.encode(new float[]{0,1}),target);
+            f.jdbc.update("INSERT INTO memory_item_embedding(item_id,model,dim,vec,updated_at,item_version) SELECT id,'m',2,?,1,0 FROM graph_claim WHERE id<>?",VectorMath.encode(new float[]{0,1}),target);
             var embedding=mock(EmbeddingClient.class);when(embedding.configured()).thenReturn(true);when(embedding.model()).thenReturn("m");when(embedding.embed(anyString())).thenReturn(Optional.of(new float[]{1,0}));
             long start=System.nanoTime();
             var hits=new MemoryItemRecall(f.items,vectors,embedding,new MemoryProps()).recall(exec("a","p","s"),"old semantic fact",null,6);

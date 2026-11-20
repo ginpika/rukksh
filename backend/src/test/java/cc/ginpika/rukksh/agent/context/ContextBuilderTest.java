@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cc.ginpika.rukksh.agent.chat.ChatLiveStore;
 import cc.ginpika.rukksh.agent.chat.store.ChatMessageStore;
-import cc.ginpika.rukksh.agent.chat.turn.History;
+import cc.ginpika.rukksh.agent.chat.turn.ChatHistoryProvider;
 import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
 import cc.ginpika.rukksh.config.ContextProps;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -21,7 +21,7 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
  * 上下文平面（STEP 2 等效抽取）的回归：组装骨架与历史回放的输出形状。
  *
  * <p>抽取的硬指标是「行为零变化」——这里把 {@link ContextBuilder} 的拼装契约（system 基底 + 各源尾段
- * 以固定分隔线相连、各源消息按序插入、tools 原样挂上）与 {@link History} 的回放形状
+ * 以固定分隔线相连、各源消息按序插入、tools 原样挂上）与 {@link ChatHistoryProvider} 的回放形状
  * （普通行、子代理归因、context_trace 原生协议回放）都钉住，避免日后插新 provider 时改动拼装规则。
  */
 class ContextBuilderTest {
@@ -115,7 +115,7 @@ class ContextBuilderTest {
         store.insert("s1", "assistant", "〔子代理的结论正文〕", null, null, null,
                 ChatMessageStore.KIND_SUBAGENT,
                 "{\"title\":\"查 X\",\"summary\":\"ok\",\"status\":\"done\",\"execId\":7}");
-        History provider = new History(store, new TurnStore(jdbc), new ChatLiveStore(), OM,
+        ChatHistoryProvider provider = new ChatHistoryProvider(store, new TurnStore(jdbc), new ChatLiveStore(), OM,
                 new ContextProps());
 
         List<JsonNode> rows = provider.messages(
@@ -138,7 +138,7 @@ class ContextBuilderTest {
                 + "{\"name\":\"search\",\"arguments\":\"{}\"}}]},"
                 + "{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"结果\"}]";
         store.insert("s1", "assistant", "最终答复", "想了一下", null, rounds, null, null);
-        History provider = new History(store, new TurnStore(jdbc), new ChatLiveStore(), OM,
+        ChatHistoryProvider provider = new ChatHistoryProvider(store, new TurnStore(jdbc), new ChatLiveStore(), OM,
                 new ContextProps());
 
         List<JsonNode> rows = provider.messages(

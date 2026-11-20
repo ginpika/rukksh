@@ -1,13 +1,15 @@
 package cc.ginpika.rukksh.agent.chat;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.roundtable.CollaborationPlan;
 import cc.ginpika.rukksh.agent.roundtable.CollaborationService;
-import cc.ginpika.rukksh.agent.roundtable.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
 import cc.ginpika.rukksh.agent.roundtable.CollaborationTaskLifecycle;
 import cc.ginpika.rukksh.agent.roundtable.CollaborationWorkspaceBinding;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableSessionStore;
-import cc.ginpika.rukksh.agent.roundtable.RoundtableTodoStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableSessionStore;
+import cc.ginpika.rukksh.agent.roundtable.store.RoundtableTodoStore;
 import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.ai.core.tool.work.BindWorkProjectWorkspaceTool;
 import cc.ginpika.rukksh.ai.core.tool.work.CreateWorkProjectTool;
@@ -17,7 +19,7 @@ import cc.ginpika.rukksh.ai.core.tool.work.ReadWorkProjectTool;
 import cc.ginpika.rukksh.ai.core.tool.work.SaveWorkProjectDocumentTool;
 import cc.ginpika.rukksh.ai.core.tool.work.SetWorkProjectMembersTool;
 import cc.ginpika.rukksh.ai.core.tool.work.UpdateWorkProjectTool;
-import cc.ginpika.rukksh.coding.api.CodingDtos.OpenProject;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.OpenProject;
 import cc.ginpika.rukksh.project.ProjectKnowledgeStore;
 import cc.ginpika.rukksh.project.ProjectStore;
 import cc.ginpika.rukksh.project.ProjectStore.ProjectRow;
@@ -30,9 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Project catalog and shared project data exposed to authenticated user conversations. */
 @Service
@@ -81,7 +81,7 @@ public class ProjectTools {
 
     public String run(String name, JsonNode args) {
         String user = UserScope.get();
-        if (user == null || user.isBlank()) return error(HttpStatus.UNAUTHORIZED.value(), "需要已认证的用户身份");
+        if (user == null || user.isBlank()) return error(DomainException.ErrorKind.UNAUTHORIZED.statusCode(), "需要已认证的用户身份");
         if (args == null || !args.isObject()) return error(400, "工具参数必须是 JSON 对象");
         try {
             if (ListWorkProjectsTool.NAME.equals(name)) return json.valueToTree(catalog(user, args)).toString();
@@ -91,7 +91,7 @@ public class ProjectTools {
                 return projectJson(created).toString();
             }
             ProjectRow project = projects.findVisible(required(args, "project_id", 200), user)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "项目不存在或不可访问"));
+                    .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "项目不存在或不可访问"));
             Object result = switch (name) {
                 case ReadWorkProjectTool.NAME -> read(user, project, args);
                 case UpdateWorkProjectTool.NAME -> update(project, args);
@@ -102,8 +102,8 @@ public class ProjectTools {
                 default -> throw new IllegalArgumentException("未知的项目工具");
             };
             return json.valueToTree(result).toString();
-        } catch (ResponseStatusException error) {
-            return error(error.getStatusCode().value(), error.getReason());
+        } catch (DomainException error) {
+            return error(error.statusCode(), error.getMessage());
         } catch (IllegalArgumentException error) {
             return error(400, error.getMessage());
         }
@@ -138,7 +138,7 @@ public class ProjectTools {
             case "board_item" -> {
                 var session = projectSession(id, required(args, "session_id", 200));
                 yield board.todo(required(args, "todo_id", 200)).filter(item -> session.id().equals(item.sessionId()))
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "任务板条目不存在"));
+                        .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "任务板条目不存在"));
             }
             case "issue" -> projectIssue(id, required(args, "issue_id", 200));
             case "progress" -> {
@@ -207,12 +207,12 @@ public class ProjectTools {
 
     private RoundtableSessionStore.SessionRow projectSession(String project, String sessionId) {
         return sessions.findById(sessionId).filter(session -> project.equals(session.projectId()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "协作会话不属于当前项目"));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "协作会话不属于当前项目"));
     }
 
     private CollaborationStore.Issue projectIssue(String project, String id) {
         var issue = collaborationData.issue(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "议题不存在"));
+                .orElseThrow(() -> new DomainException(DomainException.ErrorKind.NOT_FOUND, "议题不存在"));
         projectSession(project, issue.parentSessionId());
         projectSession(project, issue.sessionId());
         return issue;
@@ -239,7 +239,7 @@ public class ProjectTools {
         int expected = number(args, "expected_version", 0, 0, Integer.MAX_VALUE);
         var previous = expected == 0 ? null : knowledge.read(project, key, null);
         if (previous != null && previous.version() != expected) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "文档已有新版本，请重新读取后合并");
+            throw new DomainException(DomainException.ErrorKind.CONFLICT, "文档已有新版本，请重新读取后合并");
         }
         String kind = text(args, "kind", 24);
         String title = text(args, "title", 160);

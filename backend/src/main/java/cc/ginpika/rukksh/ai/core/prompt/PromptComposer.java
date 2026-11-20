@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.ai.core.prompt;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.core.prompt.PromptLibrary.PromptContext;
 import cc.ginpika.rukksh.ai.core.prompt.block.IdentityBlock;
 import cc.ginpika.rukksh.ai.core.prompt.store.PromptStore;
@@ -16,9 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 提示词组装者（编排）：提示词子系统的读引擎——解析各块当前生效的正文，并按上下文组装成
@@ -34,8 +34,8 @@ import org.springframework.web.server.ResponseStatusException;
  *   <li><b>页面视图</b>——{@link #view()}（大类 → 上下文 → 块 + 运行时素材）。</li>
  * </ul>
  *
- * <p>只读不写：版本/绑定/顺序的写操作在 {@link PromptManager}。对外门面也是
- * {@link PromptManager}——消费方（提示词页 / 各服务）只认 Manager，由它委托本类；
+ * <p>只读不写：版本/绑定/顺序的写操作在 {@link PromptService}。对外门面也是
+ * {@link PromptService}——消费方（提示词页 / 各服务）只认 Manager，由它委托本类；
  * 依赖保持 Manager → Composer 单向。
  */
 @Component
@@ -304,6 +304,6 @@ public class PromptComposer {
 
     private static PromptContext requireContext(String contextKey) {
         return PromptLibrary.context(contextKey).orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "上下文不存在: " + contextKey));
+                () -> new DomainException(DomainException.ErrorKind.BAD_REQUEST, "上下文不存在: " + contextKey));
     }
 }

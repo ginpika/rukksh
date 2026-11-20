@@ -2,7 +2,7 @@ package cc.ginpika.rukksh.web.controller;
 
 import cc.ginpika.rukksh.agent.member.AgentDtos;
 import cc.ginpika.rukksh.agent.roundtable.CollaborationService;
-import cc.ginpika.rukksh.agent.roundtable.CollaborationStore;
+import cc.ginpika.rukksh.agent.roundtable.store.CollaborationStore;
 import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.web.sso.SsoInterceptor;
 import cc.ginpika.rukksh.web.sso.SsoUser;
@@ -43,13 +43,13 @@ public class CollaborationController {
         return asUser(http,()->{lifecycle.delete(id);return Map.of("deleted",true);});
     }
     @GetMapping("/api/agents/collaboration/workspaces")
-    public List<cc.ginpika.rukksh.coding.api.CodingDtos.Workspace> workspaces(HttpServletRequest http) {
+    public List<cc.ginpika.rukksh.coding.dto.CodingDtos.Workspace> workspaces(HttpServletRequest http) {
         workspaceAccess(http);
         return asUser(http,collaboration::workspaces);
     }
     @PutMapping("/api/projects/{id}/collaboration-workspace")
     public cc.ginpika.rukksh.agent.roundtable.CollaborationWorkspaceBinding.Location workspace(@PathVariable String id,
-            @RequestBody cc.ginpika.rukksh.coding.api.CodingDtos.OpenProject request,HttpServletRequest http) {
+            @RequestBody cc.ginpika.rukksh.coding.dto.CodingDtos.OpenProject request,HttpServletRequest http) {
         workspaceAccess(http);
         return asUser(http,() -> collaboration.bindWorkspace(id,request));
     }
@@ -86,16 +86,11 @@ public class CollaborationController {
     }
 
     private static void workspaceAccess(HttpServletRequest request) {
-        if(!cc.ginpika.rukksh.coding.CodingFacade.allowsActorAt(user(request).getId(),request.getRemoteAddr()))
+        if(!cc.ginpika.rukksh.coding.CodingService.allowsActorAt(user(request).getId(),request.getRemoteAddr()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,"开发身份仅允许本机访问工作目录；远程部署请配置 SSO");
     }
 
     private static <T> T asUser(HttpServletRequest http,Supplier<T> action) {
         try(var actor=UserScope.bind(user(http).getId())) { return action.get(); }
-    }
-
-    @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Map<String,String>> error(ResponseStatusException error) {
-        return ResponseEntity.status(error.getStatusCode()).body(Map.of("message",error.getReason()==null?"请求失败":error.getReason()));
     }
 }

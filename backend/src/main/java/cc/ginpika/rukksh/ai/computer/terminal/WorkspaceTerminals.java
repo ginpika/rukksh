@@ -1,5 +1,7 @@
 package cc.ginpika.rukksh.ai.computer.terminal;
 
+import cc.ginpika.rukksh.shared.error.DomainException;
+
 import cc.ginpika.rukksh.ai.computer.terminal.exec.LocalExecTarget;
 import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
 import java.io.IOException;
@@ -7,9 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /** Human shells start at the workspace's configured directory and need no coding project. */
 @Service
@@ -26,10 +26,10 @@ public class WorkspaceTerminals extends InteractiveTerminals {
         var target=store.targetById(id).orElse(null);
         // Listing/cleanup remain possible after a workspace is disabled or deleted.
         if(!enabled){return target;}
-        if(target==null){throw new ResponseStatusException(HttpStatus.NOT_FOUND,"工作空间已删除");}
-        if(!target.enabled()){throw new ResponseStatusException(HttpStatus.CONFLICT,"工作空间未启用，请先启用后打开 Shell");}
+        if(target==null){throw new DomainException(DomainException.ErrorKind.NOT_FOUND,"工作空间已删除");}
+        if(!target.enabled()){throw new DomainException(DomainException.ErrorKind.CONFLICT,"工作空间未启用，请先启用后打开 Shell");}
         if(LocalExecTarget.KIND.equals(target.kind()) || !targets.containsKey(target.kind())){
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"工作空间类型不支持交互终端");
+            throw new DomainException(DomainException.ErrorKind.BAD_REQUEST,"工作空间类型不支持交互终端");
         }
         return target;
     }

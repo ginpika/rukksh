@@ -9,7 +9,7 @@ import cc.ginpika.rukksh.agent.chat.store.HubSessionStore;
 import cc.ginpika.rukksh.agent.chat.turn.TurnStore;
 import cc.ginpika.rukksh.agent.runtime.AgentRuntime;
 import cc.ginpika.rukksh.agent.runtime.ToolExecutionRecorder;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
 import cc.ginpika.rukksh.ai.core.tool.ToolValidator;
 import cc.ginpika.rukksh.ai.core.tool.chat.RequestUserInputTool;
@@ -34,7 +34,7 @@ class ChatUserInputTest {
     private final HubSessionStore sessions = mock(HubSessionStore.class);
     private final ChatContextService context = mock(ChatContextService.class);
     private final List<ObjectNode> requests = new ArrayList<>();
-    private final ToolManager tools = new ToolManager(List.of(new RequestUserInputTool()), om);
+    private final ToolRegistry tools = new ToolRegistry(List.of(new RequestUserInputTool()), om);
     private final ChatToolDispatcher dispatcher = spy(new ChatToolDispatcher(om, new ToolValidator(tools, om),
             null, null, null, null, null, null));
     private final String args = """
@@ -60,8 +60,8 @@ class ChatUserInputTest {
         var recorder = mock(ToolExecutionRecorder.class);
         when(recorder.record(any(), any(), any(), any(), any())).thenAnswer(inv -> inv.<Supplier<String>>getArgument(4).get());
         return new ChatTurnRunner(new AgentRuntime(client), recorder, settings, sessions, messages, om, tools,
-                mock(SubagentTool.class), mock(MemoryWriter.class), mock(ProjectStore.class), mock(ChatTaskRunner.class),
-                mock(TurnStore.class), mock(TodoService.class), context, dispatcher, mock(ChatTurnCompletion.class));
+                mock(SubagentToolPort.class), mock(MemoryWriter.class), mock(ProjectStore.class), mock(ChatTaskRunner.class),
+                mock(TurnStore.class), mock(SessionTodoService.class), context, dispatcher, mock(ChatTurnCompletion.class));
     }
     private void responses(ObjectNode... responses) {
         when(client.chatRaw(any(), any(), any(), any())).thenAnswer(inv -> {

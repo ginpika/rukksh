@@ -10,7 +10,7 @@ import cc.ginpika.rukksh.ai.computer.terminal.store.TerminalStore;
  * 换环境只是换 target 参数——与主流 agent 把「在哪执行」作为工具参数而不是工具的写法一致。
  *
  * <p>由 {@link TerminalService} 按 kind 选用：实现类以 {@link #kind()} 注册自己，
- * 与 {@code ai.core.tool.ToolManager} 按 {@code surfaces()} 聚合工具是同一个套路。
+ * 与 {@code ai.core.tool.ToolRegistry} 按 {@code surfaces()} 聚合工具是同一个套路。
  *
  * <p><b>状态语义</b>：每次调用都是一次全新的非交互进程，所以 shell 的工作目录与变量<b>不</b>跨调用保留
  * （远端 exec 通道、docker exec 都是如此）。跨调用留下的是<b>文件系统与环境层面的改动</b>——

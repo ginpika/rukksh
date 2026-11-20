@@ -4,11 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.core.type.TypeReference;
-import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolbox;
+import cc.ginpika.rukksh.agent.runtime.AgentToolRouter;
 import cc.ginpika.rukksh.ai.computer.terminal.TerminalService;
 import cc.ginpika.rukksh.agent.chat.ChatThreads;
-import cc.ginpika.rukksh.agent.chat.SubagentTool;
-import cc.ginpika.rukksh.agent.chat.HeartbeatTool;
+import cc.ginpika.rukksh.agent.chat.SubagentToolPort;
+import cc.ginpika.rukksh.agent.chat.HeartbeatToolPort;
 import cc.ginpika.rukksh.agent.member.AgentAnchorService;
 import cc.ginpika.rukksh.agent.member.AgentDirectory;
 import cc.ginpika.rukksh.agent.runtime.AgentRunner;
@@ -17,7 +17,7 @@ import cc.ginpika.rukksh.ai.core.MemoryExec;
 import cc.ginpika.rukksh.ai.core.MemoryScopeCtx;
 import cc.ginpika.rukksh.ai.core.MemorySurface;
 import cc.ginpika.rukksh.agent.runtime.TaskStore;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolResult;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
 import cc.ginpika.rukksh.ai.core.tool.heartbeat.CreatePlanTool;
@@ -66,7 +66,7 @@ import org.springframework.stereotype.Service;
  * （everything in tools &amp; bash）。同一 Agent 的拍不会重叠（{@link #inflight} 逐 Agent 守卫）。
  */
 @Service
-public class HeartbeatService implements HeartbeatTool {
+public class HeartbeatService implements HeartbeatToolPort {
 
     private static final Logger log = LoggerFactory.getLogger(HeartbeatService.class);
 
@@ -98,10 +98,10 @@ public class HeartbeatService implements HeartbeatTool {
     private final TaskStore tasks;
     private final HeartbeatContextBuilder builder;
     private final AgentRunner runner;
-    private final SubagentTool subagent;
-    private final KnowledgeToolbox toolbox;
+    private final SubagentToolPort subagent;
+    private final AgentToolRouter toolbox;
     private final TerminalService terminal;
-    private final ToolManager tools;
+    private final ToolRegistry tools;
     private final ObjectMapper om;
     /** 首页 chat 的会话投递落点（open_thread / send_message）：只碰会话表与消息表，故无构造环 */
     private final ChatThreads threads;
@@ -130,8 +130,8 @@ public class HeartbeatService implements HeartbeatTool {
     public HeartbeatService(HeartbeatProps props, PlanStore plans, ExecStore execs,
                             TaskStore tasks, HeartbeatContextBuilder builder,
                             AgentRunner runner,
-                            SubagentTool subagent, KnowledgeToolbox toolbox,
-                            TerminalService terminal, ToolManager tools,
+                            SubagentToolPort subagent, AgentToolRouter toolbox,
+                            TerminalService terminal, ToolRegistry tools,
                             ObjectMapper om, ChatThreads threads,
                             AgentDirectory directory, AgentAnchorService anchors) {
         this.props = props;
@@ -748,7 +748,7 @@ public class HeartbeatService implements HeartbeatTool {
 
     /**
      * 这份编制这次能用的 tools schema = 它声明的工具（管理类与会话工具拿不到，见
-     * {@link cc.ginpika.rukksh.ai.core.tool.ToolManager#toolsOf(List, cc.ginpika.rukksh.ai.core.tool.ToolSurface)}）
+     * {@link cc.ginpika.rukksh.ai.core.tool.ToolRegistry#toolsOf(List, cc.ginpika.rukksh.ai.core.tool.ToolSurface)}）
      * + thread 渠道附带的会话工具（open_thread / send_message）；都没有则返回 null（不挂 tools）。
      */
     private ArrayNode toolSchemas(PlanStore.PlanRow plan) {

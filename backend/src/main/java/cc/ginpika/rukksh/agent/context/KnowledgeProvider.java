@@ -1,6 +1,6 @@
 package cc.ginpika.rukksh.agent.context;
 
-import cc.ginpika.rukksh.ai.knowledge.ingest.ResultTexts;
+import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeResultFormatter;
 import cc.ginpika.rukksh.ai.knowledge.retrieval.FastSearchService;
 import cc.ginpika.rukksh.ai.knowledge.store.ChunkStore;
 import cc.ginpika.rukksh.config.ContextProps;
@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * 才看得到知识库。
  *
  * <p>与本类同名的工具（{@code KnowledgeToolbox.ragTool}）走的是同一条检索链路
- * （{@link FastSearchService#ragRecall}）与同一套渲染（{@link ResultTexts}），差别只在触发时机：
+ * （{@link FastSearchService#ragRecall}）与同一套渲染（{@link KnowledgeResultFormatter}），差别只在触发时机：
  * 这里是我们先注入、工具是模型主动查。两者不冲突——注入的片段不够用时，模型仍可继续调工具。
  *
  * <p>默认<b>关</b>（见 {@link ContextProps}）：关时直接返回空串，{@link ContextBuilder} 原样保留
@@ -28,7 +28,7 @@ public class KnowledgeProvider implements ContextProvider {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeProvider.class);
 
-    /** 单轮注入的 chunk 上限（渲染侧 {@link ResultTexts} 另有自己的上限，取更小值即可） */
+    /** 单轮注入的 chunk 上限（渲染侧 {@link KnowledgeResultFormatter} 另有自己的上限，取更小值即可） */
     private static final int TOP_CHUNKS = 6;
 
     private final FastSearchService fast;
@@ -72,8 +72,8 @@ public class KnowledgeProvider implements ContextProvider {
         StringBuilder sb = new StringBuilder(
                 "【知识库自动召回】按这次提问先检索到以下片段，可直接用作依据；不够时仍可用"
                         + " search_vector_chunks 等工具继续查：\n");
-        sb.append(ResultTexts.ragChunksText(top));
-        String triples = ResultTexts.graphTriplesText(recall.graph());
+        sb.append(KnowledgeResultFormatter.ragChunksText(top));
+        String triples = KnowledgeResultFormatter.graphTriplesText(recall.graph());
         if (!triples.isEmpty()) {
             sb.append("\n\n").append(triples);
         }

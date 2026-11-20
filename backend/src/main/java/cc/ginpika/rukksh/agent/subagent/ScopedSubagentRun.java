@@ -16,12 +16,12 @@ import cc.ginpika.rukksh.ai.core.MemoryExec;
 import cc.ginpika.rukksh.ai.core.MemoryScopeCtx;
 import cc.ginpika.rukksh.ai.core.MemorySurface;
 import cc.ginpika.rukksh.ai.core.UserScope;
-import cc.ginpika.rukksh.ai.core.prompt.PromptManager;
+import cc.ginpika.rukksh.ai.core.prompt.PromptService;
 import cc.ginpika.rukksh.ai.core.prompt.block.SubagentBlock;
-import cc.ginpika.rukksh.ai.core.tool.ToolManager;
+import cc.ginpika.rukksh.ai.core.tool.ToolRegistry;
 import cc.ginpika.rukksh.ai.core.tool.ToolResult;
 import cc.ginpika.rukksh.ai.core.tool.ToolSurface;
-import cc.ginpika.rukksh.ai.knowledge.ingest.KnowledgeToolbox;
+import cc.ginpika.rukksh.agent.runtime.AgentToolRouter;
 import cc.ginpika.rukksh.ai.runtime.ModelLoop;
 import cc.ginpika.rukksh.config.SettingsService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -61,14 +61,14 @@ class ScopedSubagentRun {
     private final ChatContextSources sources;
     private final ChatContextManifests manifests;
     private final SettingsService settings;
-    private final PromptManager prompts;
-    private final ToolManager tools;
-    private final KnowledgeToolbox toolbox;
+    private final PromptService prompts;
+    private final ToolRegistry tools;
+    private final AgentToolRouter toolbox;
     private final ObjectMapper om;
 
     ScopedSubagentRun(AgentRunner runner, TaskStore tasks, SubagentScope scope, ChatContextSources sources,
-                      ChatContextManifests manifests, SettingsService settings, PromptManager prompts,
-                      ToolManager tools, KnowledgeToolbox toolbox, ObjectMapper om) {
+                      ChatContextManifests manifests, SettingsService settings, PromptService prompts,
+                      ToolRegistry tools, AgentToolRouter toolbox, ObjectMapper om) {
         this.runner = runner;
         this.tasks = tasks;
         this.scope = scope;

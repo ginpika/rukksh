@@ -3,7 +3,7 @@ package cc.ginpika.rukksh.coding.integration;
 import cc.ginpika.rukksh.ai.core.*;
 import cc.ginpika.rukksh.ai.memory.*;
 import cc.ginpika.rukksh.ai.memory.recall.MemoryItemRecall;
-import cc.ginpika.rukksh.coding.api.CodingDtos.*;
+import cc.ginpika.rukksh.coding.dto.CodingDtos.*;
 import cc.ginpika.rukksh.config.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;

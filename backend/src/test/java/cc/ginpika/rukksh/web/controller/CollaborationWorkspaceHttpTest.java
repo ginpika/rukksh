@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import cc.ginpika.rukksh.agent.roundtable.*;
+import cc.ginpika.rukksh.agent.roundtable.store.*;
 import cc.ginpika.rukksh.agent.workspace.WorkspaceService;
 import cc.ginpika.rukksh.ai.core.UserScope;
 import cc.ginpika.rukksh.ai.computer.terminal.ExecTarget;
@@ -17,6 +18,7 @@ import cc.ginpika.rukksh.coding.store.CodingStore;
 import cc.ginpika.rukksh.coding.workspace.WorkspaceProjects;
 import cc.ginpika.rukksh.config.*;
 import cc.ginpika.rukksh.project.*;
+import cc.ginpika.rukksh.web.advice.WebExceptionAdvice;
 import cc.ginpika.rukksh.web.sso.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -49,12 +51,12 @@ class CollaborationWorkspaceHttpTest {
             var bindings=new ProjectWorkspaceStore(jdbc);
             var bindingService=new CollaborationWorkspaceBinding(bindings,workspaceProjects,projects);
             var sessions=new RoundtableSessionStore(jdbc);
-            var service=new CollaborationService(new CollaborationStore(jdbc),mock(RoundtableChatService.class),sessions,new RoundtableMessageStore(jdbc),
+            var service=new CollaborationService(new CollaborationStore(jdbc),mock(RoundtableSessionService.class),sessions,new RoundtableMessageStore(jdbc),
                     mock(cc.ginpika.rukksh.agent.member.AgentDirectory.class),projects,mock(RoundtableDiscussionRuntime.class),mock(RoundtableWorkRuntime.class),
                     mock(CollaborationIssueActions.class),new CollaborationPlan(jdbc, new cc.ginpika.rukksh.project.ProjectKnowledgeStore(jdbc)),bindingService);
             var controller=new CollaborationController(service,mock(RoundtableRewindService.class),mock(cc.ginpika.rukksh.agent.roundtable.CollaborationTaskLifecycle.class));
             var interceptor=new SsoInterceptor(new SsoProps(),new DesktopProps(),mock(SsoService.class),json);
-            var mvc=MockMvcBuilders.standaloneSetup(controller).addInterceptors(interceptor).build();
+            var mvc=MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new WebExceptionAdvice()).addInterceptors(interceptor).build();
             assertNull(UserScope.get());
             mvc.perform(put("/api/projects/project/collaboration-workspace").contentType(MediaType.APPLICATION_JSON)
                             .content("{\"workspaceId\":\"workspace\",\"directory\":\".\",\"name\":\"新项目\",\"create\":true}"))
